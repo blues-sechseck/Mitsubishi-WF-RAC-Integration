@@ -40,7 +40,10 @@
           "host": "Host (IP) address",
           "availability_check": "Check availability",
           "availability_retry_limit": "Retry limit",
-          "create_swing_mode_select": "Whether to create an additional swing mode selectors."
+          "create_swing_mode_select": "Whether to create an additional swing mode selectors.",
+		  "indoor_offset": "Indoor Temp. Sensor Offset",
+          "outdoor_offset": "Outdoor Temp. Sensor Offset",
+          "target_offset": "Target Temp. Offset"
         },
         "title": "WF-RAC AC connection info"
       }

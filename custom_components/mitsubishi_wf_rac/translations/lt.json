@@ -38,7 +38,10 @@
         "data": {
           "host": "Host (IP) adresas",
           "availability_check": "Patikrinti prieinamumą",
-          "availability_retry_limit": "Pakartotinio bandymo limitas"
+          "availability_retry_limit": "Pakartotinio bandymo limitas",
+		  "indoor_offset": "Vidaus poslinkis",
+          "outdoor_offset": "Lauko poslinkis",
+          "target_offset": "Tikslinis poslinkis"
         },
         "title": "WF-RAC oro kondicionieriaus prisijungimo informacija"
       }

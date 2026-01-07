@@ -38,7 +38,10 @@
         "data": {
           "host": "Host (IP) address",
           "availability_check": "Controleer beschikbaarheid",
-          "availability_retry_limit": "Herhaal limiet"
+          "availability_retry_limit": "Herhaal limiet",
+		  "indoor_offset": "Binnen offset",
+          "outdoor_offset": "Buiten offset",
+          "target_offset": "Doel offset"
         },
         "title": "WF-RAC AC connectie info"
       }

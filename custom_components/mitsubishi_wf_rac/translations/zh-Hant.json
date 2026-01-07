@@ -40,7 +40,10 @@
             "host": "主機（IP）地址",
             "availability_check": "檢查可用性",
             "availability_retry_limit": "重試次數上限",
-            "create_swing_mode_select": "是否建立額外的擺風模式選擇器。"
+            "create_swing_mode_select": "是否建立額外的擺風模式選擇器。",
+			"indoor_offset": "室內偏移",
+            "outdoor_offset": "室外偏移",
+            "target_offset": "目標偏移"
           },
           "title": "WF-RAC 空調連接資訊"
         }
