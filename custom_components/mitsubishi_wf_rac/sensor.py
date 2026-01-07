@@ -26,7 +26,9 @@ from .const import (
     CONF_AIRCO_ID,
     ATTR_DEVICE_ID,
     ATTR_CONNECTED_ACCOUNTS,
-    MIN_TIME_BETWEEN_UPDATES
+    MIN_TIME_BETWEEN_UPDATES,
+    CONF_INDOOR_OFFSET,
+    CONF_OUTDOOR_OFFSET
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -122,9 +124,11 @@ class TemperatureSensor(SensorEntity):
 
     def _update_state(self) -> None:
         if self._custom_type == ATTR_INSIDE_TEMPERATURE:
-            self._attr_native_value = self._device.airco.IndoorTemp
+            indoor_offset = self._device.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0)
+            self._attr_native_value = self._device.airco.IndoorTemp + indoor_offset
         elif self._custom_type == ATTR_OUTSIDE_TEMPERATURE:
-            self._attr_native_value = self._device.airco.OutdoorTemp
+            outdoor_offset = self._device.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0)
+            self._attr_native_value = self._device.airco.OutdoorTemp + outdoor_offset
         elif self._custom_type == ATTR_TARGET_TEMPERATURE:
             self._attr_native_value = self._device.airco.PresetTemp
         self._attr_available = self._device.available

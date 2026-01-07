@@ -28,6 +28,9 @@ from .const import (
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CREATE_SWING_MODE_SELECT,
     CONF_OPERATOR_ID,
+    CONF_INDOOR_OFFSET,
+    CONF_OUTDOOR_OFFSET,
+    CONF_TARGET_OFFSET,
     DOMAIN,
 )
 from .wfrac.repository import Repository
@@ -306,6 +309,18 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_AVAILABILITY_RETRY_LIMIT,
                         default=self.config_entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3),  # type: ignore
                     ): int,
+                    vol.Optional(
+                        CONF_INDOOR_OFFSET,
+                        default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0), # type: ignore
+                    ): vol.Coerce(float, vol.Range(min=-15.0, max=15.0)),
+                    vol.Optional(
+                        CONF_OUTDOOR_OFFSET,
+                        default=self.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0), # type: ignore
+                    ): vol.Coerce(float, vol.Range(min=-15.0, max=15.0)),
+                    vol.Optional(
+                        CONF_TARGET_OFFSET,
+                        default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0), # type: ignore
+                    ): vol.Coerce(float, vol.Range(min=-5.0, max=5.0)),
                 },
             ),
         )
