@@ -41,5 +41,114 @@
         "title": "WF-RACエアコン接続情報"
       }
     }
+  },
+  "entity": {
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "Auto": "Auto",
+              "Quiet": "Quiet",
+              "Low": "Low",
+              "Medium": "Medium",
+              "High": "High"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "Up/Down Auto": "Up/Down Auto",
+              "Highest": "Highest",
+              "Middle": "Middle",
+              "Normal": "Normal",
+              "Lowest": "Lowest",
+              "3D Auto": "3D Auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "Left/Right Auto": "Left/Right Auto",
+              "Left-Left": "Left-Left",
+              "Left-Center": "Left-Center",
+              "Center-Center": "Center-Center",
+              "Center-Right": "Center-Right",
+              "Right-Right": "Right-Right",
+              "Left-Right": "Left-Right",
+              "Right-Left": "Right-Left",
+              "3D Auto": "3D Auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "水平スイング方向",
+        "state": {
+          "Left/Right Auto": "左右自動",
+          "Left-Left": "左-左",
+          "Left-Center": "左-中央",
+          "Center-Center": "中央-中央",
+          "Center-Right": "中央-右",
+          "Right-Right": "右-右",
+          "Left-Right": "左-右",
+          "Right-Left": "右-左",
+          "3D Auto": "3D自動"
+        }
+      },
+      "vertical_swing": {
+        "name": "垂直スイング方向",
+        "state": {
+          "Up/Down Auto": "上下自動",
+          "Highest": "最高",
+          "Middle": "中間",
+          "Normal": "標準",
+          "Lowest": "最低",
+          "3D Auto": "3D自動"
+        }
+      },
+      "fan_speed": {
+        "name": "ファン速度",
+        "state": {
+          "auto": "自動",
+          "Quiet": "静か",
+          "low": "低",
+          "medium": "中",
+          "high": "高"
+        }
+      }
+    },
+    "sensor": {
+      "indoor": {
+        "name": "室内温度"
+      },
+      "outdoor": {
+        "name": "室外温度"
+      },
+      "target": {
+        "name": "目標温度"
+      },
+      "airco_id": {
+        "name": "エアコンID"
+      },
+      "operator_id": {
+        "name": "オペレーターID"
+      },
+      "device_id": {
+        "name": "デバイスID"
+      },
+      "host": {
+        "name": "IP"
+      },
+      "connected_accounts": {
+        "name": "アカウント数"
+      },
+      "error": {
+        "name": "エラー"
+      },
+      "energy_usage": {
+        "name": "エネルギー使用量"
+      }
+    }
   }
 }

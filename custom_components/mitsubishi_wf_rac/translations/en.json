@@ -45,5 +45,114 @@
         "title": "WF-RAC AC connection info"
       }
     }
+  },
+  "entity": {
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "Auto": "Auto",
+              "Quiet": "Quiet",
+              "Low": "Low",
+              "Medium": "Medium",
+              "High": "High"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "Up/Down Auto": "Up/Down Auto",
+              "Highest": "Highest",
+              "Middle": "Middle",
+              "Normal": "Normal",
+              "Lowest": "Lowest",
+              "3D Auto": "3D Auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "Left/Right Auto": "Left/Right Auto",
+              "Left-Left": "Left-Left",
+              "Left-Center": "Left-Center",
+              "Center-Center": "Center-Center",
+              "Center-Right": "Center-Right",
+              "Right-Right": "Right-Right",
+              "Left-Right": "Left-Right",
+              "Right-Left": "Right-Left",
+              "3D Auto": "3D Auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Horizontal Swing Direction",
+        "state": {
+          "Left/Right Auto": "Left/Right Auto",
+          "Left-Left": "Left-Left",
+          "Left-Center": "Left-Center",
+          "Center-Center": "Center-Center",
+          "Center-Right": "Center-Right",
+          "Right-Right": "Right-Right",
+          "Left-Right": "Left-Right",
+          "Right-Left": "Right-Left",
+          "3D Auto": "3D Auto"
+        }
+      },
+      "vertical_swing": {
+        "name": "Vertical Swing Direction",
+        "state": {
+          "Up/Down Auto": "Up/Down Auto",
+          "Highest": "Highest",
+          "Middle": "Middle",
+          "Normal": "Normal",
+          "Lowest": "Lowest",
+          "3D Auto": "3D Auto"
+        }
+      },
+      "fan_speed": {
+        "name": "Fan Speed",
+        "state": {
+          "Auto": "Auto",
+          "Quiet": "Quiet",
+          "Low": "Low",
+          "Medium": "Medium",
+          "High": "High"
+        }
+      }
+    },
+    "sensor": {
+      "indoor": {
+        "name": "Indoor"
+      },
+      "outdoor": {
+        "name": "Outdoor"
+      },
+      "target": {
+        "name": "Target"
+      },
+      "airco_id": {
+        "name": "Airco ID"
+      },
+      "operator_id": {
+        "name": "Operator ID"
+      },
+      "device_id": {
+        "name": "Device ID"
+      },
+      "host": {
+        "name": "IP"
+      },
+      "connected_accounts": {
+        "name": "Accounts"
+      },
+      "error": {
+        "name": "Error"
+      },
+      "energy_usage": {
+        "name": "Energy Usage Cycle"
+      }
+    }
   }
 }
