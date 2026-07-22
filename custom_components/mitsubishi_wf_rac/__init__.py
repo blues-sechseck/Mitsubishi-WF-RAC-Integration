@@ -91,7 +91,12 @@ async def create_device_from_entry(entry, hass):
     operator_id: str = entry.data[CONF_OPERATOR_ID]
     port: int = entry.data[CONF_PORT]
     airco_id: str = entry.data[CONF_AIRCO_ID]
-    availability_retry: bool = entry.options.get("availability_retry", False)
+    # Bugfix: config_flow.py stores this toggle under CONF_AVAILABILITY_CHECK
+    # ("availability_check") via the Options Flow; the literal "availability_retry"
+    # key is never written anywhere, so this always defaulted to False and the
+    # retry-tolerance logic in wfrac/device.py (_availability_retry_limit) was
+    # dead code even when the user enabled "Availability Check" in the UI.
+    availability_retry: bool = entry.options.get(CONF_AVAILABILITY_CHECK, False)
     availability_retry_limit: int = entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3)
     create_swing_mode_select: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
     _device = Device(hass, name, device, port, device_id, operator_id, airco_id, availability_retry,
