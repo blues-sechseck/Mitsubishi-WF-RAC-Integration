@@ -72,10 +72,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 self._set_availability(False)
                 _LOGGER.warning("Received no data for device %s", self._airco_id)
                 return
-        except Exception:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             self._set_availability(False)
             _LOGGER.warning(
-                "Error: something went wrong updating the airco [%s] values", self.device_name
+                "Error: something went wrong updating the airco [%s] values", self.device_name,
+                exc_info=e,
             )
             # The WF-RAC module keeps only a small, fixed-size table of registered
             # accounts (operator ids). Opening the official app or adding phones can
