@@ -8,13 +8,12 @@ from async_timeout import timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.util import Throttle
 
 from .rac_parser import RacParser
-from .repository import Repository
+from .repository import AirconApiError, Repository
 from .models.aircon import Aircon, AirconStat
 
-from ..const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
+from ..const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,9 +60,17 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             update_interval=timedelta(seconds=60),
         )
 
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def update(self):
-        """Update the device information from API"""
+        """Update the device information from API.
+
+        Called both directly (e.g. by entities' own async_update()) and by
+        the coordinator via _async_update_data() below. Does not call
+        async_refresh()/async_set_updated_data() - no entity in this
+        integration is a CoordinatorEntity/listener, so there's nothing to
+        notify, and calling async_refresh() here would re-enter
+        _async_update_data() -> update() from within the coordinator-driven
+        path.
+        """
 
         try:
             response = await self._api.get_aircon_stats()
@@ -72,10 +79,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 self._set_availability(False)
                 _LOGGER.warning("Received no data for device %s", self._airco_id)
                 return
-        except Exception:  # pylint: disable=broad-except
+        except (AirconApiError, KeyError) as ex:
             self._set_availability(False)
             _LOGGER.warning(
-                "Error: something went wrong updating the airco [%s] values", self.device_name
+                "Error: something went wrong updating the airco [%s] values",
+                self.device_name,
+                exc_info=ex,
             )
             return
 
@@ -83,18 +92,18 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             self._connected_accounts = int(response["numOfAccount"])
             self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
             self._airco = self._parser.translate_bytes(response["airconStat"])
-            await self.async_refresh()
             self._set_availability(True)
-        except Exception as e:  # pylint: disable=broad-except
-            _LOGGER.warning("Could not parse airco data", exc_info=e)
+        except (KeyError, TypeError, ValueError) as ex:
+            _LOGGER.warning("Could not parse airco data", exc_info=ex)
             self._set_availability(False)
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
         try:
             return await self._api.del_account_info(self._airco_id)
-        except Exception:  # pylint: disable=broad-except
+        except (AirconApiError, KeyError, TypeError):
             _LOGGER.warning("Could not delete account from airco %s", self._airco_id)
+            return None
 
     async def add_account(self):
         """Add account (operator id) from the airco"""
@@ -102,14 +111,15 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             return await self._api.update_account_info(
                 self._airco_id, self._hass.config.time_zone
             )
-        except Exception:  # pylint: disable=broad-except
+        except (AirconApiError, KeyError, TypeError):
             _LOGGER.warning("Could not add account from airco %s", self._airco_id)
+            return None
 
     async def set_airco(self, params: dict[str, Any]) -> None:
         """Method to send airco command"""
         _LOGGER.debug("Setting airco: %s", params)
         if self.airco is None:
-            await self._hass.async_add_executor_job(self.update)
+            await self.update()
 
         if self._airco is None:
             raise ValueError("Airco object is empty")
@@ -123,9 +133,8 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             command = self._parser.to_base64(airco_stat)
             response = await self._api.send_airco_command(self._airco_id, command)
             self._airco = self._parser.translate_bytes(response)
-            await self.async_refresh()
-        except Exception as e:  # pylint: disable=broad-except
-            _LOGGER.warning("Could not send airco data: %s", str(e))
+        except (AirconApiError, KeyError, TypeError, ValueError) as ex:
+            _LOGGER.warning("Could not send airco data: %s", str(ex))
             raise
 
     def _set_availability(self, available: bool):
