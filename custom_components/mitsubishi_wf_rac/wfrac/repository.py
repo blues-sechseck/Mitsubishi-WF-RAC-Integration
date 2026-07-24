@@ -52,8 +52,44 @@ class Repository:
         self._operator_id = operator_id
         self._device_id = device_id
         self._session = async_get_clientsession(hass)
+        self._https_session: aiohttp.ClientSession | None = None
         self._next_request_after = datetime.now()
         self._method: str | None = None
+
+    async def _get_https_session(self) -> aiohttp.ClientSession:
+        """Get the persistent HTTPS fallback session, creating it once lazily.
+
+        Reused across requests (instead of opening a fresh TCP connection and
+        SSL context on every call) so the HTTPS path follows the same
+        shared-session lifecycle as the HTTP path (self._session, from
+        async_get_clientsession).
+        """
+        if self._https_session is not None and not self._https_session.closed:
+            return self._https_session
+
+        # TODO: add this logic to the config flow and try to fetch HTTPS cert automaticly
+        # If a certificate file is present, use it for SSL, otherwise bypass
+        # A certificate file can be stored in the HA configuration directory by running this command while in that directory:
+        # openssl s_client -connect <<AC_IP_ADDRESS>>:51443 -showcerts </dev/null 2>/dev/null | openssl x509 -outform PEM > ac_cert.pem
+        cert_path = "/config/ac_cert.pem"
+        cert_exists = await self._hass.async_add_executor_job(
+            os.path.isfile, cert_path
+        )
+
+        if cert_exists:
+            _LOGGER.debug("Certificate file found, creating secure SSL context")
+            partial_func = functools.partial(
+                ssl.create_default_context, cafile=cert_path
+            )
+            ssl_context = await self._hass.async_add_executor_job(partial_func)
+            ssl_context.check_hostname = False
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+        else:
+            _LOGGER.debug("Certificate file not found, falling back to insecure SSL")
+            connector = aiohttp.TCPConnector(ssl=False)
+
+        self._https_session = aiohttp.ClientSession(connector=connector)
+        return self._https_session
 
     async def _post(
         self, command: str, contents: dict[str, Any] | None = None
@@ -69,41 +105,12 @@ class Repository:
                         resp.raise_for_status()
                         return await resp.json()
                 elif protocol == "https":
-                    # TODO: add this logic to the config flow and try to fetch HTTPS cert automaticly
-                    # If a certificate file is present, use it for SSL, otherwise bypass
-                    # A certificate file can be stored in the HA configuration directory by running this command while in that directory:
-                    # openssl s_client -connect <<AC_IP_ADDRESS>>:51443 -showcerts </dev/null 2>/dev/null | openssl x509 -outform PEM > ac_cert.pem
-                    cert_path = "/config/ac_cert.pem"
-                    cert_exists = await self._hass.async_add_executor_job(
-                        os.path.isfile, cert_path
-                    )
-
-                    if cert_exists:
-                        _LOGGER.debug(
-                            "Certificate file found, creating secure SSL context"
-                        )
-                        partial_func = functools.partial(
-                            ssl.create_default_context, cafile=cert_path
-                        )
-                        ssl_context = await self._hass.async_add_executor_job(
-                            partial_func
-                        )
-                        ssl_context.check_hostname = False
-                        connector = aiohttp.TCPConnector(ssl=ssl_context)
-                    else:
-                        _LOGGER.debug(
-                            "Certificate file not found, falling back to insecure SSL"
-                        )
-                        connector = aiohttp.TCPConnector(ssl=False)
-
-                    async with aiohttp.ClientSession(
-                        connector=connector
-                    ) as https_session:
-                        async with https_session.post(
-                            url, json=data, timeout=aiohttp.ClientTimeout(total=30)
-                        ) as resp:
-                            resp.raise_for_status()
-                            return await resp.json()
+                    https_session = await self._get_https_session()
+                    async with https_session.post(
+                        url, json=data, timeout=aiohttp.ClientTimeout(total=30)
+                    ) as resp:
+                        resp.raise_for_status()
+                        return await resp.json()
             except (ClientConnectionError, asyncio.TimeoutError) as ex:
                 raise AirconApiError(f"Aircon returned error: {ex}") from ex
 
