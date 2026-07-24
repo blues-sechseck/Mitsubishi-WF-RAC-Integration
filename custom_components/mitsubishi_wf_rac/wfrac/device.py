@@ -109,7 +109,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         """Method to send airco command"""
         _LOGGER.debug("Setting airco: %s", params)
         if self.airco is None:
-            await self._hass.async_add_executor_job(self.update)
+            # update() is a coroutine function; async_add_executor_job is for
+            # blocking sync calls and would not actually run it (no event loop
+            # in the executor thread), so the coroutine was silently never
+            # awaited. Await it directly instead.
+            await self.update()
 
         if self._airco is None:
             raise ValueError("Airco object is empty")
