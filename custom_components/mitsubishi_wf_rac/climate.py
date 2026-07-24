@@ -291,7 +291,7 @@ class AircoClimate(ClimateEntity):
         try:
             await self._device.update()
             self._update_state()
-        except Exception:  # pylint: disable=broad-except
+        except (IndexError, KeyError, AttributeError, ValueError):
             _LOGGER.warning("Could not update the airco values")
             self._attr_available = False
             self._device.set_available(False)

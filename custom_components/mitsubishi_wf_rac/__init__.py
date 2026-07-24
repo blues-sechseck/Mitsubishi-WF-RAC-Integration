@@ -5,6 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from homeassistant.const import (
     CONF_HOST,
@@ -18,7 +19,7 @@ from .const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
-    CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT, DOMAIN
+    CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
 )
 from .wfrac.device import Device
 
@@ -63,28 +64,27 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry):
+async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry) -> bool:
     """Establish connection with mitsubishi-wf-rac."""
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = {}
-    hass.data[DOMAIN][entry.entry_id]["devices"] = coordinators = []
-
     device: str = entry.options[CONF_HOST]
     _device = await create_device_from_entry(entry, hass)
 
-    coordinators.append(_device)
-    try:
-        await _device.update()  # initial update to get fresh values
-        entry.runtime_data = MitsubishiWfRacData(_device)
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        entry.async_on_unload(entry.add_update_listener(async_update_options))
-    except Exception as ex:  # pylint: disable=broad-except
-        _LOGGER.warning("Something whent wrong setting up device [%s] %s", device, ex)
+    await _device.update()  # initial update to get fresh values
+    # update() catches its own errors and reflects them via .available instead
+    # of raising (see wfrac/device.py) - check that instead of try/except so a
+    # device that's unreachable at startup gets HA's automatic retry-with-backoff
+    # rather than a silently "loaded" entry with no working entities.
+    if not _device.available:
+        raise ConfigEntryNotReady(f"Could not reach device [{device}]")
+
+    entry.runtime_data = MitsubishiWfRacData(_device)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     return True
 
 
-async def create_device_from_entry(entry, hass):
+async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> Device:
     device: str = entry.options[CONF_HOST]
     name: str = entry.data[CONF_NAME]
     device_id: str = entry.data[CONF_DEVICE_ID]
@@ -123,20 +123,24 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
         _LOGGER.warning("Failed to update options to [%s]", entry.options)
 
 
-async def async_remove_entry(hass, entry: MitsubishiWfRacConfigEntry) -> None:
+async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry) -> None:
     """Handle removal of an entry."""
 
     temp_device = await create_device_from_entry(entry, hass)
-    try:
-        await temp_device.delete_account()
+    # delete_account() catches its own errors and returns None on failure (see
+    # wfrac/device.py) rather than raising, so check the result instead of
+    # try/except - the previous try/except here could never actually trigger,
+    # and the "Deleted" log below used to fire unconditionally even on failure.
+    result = await temp_device.delete_account()
+    if result is not None:
         _LOGGER.info(
             "Deleted operator ID [%s] from airco [%s]",
             temp_device.operator_id,
             temp_device.airco_id,
         )
-    except Exception as ex:  # pylint: disable=broad-except
+    else:
         _LOGGER.warning(
-            "Something whent wrong deleting account from airco [%s] %s",
-            temp_device.device_name,
-            ex,
+            "Could not delete operator ID [%s] from airco [%s]",
+            temp_device.operator_id,
+            temp_device.airco_id,
         )
