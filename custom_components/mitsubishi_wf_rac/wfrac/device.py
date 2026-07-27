@@ -48,6 +48,10 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._name = name
         self._firmware = ""
         self._connected_accounts = -1
+        self._updated_by: str | None = None
+        self._account_expires: int | None = None
+        self._led_status: int | None = None
+        self._auto_heating: int | None = None
         self._availability_retry = availability_retry
         self._availability_retry_count = 0
         self._availability_retry_limit = availability_retry_limit
@@ -95,16 +99,17 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             await self.add_account()
             return
 
-        # TEMP DEBUG: dump the full raw response once to see which top-level
-        # fields (highTemp, lowTemp, autoHeating, ledStat, remoteList, expires,
-        # updatedBy, logStat) this device's firmware actually sends, before we
-        # build parsing/entities around them. Remove after Phase 0 verification.
-        _LOGGER.debug("Raw airco response for %s: %s", self._airco_id, response)
-
         try:
             self._connected_accounts = int(response["numOfAccount"])
             self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
             self._airco = self._parser.translate_bytes(response["airconStat"])
+            # Not part of the airconStat blob, present alongside it in the same
+            # response. Tolerate absence (.get()) since it's undocumented and
+            # could be missing on older firmware.
+            self._updated_by = response.get("updatedBy")
+            self._account_expires = response.get("expires")
+            self._led_status = response.get("ledStat")
+            self._auto_heating = response.get("autoHeating")
             self._set_availability(True)
         except (KeyError, TypeError, ValueError) as ex:
             _LOGGER.warning("Could not parse airco data", exc_info=ex)
@@ -194,6 +199,26 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def num_accounts(self) -> int:
         """Return Accounts connected"""
         return self._connected_accounts
+
+    @property
+    def updated_by(self) -> str | None:
+        """Return what last updated the airco's state ('local' or a foreign account)"""
+        return self._updated_by
+
+    @property
+    def account_expires(self) -> int | None:
+        """Return the raw 'expires' timestamp reported alongside our account registration"""
+        return self._account_expires
+
+    @property
+    def led_status(self) -> int | None:
+        """Return the airco's front panel LED status"""
+        return self._led_status
+
+    @property
+    def auto_heating(self) -> int | None:
+        """Return the airco's auto-heating flag"""
+        return self._auto_heating
 
     @property
     def device_id(self) -> str:
