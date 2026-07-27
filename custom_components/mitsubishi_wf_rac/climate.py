@@ -79,7 +79,10 @@ class AircoClimate(ClimateEntity):
     _attr_fan_mode: str = FAN_AUTO
     _attr_swing_mode: str | None = SWING_VERTICAL_AUTO
     _attr_swing_modes: list[str] | None = SUPPORT_SWING_MODES
-    _attr_min_temp: float = 16
+    # Per Mitsubishi Heavy Industries' official operable table ('21 SRK-T-324,
+    # models SRK60ZSX-W/A and SRK100ZR-W): indoor unit only accepts 18-30C:
+    # values below 18 are not a documented WF-RAC capability.
+    _attr_min_temp: float = 18
     _attr_max_temp: float = 30
     _attr_swing_horizontal_mode: str | None = SWING_HORIZONTAL_AUTO
     _attr_swing_horizontal_modes: list[str] | None = SUPPORT_SWING_HORIZONTAL_MODES
