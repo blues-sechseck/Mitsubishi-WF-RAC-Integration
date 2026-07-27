@@ -1,49 +1,159 @@
 {
-    "config": {
-      "error": {
-        "unexpected_error": "發生了意外錯誤。請查看日誌以獲取詳細信息。",
-        "cannot_connect": "無法連接到空調：{reason}",
-        "name_invalid": "名稱已被佔用或少於 3 個字元",
-        "host_already_configured": "空調 IP 已被配置為 [{error_name}]",
-        "too_many_devices_registered": "此空調已註冊了太多設備。請在應用中刪除一個設備或對模組進行出廠重置。"
-      },
-      "abort": {
-        "existing_instance_updated": "已更新現有配置。",
-        "already_configured": "空調已配置"
-      },
-      "step": {
-        "user": {
-          "data": {
-            "name": "空調名稱",
-            "host": "主機（IP）地址",
-            "port": "埠號",
-            "force_update": "忽略重複 IP（可能/將會引發錯誤，請檢查錯誤日誌）",
-            "create_swing_mode_select": "是否建立額外的擺風模式選擇器。"
-          },
-          "description": "請填寫正確的信息以手動新增空調",
-          "title": "WF-RAC 空調連接資訊"
+  "config": {
+    "error": {
+      "unexpected_error": "發生了意外錯誤。請查看日誌以獲取詳細信息。",
+      "cannot_connect": "無法連接到空調：{reason}",
+      "name_invalid": "名稱已被佔用或少於 3 個字元",
+      "host_already_configured": "空調 IP 已被配置為 [{error_name}]",
+      "too_many_devices_registered": "此空調已註冊了太多設備。請在應用中刪除一個設備或對模組進行出廠重置。"
+    },
+    "abort": {
+      "existing_instance_updated": "已更新現有配置。",
+      "already_configured": "空調已配置"
+    },
+    "step": {
+      "user": {
+        "data": {
+          "name": "空調名稱",
+          "host": "主機（IP）地址",
+          "port": "埠號",
+          "force_update": "忽略重複 IP（可能/將會引發錯誤，請檢查錯誤日誌）",
+          "create_swing_mode_select": "是否建立額外的擺風模式選擇器。"
         },
-        "discovery_confirm": {
-          "description": "發現了空調，ID: {id}，IP: {host}，埠號: {port}。請為其命名。",
-          "title": "發現的 WF-RAC 空調",
-          "data": {
-            "name": "空調名稱"
+        "description": "請填寫正確的信息以手動新增空調",
+        "title": "WF-RAC 空調連接資訊"
+      },
+      "discovery_confirm": {
+        "description": "發現了空調，ID: {id}，IP: {host}，埠號: {port}。請為其命名。",
+        "title": "發現的 WF-RAC 空調",
+        "data": {
+          "name": "空調名稱"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "以下是你可以為此空調更改的選項。",
+        "data": {
+          "host": "主機（IP）地址",
+          "availability_check": "檢查可用性",
+          "availability_retry_limit": "重試次數上限",
+          "create_swing_mode_select": "是否建立額外的擺風模式選擇器。"
+        },
+        "title": "WF-RAC 空調連接資訊"
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "name": "空調",
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "Auto": "自動",
+              "Quiet": "靜音",
+              "Low": "低速",
+              "Medium": "中速",
+              "High": "高速"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "Up/Down Auto": "上下自動",
+              "Highest": "最高",
+              "Middle": "中間",
+              "Normal": "標準",
+              "Lowest": "最低",
+              "3D Auto": "3D自動"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "Left/Right Auto": "左右自動",
+              "Left-Left": "左-左",
+              "Left-Center": "左-中",
+              "Center-Center": "中-中",
+              "Center-Right": "中-右",
+              "Right-Right": "右-右",
+              "Left-Right": "左-右",
+              "Right-Left": "右-左",
+              "3D Auto": "3D自動"
+            }
           }
         }
       }
     },
-    "options": {
-      "step": {
-        "init": {
-          "description": "以下是你可以為此空調更改的選項。",
-          "data": {
-            "host": "主機（IP）地址",
-            "availability_check": "檢查可用性",
-            "availability_retry_limit": "重試次數上限",
-            "create_swing_mode_select": "是否建立額外的擺風模式選擇器。"
-          },
-          "title": "WF-RAC 空調連接資訊"
+    "select": {
+      "horizontal_swing": {
+        "name": "水平擺動方向",
+        "state": {
+          "Left/Right Auto": "左右自動",
+          "Left-Left": "左-左",
+          "Left-Center": "左-中",
+          "Center-Center": "中-中",
+          "Center-Right": "中-右",
+          "Right-Right": "右-右",
+          "Left-Right": "左-右",
+          "Right-Left": "右-左",
+          "3D Auto": "3D自動"
         }
+      },
+      "vertical_swing": {
+        "name": "垂直擺動方向",
+        "state": {
+          "Up/Down Auto": "上下自動",
+          "Highest": "最高",
+          "Middle": "中間",
+          "Normal": "標準",
+          "Lowest": "最低",
+          "3D Auto": "3D自動"
+        }
+      },
+      "fan_speed": {
+        "name": "風速",
+        "state": {
+          "auto": "自動",
+          "Quiet": "靜音",
+          "low": "低速",
+          "medium": "中速",
+          "high": "高速"
+        }
+      }
+    },
+    "sensor": {
+      "indoor": {
+        "name": "室內溫度"
+      },
+      "outdoor": {
+        "name": "室外溫度"
+      },
+      "target": {
+        "name": "目標"
+      },
+      "airco_id": {
+        "name": "空調 ID"
+      },
+      "operator_id": {
+        "name": "操作員 ID"
+      },
+      "device_id": {
+        "name": "設備 ID"
+      },
+      "host": {
+        "name": "IP"
+      },
+      "connected_accounts": {
+        "name": "帳戶數"
+      },
+      "error": {
+        "name": "錯誤"
+      },
+      "energy_usage": {
+        "name": "能耗"
       }
     }
   }
+}

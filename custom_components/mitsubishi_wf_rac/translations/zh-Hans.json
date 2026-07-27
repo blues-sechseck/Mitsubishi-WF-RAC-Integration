@@ -45,5 +45,115 @@
         "title": "WF-RAC 空调连接信息"
       }
     }
+  },
+  "entity": {
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "name": "空调",
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "Auto": "自动",
+              "Quiet": "静音",
+              "Low": "低速",
+              "Medium": "中速",
+              "High": "高速"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "Up/Down Auto": "上下自动",
+              "Highest": "最高",
+              "Middle": "中间",
+              "Normal": "标准",
+              "Lowest": "最低",
+              "3D Auto": "3D自动"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "Left/Right Auto": "左右自动",
+              "Left-Left": "左-左",
+              "Left-Center": "左-中",
+              "Center-Center": "中-中",
+              "Center-Right": "中-右",
+              "Right-Right": "右-右",
+              "Left-Right": "左-右",
+              "Right-Left": "右-左",
+              "3D Auto": "3D自动"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "水平摆动方向",
+        "state": {
+          "Left/Right Auto": "左右自动",
+          "Left-Left": "左-左",
+          "Left-Center": "左-中",
+          "Center-Center": "中-中",
+          "Center-Right": "中-右",
+          "Right-Right": "右-右",
+          "Left-Right": "左-右",
+          "Right-Left": "右-左",
+          "3D Auto": "3D自动"
+        }
+      },
+      "vertical_swing": {
+        "name": "垂直摆动方向",
+        "state": {
+          "Up/Down Auto": "上下自动",
+          "Highest": "最高",
+          "Middle": "中间",
+          "Normal": "标准",
+          "Lowest": "最低",
+          "3D Auto": "3D自动"
+        }
+      },
+      "fan_speed": {
+        "name": "风速",
+        "state": {
+          "auto": "自动",
+          "Quiet": "静音",
+          "low": "低速",
+          "medium": "中速",
+          "high": "高速"
+        }
+      }
+    },
+    "sensor": {
+      "indoor": {
+        "name": "室内温度"
+      },
+      "outdoor": {
+        "name": "室外温度"
+      },
+      "target": {
+        "name": "目标"
+      },
+      "airco_id": {
+        "name": "空调 ID"
+      },
+      "operator_id": {
+        "name": "操作员 ID"
+      },
+      "device_id": {
+        "name": "设备 ID"
+      },
+      "host": {
+        "name": "IP"
+      },
+      "connected_accounts": {
+        "name": "账户数"
+      },
+      "error": {
+        "name": "错误"
+      },
+      "energy_usage": {
+        "name": "能耗"
+      }
+    }
   }
 }

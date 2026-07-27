@@ -68,13 +68,13 @@ class DiagnosticsSensor(SensorEntity):
     """Representation of a Sensor."""
 
     _attr_entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name: bool = True
 
     def __init__(
         self, device: Device, name: str, custom_type: str, enable=False
     ) -> None:
         """Initialize the sensor."""
         self._device = device
-        self._attr_name = f"{device.device_name} {name}"
         self._attr_entity_registry_enabled_default = enable
         self._custom_type = custom_type
         self._attr_device_info = device.device_info
@@ -87,6 +87,16 @@ class DiagnosticsSensor(SensorEntity):
         self._attr_unique_id = (
             f"{DOMAIN}-{self._device.airco_id}-{self._custom_type}-sensor"
         )
+        # Map custom_type to translation key
+        type_map = {
+            "airco_id": "airco_id",
+            "operator_id": "operator_id",
+            "device_id": "device_id",
+            "host": "host",
+            "connected_accounts": "connected_accounts",
+            "error": "error"
+        }
+        self._attr_translation_key = type_map.get(custom_type, custom_type)
         self._update_state()
 
     def _update_state(self) -> None:
@@ -123,17 +133,24 @@ class TemperatureSensor(SensorEntity):
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_has_entity_name: bool = True
 
     def __init__(self, device: Device, name: str, custom_type: str, enable=True) -> None:
         """Initialize the sensor."""
         self._device = device
         self._custom_type = custom_type
         self._attr_entity_registry_enabled_default = enable
-        self._attr_name = f"{device.device_name} {name}"
         self._attr_device_info = device.device_info
         self._attr_unique_id = (
             f"{DOMAIN}-{self._device.airco_id}-{self._custom_type}-sensor"
         )
+        # Map custom_type to translation key
+        type_map = {
+            "inside_temperature": "indoor",
+            "outside_temperature": "outdoor",
+            "target_temperature": "target"
+        }
+        self._attr_translation_key = type_map.get(custom_type, custom_type)
         self._update_state()
 
     def _update_state(self) -> None:
@@ -154,14 +171,15 @@ class TemperatureSensor(SensorEntity):
 class EnergySensor(SensorEntity):
     """Representation of a Sensor."""
 
+    _attr_translation_key = "energy_usage"
     _attr_native_unit_of_measurement: str | None = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class: SensorDeviceClass | str | None = SensorDeviceClass.ENERGY
     _attr_state_class: SensorStateClass | str | None = SensorStateClass.TOTAL_INCREASING
+    _attr_has_entity_name: bool = True
 
     def __init__(self, device: Device) -> None:
         """Initialize the sensor."""
         self._device = device
-        self._attr_name = f"{device.device_name} energy usage cycle"
         self._attr_device_info = device.device_info
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-energy-sensor"
         self._update_state()

@@ -36,11 +36,13 @@ async def async_setup_entry(_hass, entry: MitsubishiWfRacConfigEntry, async_add_
 class HorizontalSwingSelect(SelectEntity):
     """Select component to set the horizontal swing direction of the airco"""
 
+    _attr_translation_key = "horizontal_swing"
+    _attr_has_entity_name: bool = True
+
     def __init__(self, device: Device) -> None:
         super().__init__()
         self._attr_options = SUPPORT_SWING_HORIZONTAL_MODES
         self._device = device
-        self._attr_name = f"{device.device_name} horizontal swing direction"
         self._attr_device_info = device.device_info
         self._attr_icon = "mdi:weather-dust"
         self._attr_unique_id = (
@@ -95,11 +97,13 @@ class HorizontalSwingSelect(SelectEntity):
 class VerticalSwingSelect(SelectEntity):
     """Select component to set the vertical swing direction of the airco"""
 
+    _attr_translation_key = "vertical_swing"
+    _attr_has_entity_name: bool = True
+
     def __init__(self, device: Device) -> None:
         super().__init__()
         self._attr_options = SUPPORT_SWING_MODES
         self._device = device
-        self._attr_name = f"{device.device_name} vertical swing direction"
         self._attr_device_info = device.device_info
         self._attr_icon = "mdi:weather-dust"
         self._attr_unique_id = (
@@ -152,11 +156,13 @@ class VerticalSwingSelect(SelectEntity):
 class FanSpeedSelect(SelectEntity):
     """Select component to set the fan speed of the airco"""
 
+    _attr_translation_key = "fan_speed"
+    _attr_has_entity_name: bool = True
+
     def __init__(self, device: Device) -> None:
         super().__init__()
         self._attr_options = SUPPORTED_FAN_MODES
         self._device = device
-        self._attr_name = f"{device.device_name} fan speed"
         self._attr_device_info = device.device_info
         self._attr_icon = "mdi:fan"
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-fan-speed"

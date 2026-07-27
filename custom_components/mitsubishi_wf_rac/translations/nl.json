@@ -43,5 +43,114 @@
         "title": "WF-RAC AC connectie info"
       }
     }
+  },
+  "entity": {
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "Auto": "Auto",
+              "Quiet": "Quiet",
+              "Low": "Low",
+              "Medium": "Medium",
+              "High": "High"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "Up/Down Auto": "Up/Down Auto",
+              "Highest": "Highest",
+              "Middle": "Middle",
+              "Normal": "Normal",
+              "Lowest": "Lowest",
+              "3D Auto": "3D Auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "Left/Right Auto": "Left/Right Auto",
+              "Left-Left": "Left-Left",
+              "Left-Center": "Left-Center",
+              "Center-Center": "Center-Center",
+              "Center-Right": "Center-Right",
+              "Right-Right": "Right-Right",
+              "Left-Right": "Left-Right",
+              "Right-Left": "Right-Left",
+              "3D Auto": "3D Auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Horizontale zwaairichting",
+        "state": {
+          "Left/Right Auto": "Links/Rechts Auto",
+          "Left-Left": "Links-Links",
+          "Left-Center": "Links-Midden",
+          "Center-Center": "Midden-Midden",
+          "Center-Right": "Midden-Rechts",
+          "Right-Right": "Rechts-Rechts",
+          "Left-Right": "Links-Rechts",
+          "Right-Left": "Rechts-Links",
+          "3D Auto": "3D Auto"
+        }
+      },
+      "vertical_swing": {
+        "name": "Verticale zwaairichting",
+        "state": {
+          "Up/Down Auto": "Omhoog/Omlaag Auto",
+          "Highest": "Hoogste",
+          "Middle": "Midden",
+          "Normal": "Normaal",
+          "Lowest": "Laagste",
+          "3D Auto": "3D Auto"
+        }
+      },
+      "fan_speed": {
+        "name": "Ventilatorsnelheid",
+        "state": {
+          "auto": "Auto",
+          "Quiet": "Stil",
+          "low": "Laag",
+          "medium": "Gemiddeld",
+          "high": "Hoog"
+        }
+      }
+    },
+    "sensor": {
+      "indoor": {
+        "name": "Binnentemperatuur"
+      },
+      "outdoor": {
+        "name": "Buitentemperatuur"
+      },
+      "target": {
+        "name": "Doeltemperatuur"
+      },
+      "airco_id": {
+        "name": "Airco-ID"
+      },
+      "operator_id": {
+        "name": "Operator-ID"
+      },
+      "device_id": {
+        "name": "Apparaat-ID"
+      },
+      "host": {
+        "name": "IP"
+      },
+      "connected_accounts": {
+        "name": "Aantal accounts"
+      },
+      "error": {
+        "name": "Fout"
+      },
+      "energy_usage": {
+        "name": "Energieverbruik"
+      }
+    }
   }
 }

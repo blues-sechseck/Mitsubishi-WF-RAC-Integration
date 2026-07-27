@@ -43,5 +43,114 @@
         "title": "WF-RAC oro kondicionieriaus prisijungimo informacija"
       }
     }
+  },
+  "entity": {
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "Auto": "Auto",
+              "Quiet": "Quiet",
+              "Low": "Low",
+              "Medium": "Medium",
+              "High": "High"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "Up/Down Auto": "Up/Down Auto",
+              "Highest": "Highest",
+              "Middle": "Middle",
+              "Normal": "Normal",
+              "Lowest": "Lowest",
+              "3D Auto": "3D Auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "Left/Right Auto": "Left/Right Auto",
+              "Left-Left": "Left-Left",
+              "Left-Center": "Left-Center",
+              "Center-Center": "Center-Center",
+              "Center-Right": "Center-Right",
+              "Right-Right": "Right-Right",
+              "Left-Right": "Left-Right",
+              "Right-Left": "Right-Left",
+              "3D Auto": "3D Auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Horizontalus svyravimo kryptis",
+        "state": {
+          "Left/Right Auto": "Kairė/Dešinė Auto",
+          "Left-Left": "Kairė-Kairė",
+          "Left-Center": "Kairė-Centras",
+          "Center-Center": "Centras-Centras",
+          "Center-Right": "Centras-Dešinė",
+          "Right-Right": "Dešinė-Dešinė",
+          "Left-Right": "Kairė-Dešinė",
+          "Right-Left": "Dešinė-Kairė",
+          "3D Auto": "3D Auto"
+        }
+      },
+      "vertical_swing": {
+        "name": "Vertikalus svyravimo kryptis",
+        "state": {
+          "Up/Down Auto": "Aukštyn/Žemyn Auto",
+          "Highest": "Aukščiausias",
+          "Middle": "Vidurinis",
+          "Normal": "Normalus",
+          "Lowest": "Žemiausias",
+          "3D Auto": "3D Auto"
+        }
+      },
+      "fan_speed": {
+        "name": "Ventiliatoriaus greitis",
+        "state": {
+          "auto": "Automatinis",
+          "Quiet": "Tylus",
+          "low": "Žemas",
+          "medium": "Vidutinis",
+          "high": "Aukštas"
+        }
+      }
+    },
+    "sensor": {
+      "indoor": {
+        "name": "Vidaus temperatūra"
+      },
+      "outdoor": {
+        "name": "Lauko temperatūra"
+      },
+      "target": {
+        "name": "Tikslinė temperatūra"
+      },
+      "airco_id": {
+        "name": "Oro kondicioniaus ID"
+      },
+      "operator_id": {
+        "name": "Operatoriaus ID"
+      },
+      "device_id": {
+        "name": "Įrenginio ID"
+      },
+      "host": {
+        "name": "IP"
+      },
+      "connected_accounts": {
+        "name": "Sąskaitų skaičius"
+      },
+      "error": {
+        "name": "Klaida"
+      },
+      "energy_usage": {
+        "name": "Energijos suvartojimas"
+      }
+    }
   }
 }
