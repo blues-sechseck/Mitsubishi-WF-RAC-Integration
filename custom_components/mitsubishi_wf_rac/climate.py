@@ -10,7 +10,6 @@ from . import MitsubishiWfRacConfigEntry
 import voluptuous as vol
 
 from homeassistant.components.climate import ClimateEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.climate.const import HVACMode, HVACAction, FAN_AUTO
 from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
@@ -108,23 +107,23 @@ class AircoClimate(ClimateEntity):
         if set_temp is None:
             raise ValueError("Temperature is required")
 
-
-        # Apply target offset
-        target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
-        # The target offset is subtracted from the user-set temperature to get the real temperature to be sent to the AC unit.
-        _target_temp = set_temp + target_offset
-
-        # Ensure the target temperature is at least 18 degrees
-        if _target_temp < 16:
-            _target_temp = 16
-
         if set_temp < self._attr_min_temp:
             raise ValueError(f"Temperature {set_temp} is below minimum {self._attr_min_temp}")
 
         if set_temp > self._attr_max_temp:
             raise ValueError(f"Temperature {set_temp} is above maximum {self._attr_max_temp}")
 
-        opts: dict[str, Any] = {AirconCommands.PresetTemp: set_temp}
+        # The AC unit's own thermostat logic uses its own indoor sensor reading,
+        # subject to the same calibration bias CONF_INDOOR_OFFSET corrects for
+        # display (see sensor.py). To make the unit actually reach the
+        # user-requested real room temperature despite that bias, the offset is
+        # subtracted from the commanded setpoint before sending - the displayed
+        # target_temperature itself is unaffected.
+        target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
+        target_temp = set_temp - target_offset
+        target_temp = max(self._attr_min_temp, min(self._attr_max_temp, target_temp))
+
+        opts: dict[str, Any] = {AirconCommands.PresetTemp: target_temp}
 
         if "hvac_mode" in kwargs:
             hvac_mode: HVACMode | None = kwargs.get("hvac_mode")

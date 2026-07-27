@@ -100,7 +100,7 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     availability_retry_limit: int = entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3)
     create_swing_mode_select: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
     _device = Device(hass, name, device, port, device_id, operator_id, airco_id, availability_retry,
-                     availability_retry_limit, create_swing_mode_select)
+                     availability_retry_limit, create_swing_mode_select, entry)
     return _device
 
 

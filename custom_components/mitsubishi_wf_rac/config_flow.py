@@ -315,15 +315,15 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_INDOOR_OFFSET,
                         default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0), # type: ignore
-                    ): vol.Coerce(float, vol.Range(min=-15.0, max=15.0)),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
                     vol.Optional(
                         CONF_OUTDOOR_OFFSET,
                         default=self.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0), # type: ignore
-                    ): vol.Coerce(float, vol.Range(min=-15.0, max=15.0)),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
                     vol.Optional(
                         CONF_TARGET_OFFSET,
                         default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0), # type: ignore
-                    ): vol.Coerce(float, vol.Range(min=-5.0, max=5.0)),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0)),
                 },
             ),
         )
