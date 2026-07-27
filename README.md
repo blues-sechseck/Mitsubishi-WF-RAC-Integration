@@ -12,10 +12,6 @@ This is a fork of [jeatheak/Mitsubishi-WF-RAC-Integration](https://github.com/je
 
 See [Github To Do & Bug List](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues)
 
-# Support
-
-Original integration by jeatheak — <a href="https://www.buymeacoffee.com/jeatheak" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 40px !important;width: 145px !important;" ></a>
-
 # Installation
 
 Install using [HACS](https://hacs.xyz)
