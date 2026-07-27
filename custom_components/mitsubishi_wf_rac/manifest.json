@@ -2,7 +2,7 @@
   "domain": "mitsubishi_wf_rac",
   "name": "Mitsubishi WF-RAC",
   "codeowners": [
-    "blues-sechseck"
+    "@blues-sechseck"
   ],
   "config_flow": true,
   "documentation": "https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/",
@@ -11,7 +11,7 @@
   "requirements": [
     "aenum>=3.1.11"
   ],
-  "version": "2025.12",
+  "version": "2026.7.1",
   "zeroconf": [
     "_beaver._tcp.local."
   ]
