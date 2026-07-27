@@ -5,7 +5,6 @@ from typing import Any
 import logging
 
 from async_timeout import timeout
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -33,12 +32,10 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             availability_retry: bool,
             availability_retry_limit: int,
             create_swing_mode_select: bool,
-            config_entry: ConfigEntry,
     ) -> None:
         self._api = Repository(hass, hostname, port, operator_id, device_id)
         self._parser = RacParser()
         self._hass = hass
-        self._config_entry = config_entry
 
         # Protected state
         self._airco = Aircon()
@@ -202,11 +199,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def num_accounts(self) -> int:
         """Return Accounts connected"""
         return self._connected_accounts
-
-    @property
-    def config_entry(self) -> ConfigEntry:
-        """Return the config entry this device was set up from"""
-        return self._config_entry
 
     @property
     def updated_by(self) -> str | None:
