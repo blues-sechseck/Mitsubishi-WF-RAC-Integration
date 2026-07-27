@@ -40,7 +40,10 @@
           "host": "主机（IP）地址",
           "availability_check": "检查可用性",
           "availability_retry_limit": "重试次数上限",
-          "create_swing_mode_select": "是否创建额外的摆风模式选择器。"
+          "create_swing_mode_select": "是否创建额外的摆风模式选择器。",
+		  "indoor_offset": "室内偏移",
+          "outdoor_offset": "室外偏移",
+          "target_offset": "目标偏移"
         },
         "title": "WF-RAC 空调连接信息"
       }

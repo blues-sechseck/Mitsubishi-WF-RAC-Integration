@@ -38,7 +38,10 @@
         "data": {
           "host": "Host (IP) Adresse",
           "availability_check": "Verfügbarkeit prüfen",
-          "availability_retry_limit": "max. Anzahl Wiederholungen"
+          "availability_retry_limit": "max. Anzahl Wiederholungen",
+          "indoor_offset": "Innentemperatur Sensor-Offset",
+          "outdoor_offset": "Außentemperatur Sensor-Offset",
+          "target_offset": "Zieltemperatur-Offset"
         },
         "title": "WF-RAC AC Verbindungs-Info"
       }

@@ -36,7 +36,10 @@
       "init": {
         "description": "以下は、このエアコンの変更可能なオプションです。",
         "data": {
-          "host": "ホスト（IP）アドレス"
+          "host": "ホスト（IP）アドレス",
+		  "indoor_offset": "室内オフセット",
+          "outdoor_offset": "室外オフセット",
+          "target_offset": "設定オフセット"
         },
         "title": "WF-RACエアコン接続情報"
       }

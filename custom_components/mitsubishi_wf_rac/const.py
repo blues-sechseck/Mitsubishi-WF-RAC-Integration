@@ -32,6 +32,11 @@ ATTR_INSIDE_TEMPERATURE = "inside_temperature"
 ATTR_OUTSIDE_TEMPERATURE = "outside_temperature"
 ATTR_TARGET_TEMPERATURE = "target_temperature"
 
+# New offset constants
+CONF_INDOOR_OFFSET = "indoor_offset"
+CONF_OUTDOOR_OFFSET = "outdoor_offset"
+CONF_TARGET_OFFSET = "target_offset"
+
 SENSOR_TYPE_TEMPERATURE = "temperature"
 
 SENSOR_TYPES = {
