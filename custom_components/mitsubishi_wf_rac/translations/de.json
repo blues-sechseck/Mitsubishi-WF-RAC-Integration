@@ -148,6 +148,18 @@
       "error": {
         "name": "Fehler"
       },
+      "updated_by": {
+        "name": "Zuletzt geändert von"
+      },
+      "account_expires": {
+        "name": "Konto läuft ab"
+      },
+      "led_status": {
+        "name": "LED-Status"
+      },
+      "auto_heating": {
+        "name": "Auto-Heizen"
+      },
       "energy_usage": {
         "name": "Energieverbrauch"
       }

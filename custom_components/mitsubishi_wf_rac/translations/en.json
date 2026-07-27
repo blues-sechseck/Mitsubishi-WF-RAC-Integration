@@ -150,6 +150,18 @@
       "error": {
         "name": "Error"
       },
+      "updated_by": {
+        "name": "Updated By"
+      },
+      "account_expires": {
+        "name": "Account Expires"
+      },
+      "led_status": {
+        "name": "LED Status"
+      },
+      "auto_heating": {
+        "name": "Auto Heating"
+      },
       "energy_usage": {
         "name": "Energy Usage Cycle"
       }

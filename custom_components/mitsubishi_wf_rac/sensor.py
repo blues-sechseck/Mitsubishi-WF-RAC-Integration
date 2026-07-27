@@ -94,7 +94,11 @@ class DiagnosticsSensor(SensorEntity):
             "device_id": "device_id",
             "host": "host",
             "connected_accounts": "connected_accounts",
-            "error": "error"
+            "error": "error",
+            "updated_by": "updated_by",
+            "account_expires": "account_expires",
+            "led_status": "led_status",
+            "auto_heating": "auto_heating",
         }
         self._attr_translation_key = type_map.get(custom_type, custom_type)
         self._update_state()
