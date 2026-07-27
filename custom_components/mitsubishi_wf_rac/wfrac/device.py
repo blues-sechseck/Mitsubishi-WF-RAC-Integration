@@ -95,6 +95,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             await self.add_account()
             return
 
+        # TEMP DEBUG: dump the full raw response once to see which top-level
+        # fields (highTemp, lowTemp, autoHeating, ledStat, remoteList, expires,
+        # updatedBy, logStat) this device's firmware actually sends, before we
+        # build parsing/entities around them. Remove after Phase 0 verification.
+        _LOGGER.debug("Raw airco response for %s: %s", self._airco_id, response)
+
         try:
             self._connected_accounts = int(response["numOfAccount"])
             self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
