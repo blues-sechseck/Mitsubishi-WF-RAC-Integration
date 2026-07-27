@@ -4,10 +4,12 @@ set_horizontal_swing_mode:
   name: Set horizontal swing mode
   # Description of the service
   description: Sets the horizontal (left/right) swing mode
-  # If the service accepts entity IDs, target allows the user to specify entities by entity, device, or area. If `target` is specified, `entity_id` should not be defined in the `fields` map. By default it shows only targets matching entities from the same domain as the service, but if further customization is required, target supports the entity, device, and area selectors (https://www.home-assistant.io/docs/blueprint/selectors/). Entity selector parameters will automatically be applied to device and area, and device selector parameters will automatically be applied to area.
+  # This is an entity service registered on the climate platform, so target
+  # entities of this integration's climate domain rather than devices.
   target:
-    device:
+    entity:
       integration: mitsubishi_wf_rac
+      domain: climate
   # Different fields that your service accepts
   fields:
     # Key of the field
@@ -21,31 +23,33 @@ set_horizontal_swing_mode:
       # Advanced fields are only shown when the advanced mode is enabled for the user (default = false)
       advanced: false
       # Example value that can be passed for this field
-      example: "Left/Right Auto"
+      example: "left_right_auto"
       # The default field value
-      default: "Left/Right Auto"
+      default: "left_right_auto"
       # Selector (https://www.home-assistant.io/docs/blueprint/selectors/) to control the input UI for this field
       selector:
         select:
           options:
-            - "Left/Right Auto"
-            - "Left-Left"
-            - "Left-Center"
-            - "Center-Center"
-            - "Center-Right"
-            - "Right-Right"
-            - "Left-Right"
-            - "Right-Left"
+            - "left_right_auto"
+            - "left_left"
+            - "left_center"
+            - "center_center"
+            - "center_right"
+            - "right_right"
+            - "left_right"
+            - "right_left"
 # Service ID
 set_vertical_swing_mode:
   # Service name as shown in UI
   name: Set vertical swing mode
   # Description of the service
   description: Sets the vertical (up/down) swing mode
-  # If the service accepts entity IDs, target allows the user to specify entities by entity, device, or area. If `target` is specified, `entity_id` should not be defined in the `fields` map. By default it shows only targets matching entities from the same domain as the service, but if further customization is required, target supports the entity, device, and area selectors (https://www.home-assistant.io/docs/blueprint/selectors/). Entity selector parameters will automatically be applied to device and area, and device selector parameters will automatically be applied to area.
+  # This is an entity service registered on the climate platform, so target
+  # entities of this integration's climate domain rather than devices.
   target:
-    device:
+    entity:
       integration: mitsubishi_wf_rac
+      domain: climate
   # Different fields that your service accepts
   fields:
     # Key of the field
@@ -59,41 +63,16 @@ set_vertical_swing_mode:
       # Advanced fields are only shown when the advanced mode is enabled for the user (default = false)
       advanced: false
       # Example value that can be passed for this field
-      example: "Up/Down Auto"
+      example: "up_down_auto"
       # The default field value
-      default: "Up/Down Auto"
+      default: "up_down_auto"
       # Selector (https://www.home-assistant.io/docs/blueprint/selectors/) to control the input UI for this field
       selector:
         select:
           options:
-            - "Up/Down Auto"
-            - "Highest"
-            - "Middle"
-            - "Normal"
-            - "Lowest"
-            - "3D Auto"
-# Service ID
-set_fan_speed:
-  # Service name as shown in UI
-  name: Set fan speed
-  # Description of the service
-  description: Sets the fan speed of the air conditioner
-  target:
-    device:
-      integration: mitsubishi_wf_rac
-  fields:
-    speed:
-      name: Fan speed
-      description: Which fan speed to set
-      required: true
-      advanced: false
-      example: "Auto"
-      default: "Auto"
-      selector:
-        select:
-          options:
-            - "Auto"
-            - "Quiet"
-            - "Low"
-            - "Medium"
-            - "High"
+            - "up_down_auto"
+            - "highest"
+            - "middle"
+            - "normal"
+            - "lowest"
+            - "3d_auto"

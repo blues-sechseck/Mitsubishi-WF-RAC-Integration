@@ -39,7 +39,7 @@
           "host": "Host (IP) address",
           "availability_check": "Controleer beschikbaarheid",
           "availability_retry_limit": "Herhaal limiet",
-		  "indoor_offset": "Binnen offset",
+          "indoor_offset": "Binnen offset",
           "outdoor_offset": "Buiten offset",
           "target_offset": "Doel offset"
         },
@@ -53,34 +53,34 @@
         "state_attributes": {
           "fan_mode": {
             "state": {
-              "Auto": "Auto",
-              "Quiet": "Quiet",
-              "Low": "Low",
-              "Medium": "Medium",
-              "High": "High"
+              "auto": "Auto",
+              "quiet": "Quiet",
+              "low": "Low",
+              "medium": "Medium",
+              "high": "High"
             }
           },
           "swing_mode": {
             "state": {
-              "Up/Down Auto": "Up/Down Auto",
-              "Highest": "Highest",
-              "Middle": "Middle",
-              "Normal": "Normal",
-              "Lowest": "Lowest",
-              "3D Auto": "3D Auto"
+              "up_down_auto": "Up/Down Auto",
+              "highest": "Highest",
+              "middle": "Middle",
+              "normal": "Normal",
+              "lowest": "Lowest",
+              "3d_auto": "3D Auto"
             }
           },
           "swing_horizontal_mode": {
             "state": {
-              "Left/Right Auto": "Left/Right Auto",
-              "Left-Left": "Left-Left",
-              "Left-Center": "Left-Center",
-              "Center-Center": "Center-Center",
-              "Center-Right": "Center-Right",
-              "Right-Right": "Right-Right",
-              "Left-Right": "Left-Right",
-              "Right-Left": "Right-Left",
-              "3D Auto": "3D Auto"
+              "left_right_auto": "Left/Right Auto",
+              "left_left": "Left-Left",
+              "left_center": "Left-Center",
+              "center_center": "Center-Center",
+              "center_right": "Center-Right",
+              "right_right": "Right-Right",
+              "left_right": "Left-Right",
+              "right_left": "Right-Left",
+              "3d_auto": "3D Auto"
             }
           }
         }
@@ -90,33 +90,33 @@
       "horizontal_swing": {
         "name": "Horizontale zwaairichting",
         "state": {
-          "Left/Right Auto": "Links/Rechts Auto",
-          "Left-Left": "Links-Links",
-          "Left-Center": "Links-Midden",
-          "Center-Center": "Midden-Midden",
-          "Center-Right": "Midden-Rechts",
-          "Right-Right": "Rechts-Rechts",
-          "Left-Right": "Links-Rechts",
-          "Right-Left": "Rechts-Links",
-          "3D Auto": "3D Auto"
+          "left_right_auto": "Links/Rechts Auto",
+          "left_left": "Links-Links",
+          "left_center": "Links-Midden",
+          "center_center": "Midden-Midden",
+          "center_right": "Midden-Rechts",
+          "right_right": "Rechts-Rechts",
+          "left_right": "Links-Rechts",
+          "right_left": "Rechts-Links",
+          "3d_auto": "3D Auto"
         }
       },
       "vertical_swing": {
         "name": "Verticale zwaairichting",
         "state": {
-          "Up/Down Auto": "Omhoog/Omlaag Auto",
-          "Highest": "Hoogste",
-          "Middle": "Midden",
-          "Normal": "Normaal",
-          "Lowest": "Laagste",
-          "3D Auto": "3D Auto"
+          "up_down_auto": "Omhoog/Omlaag Auto",
+          "highest": "Hoogste",
+          "middle": "Midden",
+          "normal": "Normaal",
+          "lowest": "Laagste",
+          "3d_auto": "3D Auto"
         }
       },
       "fan_speed": {
         "name": "Ventilatorsnelheid",
         "state": {
           "auto": "Auto",
-          "Quiet": "Stil",
+          "quiet": "Stil",
           "low": "Laag",
           "medium": "Gemiddeld",
           "high": "Hoog"

@@ -37,7 +37,7 @@
         "description": "以下は、このエアコンの変更可能なオプションです。",
         "data": {
           "host": "ホスト（IP）アドレス",
-		  "indoor_offset": "室内オフセット",
+          "indoor_offset": "室内オフセット",
           "outdoor_offset": "室外オフセット",
           "target_offset": "設定オフセット"
         },
@@ -51,34 +51,34 @@
         "state_attributes": {
           "fan_mode": {
             "state": {
-              "Auto": "Auto",
-              "Quiet": "Quiet",
-              "Low": "Low",
-              "Medium": "Medium",
-              "High": "High"
+              "auto": "Auto",
+              "quiet": "Quiet",
+              "low": "Low",
+              "medium": "Medium",
+              "high": "High"
             }
           },
           "swing_mode": {
             "state": {
-              "Up/Down Auto": "Up/Down Auto",
-              "Highest": "Highest",
-              "Middle": "Middle",
-              "Normal": "Normal",
-              "Lowest": "Lowest",
-              "3D Auto": "3D Auto"
+              "up_down_auto": "Up/Down Auto",
+              "highest": "Highest",
+              "middle": "Middle",
+              "normal": "Normal",
+              "lowest": "Lowest",
+              "3d_auto": "3D Auto"
             }
           },
           "swing_horizontal_mode": {
             "state": {
-              "Left/Right Auto": "Left/Right Auto",
-              "Left-Left": "Left-Left",
-              "Left-Center": "Left-Center",
-              "Center-Center": "Center-Center",
-              "Center-Right": "Center-Right",
-              "Right-Right": "Right-Right",
-              "Left-Right": "Left-Right",
-              "Right-Left": "Right-Left",
-              "3D Auto": "3D Auto"
+              "left_right_auto": "Left/Right Auto",
+              "left_left": "Left-Left",
+              "left_center": "Left-Center",
+              "center_center": "Center-Center",
+              "center_right": "Center-Right",
+              "right_right": "Right-Right",
+              "left_right": "Left-Right",
+              "right_left": "Right-Left",
+              "3d_auto": "3D Auto"
             }
           }
         }
@@ -88,33 +88,33 @@
       "horizontal_swing": {
         "name": "水平スイング方向",
         "state": {
-          "Left/Right Auto": "左右自動",
-          "Left-Left": "左-左",
-          "Left-Center": "左-中央",
-          "Center-Center": "中央-中央",
-          "Center-Right": "中央-右",
-          "Right-Right": "右-右",
-          "Left-Right": "左-右",
-          "Right-Left": "右-左",
-          "3D Auto": "3D自動"
+          "left_right_auto": "左右自動",
+          "left_left": "左-左",
+          "left_center": "左-中央",
+          "center_center": "中央-中央",
+          "center_right": "中央-右",
+          "right_right": "右-右",
+          "left_right": "左-右",
+          "right_left": "右-左",
+          "3d_auto": "3D自動"
         }
       },
       "vertical_swing": {
         "name": "垂直スイング方向",
         "state": {
-          "Up/Down Auto": "上下自動",
-          "Highest": "最高",
-          "Middle": "中間",
-          "Normal": "標準",
-          "Lowest": "最低",
-          "3D Auto": "3D自動"
+          "up_down_auto": "上下自動",
+          "highest": "最高",
+          "middle": "中間",
+          "normal": "標準",
+          "lowest": "最低",
+          "3d_auto": "3D自動"
         }
       },
       "fan_speed": {
         "name": "ファン速度",
         "state": {
           "auto": "自動",
-          "Quiet": "静か",
+          "quiet": "静か",
           "low": "低",
           "medium": "中",
           "high": "高"

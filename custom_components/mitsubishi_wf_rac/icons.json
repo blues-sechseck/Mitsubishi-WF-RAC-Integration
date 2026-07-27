@@ -5,29 +5,29 @@
                 "state_attributes": {
                     "fan_mode": {
                         "state": {
-                            "Quiet": "mdi:fan-minus"
+                            "quiet": "mdi:fan-minus"
                         }
                     },
                     "swing_horizontal_mode": {
                         "state": {
-                            "Left-Left": "mdi:arrow-left-thick",
-                            "Left-Center": "mdi:arrow-left",
-                            "Center-Right": "mdi:arrow-right",
-                            "Right-Right": "mdi:arrow-right-thick",
-                            "Left-Right": "mdi:arrow-left-right",
-                            "Right-Left": "mdi:arrow-left-right",
-                            "Left/Right Auto": "mdi:refresh-auto",
-                            "3D Auto": "mdi:video-3d"
+                            "left_left": "mdi:arrow-left-thick",
+                            "left_center": "mdi:arrow-left",
+                            "center_right": "mdi:arrow-right",
+                            "right_right": "mdi:arrow-right-thick",
+                            "left_right": "mdi:arrow-left-right",
+                            "right_left": "mdi:arrow-left-right",
+                            "left_right_auto": "mdi:refresh-auto",
+                            "3d_auto": "mdi:video-3d"
                         }
                     },
                     "swing_mode": {
                         "state": {
-                            "Highest": "mdi:arrow-up-thick",
-                            "Middle": "mdi:arrow-up",
-                            "Normal": "mdi:circle-medium",
-                            "Lowest": "mdi:arrow-down",
-                            "Up/Down Auto": "mdi:arrow-up-down",
-                            "3D Auto": "mdi:video-3d"
+                            "highest": "mdi:arrow-up-thick",
+                            "middle": "mdi:arrow-up",
+                            "normal": "mdi:circle-medium",
+                            "lowest": "mdi:arrow-down",
+                            "up_down_auto": "mdi:arrow-up-down",
+                            "3d_auto": "mdi:video-3d"
                         }
                     }
                 }

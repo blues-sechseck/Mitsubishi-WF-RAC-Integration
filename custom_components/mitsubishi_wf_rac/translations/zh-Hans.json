@@ -41,7 +41,7 @@
           "availability_check": "检查可用性",
           "availability_retry_limit": "重试次数上限",
           "create_swing_mode_select": "是否创建额外的摆风模式选择器。",
-		  "indoor_offset": "室内偏移",
+          "indoor_offset": "室内偏移",
           "outdoor_offset": "室外偏移",
           "target_offset": "目标偏移"
         },
@@ -56,34 +56,34 @@
         "state_attributes": {
           "fan_mode": {
             "state": {
-              "Auto": "自动",
-              "Quiet": "静音",
-              "Low": "低速",
-              "Medium": "中速",
-              "High": "高速"
+              "auto": "自动",
+              "quiet": "静音",
+              "low": "低速",
+              "medium": "中速",
+              "high": "高速"
             }
           },
           "swing_mode": {
             "state": {
-              "Up/Down Auto": "上下自动",
-              "Highest": "最高",
-              "Middle": "中间",
-              "Normal": "标准",
-              "Lowest": "最低",
-              "3D Auto": "3D自动"
+              "up_down_auto": "上下自动",
+              "highest": "最高",
+              "middle": "中间",
+              "normal": "标准",
+              "lowest": "最低",
+              "3d_auto": "3D自动"
             }
           },
           "swing_horizontal_mode": {
             "state": {
-              "Left/Right Auto": "左右自动",
-              "Left-Left": "左-左",
-              "Left-Center": "左-中",
-              "Center-Center": "中-中",
-              "Center-Right": "中-右",
-              "Right-Right": "右-右",
-              "Left-Right": "左-右",
-              "Right-Left": "右-左",
-              "3D Auto": "3D自动"
+              "left_right_auto": "左右自动",
+              "left_left": "左-左",
+              "left_center": "左-中",
+              "center_center": "中-中",
+              "center_right": "中-右",
+              "right_right": "右-右",
+              "left_right": "左-右",
+              "right_left": "右-左",
+              "3d_auto": "3D自动"
             }
           }
         }
@@ -93,33 +93,33 @@
       "horizontal_swing": {
         "name": "水平摆动方向",
         "state": {
-          "Left/Right Auto": "左右自动",
-          "Left-Left": "左-左",
-          "Left-Center": "左-中",
-          "Center-Center": "中-中",
-          "Center-Right": "中-右",
-          "Right-Right": "右-右",
-          "Left-Right": "左-右",
-          "Right-Left": "右-左",
-          "3D Auto": "3D自动"
+          "left_right_auto": "左右自动",
+          "left_left": "左-左",
+          "left_center": "左-中",
+          "center_center": "中-中",
+          "center_right": "中-右",
+          "right_right": "右-右",
+          "left_right": "左-右",
+          "right_left": "右-左",
+          "3d_auto": "3D自动"
         }
       },
       "vertical_swing": {
         "name": "垂直摆动方向",
         "state": {
-          "Up/Down Auto": "上下自动",
-          "Highest": "最高",
-          "Middle": "中间",
-          "Normal": "标准",
-          "Lowest": "最低",
-          "3D Auto": "3D自动"
+          "up_down_auto": "上下自动",
+          "highest": "最高",
+          "middle": "中间",
+          "normal": "标准",
+          "lowest": "最低",
+          "3d_auto": "3D自动"
         }
       },
       "fan_speed": {
         "name": "风速",
         "state": {
           "auto": "自动",
-          "Quiet": "静音",
+          "quiet": "静音",
           "low": "低速",
           "medium": "中速",
           "high": "高速"

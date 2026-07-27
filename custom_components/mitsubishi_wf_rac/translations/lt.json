@@ -39,7 +39,7 @@
           "host": "Host (IP) adresas",
           "availability_check": "Patikrinti prieinamumą",
           "availability_retry_limit": "Pakartotinio bandymo limitas",
-		  "indoor_offset": "Vidaus poslinkis",
+          "indoor_offset": "Vidaus poslinkis",
           "outdoor_offset": "Lauko poslinkis",
           "target_offset": "Tikslinis poslinkis"
         },
@@ -53,34 +53,34 @@
         "state_attributes": {
           "fan_mode": {
             "state": {
-              "Auto": "Auto",
-              "Quiet": "Quiet",
-              "Low": "Low",
-              "Medium": "Medium",
-              "High": "High"
+              "auto": "Auto",
+              "quiet": "Quiet",
+              "low": "Low",
+              "medium": "Medium",
+              "high": "High"
             }
           },
           "swing_mode": {
             "state": {
-              "Up/Down Auto": "Up/Down Auto",
-              "Highest": "Highest",
-              "Middle": "Middle",
-              "Normal": "Normal",
-              "Lowest": "Lowest",
-              "3D Auto": "3D Auto"
+              "up_down_auto": "Up/Down Auto",
+              "highest": "Highest",
+              "middle": "Middle",
+              "normal": "Normal",
+              "lowest": "Lowest",
+              "3d_auto": "3D Auto"
             }
           },
           "swing_horizontal_mode": {
             "state": {
-              "Left/Right Auto": "Left/Right Auto",
-              "Left-Left": "Left-Left",
-              "Left-Center": "Left-Center",
-              "Center-Center": "Center-Center",
-              "Center-Right": "Center-Right",
-              "Right-Right": "Right-Right",
-              "Left-Right": "Left-Right",
-              "Right-Left": "Right-Left",
-              "3D Auto": "3D Auto"
+              "left_right_auto": "Left/Right Auto",
+              "left_left": "Left-Left",
+              "left_center": "Left-Center",
+              "center_center": "Center-Center",
+              "center_right": "Center-Right",
+              "right_right": "Right-Right",
+              "left_right": "Left-Right",
+              "right_left": "Right-Left",
+              "3d_auto": "3D Auto"
             }
           }
         }
@@ -90,33 +90,33 @@
       "horizontal_swing": {
         "name": "Horizontalus svyravimo kryptis",
         "state": {
-          "Left/Right Auto": "Kairė/Dešinė Auto",
-          "Left-Left": "Kairė-Kairė",
-          "Left-Center": "Kairė-Centras",
-          "Center-Center": "Centras-Centras",
-          "Center-Right": "Centras-Dešinė",
-          "Right-Right": "Dešinė-Dešinė",
-          "Left-Right": "Kairė-Dešinė",
-          "Right-Left": "Dešinė-Kairė",
-          "3D Auto": "3D Auto"
+          "left_right_auto": "Kairė/Dešinė Auto",
+          "left_left": "Kairė-Kairė",
+          "left_center": "Kairė-Centras",
+          "center_center": "Centras-Centras",
+          "center_right": "Centras-Dešinė",
+          "right_right": "Dešinė-Dešinė",
+          "left_right": "Kairė-Dešinė",
+          "right_left": "Dešinė-Kairė",
+          "3d_auto": "3D Auto"
         }
       },
       "vertical_swing": {
         "name": "Vertikalus svyravimo kryptis",
         "state": {
-          "Up/Down Auto": "Aukštyn/Žemyn Auto",
-          "Highest": "Aukščiausias",
-          "Middle": "Vidurinis",
-          "Normal": "Normalus",
-          "Lowest": "Žemiausias",
-          "3D Auto": "3D Auto"
+          "up_down_auto": "Aukštyn/Žemyn Auto",
+          "highest": "Aukščiausias",
+          "middle": "Vidurinis",
+          "normal": "Normalus",
+          "lowest": "Žemiausias",
+          "3d_auto": "3D Auto"
         }
       },
       "fan_speed": {
         "name": "Ventiliatoriaus greitis",
         "state": {
           "auto": "Automatinis",
-          "Quiet": "Tylus",
+          "quiet": "Tylus",
           "low": "Žemas",
           "medium": "Vidutinis",
           "high": "Aukštas"
