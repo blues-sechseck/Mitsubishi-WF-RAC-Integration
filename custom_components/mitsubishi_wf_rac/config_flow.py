@@ -30,7 +30,7 @@ from .const import (
     CONF_OPERATOR_ID,
     DOMAIN,
 )
-from .wfrac.repository import Repository
+from .wfrac.repository import AirconApiError, Repository
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             airco_id = await repository.get_airco_id()
-        except Exception as query_failed:
+        except (AirconApiError, KeyError, TypeError) as query_failed:
             raise CannotConnect(reason=str(query_failed)) from query_failed  # type: ignore
 
         data[CONF_AIRCO_ID] = airco_id
@@ -167,7 +167,10 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     else:
                         description_placeholders[key] = value
             except Exception:  # pylint: disable=broad-except
-                _LOGGER.error("Unexpected exception")
+                # Intentionally broad: this is the outermost boundary of the config
+                # flow step, so any bug here should show the user a graceful
+                # "unexpected_error" instead of crashing the flow.
+                _LOGGER.error("Unexpected exception", exc_info=True)
                 errors[CONF_BASE] = "unexpected_error"
 
         # If there is no user input or there were errors, show the form again, including any errors
