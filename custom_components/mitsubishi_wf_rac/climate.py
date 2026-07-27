@@ -18,6 +18,7 @@ from homeassistant.helpers import config_validation as cv, entity_platform
 
 from .wfrac.device import Device
 from .wfrac.models.aircon import AirconCommands
+from .wfrac.repository import AirconApiError
 from .const import (
     DOMAIN,
     FAN_MODE_TRANSLATION,
@@ -191,7 +192,16 @@ class AircoClimate(ClimateEntity):
         await asyncio.sleep(UPDATE_CONSOLIDATION_PERIOD.total_seconds())
         params = self._consolidated_params.copy()
         self._consolidated_params.clear()
-        await self._device.set_airco(params)
+        try:
+            await self._device.set_airco(params)
+        except (AirconApiError, KeyError, TypeError, ValueError):
+            # This runs as a detached task (async_create_task, nothing awaits it), so
+            # without this the re-raised error from Device.set_airco() (already logged
+            # there) becomes an orphaned "Task exception was never retrieved" with zero
+            # HA-visible feedback that the command never reached the unit. Still refresh
+            # below so the entity picks up self._device.available if the same failure
+            # already flipped it.
+            pass
         self._update_state()
         self.async_write_ha_state()
 
