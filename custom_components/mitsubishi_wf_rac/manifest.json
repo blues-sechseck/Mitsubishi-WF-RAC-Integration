@@ -11,7 +11,7 @@
   "requirements": [
     "aenum>=3.1.11"
   ],
-  "version": "2.0.0",
+  "version": "2026.8",
   "zeroconf": [
     "_beaver._tcp.local."
   ]
