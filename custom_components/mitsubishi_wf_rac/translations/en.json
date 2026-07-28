@@ -166,7 +166,7 @@
         "name": "Auto Heating"
       },
       "energy_usage": {
-        "name": "Energy Usage Cycle"
+        "name": "Energy Usage"
       }
     }
   }
