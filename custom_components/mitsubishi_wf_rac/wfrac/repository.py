@@ -128,14 +128,17 @@ class Repository:
                         url, json=data, timeout=aiohttp.ClientTimeout(total=30)
                     ) as resp:
                         resp.raise_for_status()
-                        return await resp.json()
+                        # Some modules send a valid JSON body with an incorrect
+                        # Content-Type header (e.g. text/plain) - content_type=None
+                        # skips aiohttp's default content-type validation.
+                        return await resp.json(content_type=None)
                 elif protocol == "https":
                     https_session = await self._get_https_session()
                     async with https_session.post(
                         url, json=data, timeout=aiohttp.ClientTimeout(total=30)
                     ) as resp:
                         resp.raise_for_status()
-                        return await resp.json()
+                        return await resp.json(content_type=None)
             except (ClientConnectionError, asyncio.TimeoutError) as ex:
                 raise AirconApiError(f"Aircon returned error: {ex}") from ex
 
