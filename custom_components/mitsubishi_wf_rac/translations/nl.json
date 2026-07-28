@@ -154,19 +154,6 @@
       "energy_usage": {
         "name": "Energieverbruik"
       }
-    },
-    "binary_sensor": {
-      "problem": {
-        "name": "Probleem"
-      },
-      "occupancy": {
-        "name": "Bezetting"
-      }
-    },
-    "switch": {
-      "self_clean": {
-        "name": "Zelfreiniging"
-      }
     }
   }
 }

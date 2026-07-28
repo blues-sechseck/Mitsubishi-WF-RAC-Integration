@@ -32,11 +32,8 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             availability_retry: bool,
             availability_retry_limit: int,
             create_swing_mode_select: bool,
-            connection_method: str | None = None,
     ) -> None:
-        self._api = Repository(
-            hass, hostname, port, operator_id, device_id, method=connection_method
-        )
+        self._api = Repository(hass, hostname, port, operator_id, device_id)
         self._parser = RacParser()
         self._hass = hass
 
@@ -149,7 +146,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         if self._airco is None:
             raise ValueError("Airco object is empty")
 
-        airco_stat = AirconStat.from_aircon(self._airco)
+        airco_stat = AirconStat(self._airco)
 
         for key, value in params.items():
             setattr(airco_stat, key, value)
@@ -262,11 +259,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def create_swing_mode_select(self) -> bool:
         """Create swing mode select"""
         return self._create_swing_mode_select
-
-    @property
-    def connection_method(self) -> str | None:
-        """Return the discovered/persisted communication method (http/https), if known."""
-        return self._api.method
 
     async def _async_update_data(self):
         """Update data via library."""

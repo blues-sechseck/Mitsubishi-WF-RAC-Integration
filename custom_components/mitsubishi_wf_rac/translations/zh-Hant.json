@@ -157,19 +157,6 @@
       "energy_usage": {
         "name": "能耗"
       }
-    },
-    "binary_sensor": {
-      "problem": {
-        "name": "問題"
-      },
-      "occupancy": {
-        "name": "佔用"
-      }
-    },
-    "switch": {
-      "self_clean": {
-        "name": "自清潔"
-      }
     }
   }
 }

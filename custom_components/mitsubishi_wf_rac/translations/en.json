@@ -168,19 +168,6 @@
       "energy_usage": {
         "name": "Energy Usage Cycle"
       }
-    },
-    "binary_sensor": {
-      "problem": {
-        "name": "Problem"
-      },
-      "occupancy": {
-        "name": "Occupancy"
-      }
-    },
-    "switch": {
-      "self_clean": {
-        "name": "Self Clean"
-      }
     }
   }
 }

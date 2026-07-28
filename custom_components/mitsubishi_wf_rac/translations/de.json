@@ -166,19 +166,6 @@
       "energy_usage": {
         "name": "Energieverbrauch"
       }
-    },
-    "binary_sensor": {
-      "problem": {
-        "name": "Problem"
-      },
-      "occupancy": {
-        "name": "Belegung"
-      }
-    },
-    "switch": {
-      "self_clean": {
-        "name": "Selbstreinigung"
-      }
     }
   }
 }

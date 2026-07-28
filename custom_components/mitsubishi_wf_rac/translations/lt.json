@@ -154,19 +154,6 @@
       "energy_usage": {
         "name": "Energijos suvartojimas"
       }
-    },
-    "binary_sensor": {
-      "problem": {
-        "name": "Problema"
-      },
-      "occupancy": {
-        "name": "Užimtumas"
-      }
-    },
-    "switch": {
-      "self_clean": {
-        "name": "Savaiminis valymas"
-      }
     }
   }
 }
