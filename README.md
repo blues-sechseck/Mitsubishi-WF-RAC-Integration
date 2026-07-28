@@ -3,7 +3,13 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="28">](https://buymeacoffee.com/blues.sechseck)
 
-This is a Homeassistant integration for implementing the WF-RAC Airco modules into Homeassistant
+This is a Home Assistant integration for **Mitsubishi Heavy Industries** air conditioners that use
+the WF-RAC WiFi module and the **"Smart M-Air"** app.
+
+> **Not compatible with Mitsubishi Electric systems** (e.g. those using a MAC-577IF2-E interface) or
+> the MELCloud platform — those are a different manufacturer with a different app and protocol. If
+> your unit uses MELCloud, see Home Assistant's built-in
+> [MELCloud integration](https://www.home-assistant.io/integrations/melcloud/) instead.
 
 ## History
 
