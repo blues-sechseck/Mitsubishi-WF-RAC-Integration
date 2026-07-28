@@ -29,6 +29,26 @@ _MIN_TIME_BETWEEN_REQUESTS = timedelta(seconds=1)
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
+def _create_permissive_ssl_context() -> ssl.SSLContext:
+    """Build a permissive SSL context for units without a known certificate.
+
+    Some WF-RAC modules' embedded HTTPS stacks only support legacy TLS
+    versions/cipher suites that Python's security-hardened defaults reject
+    outright - observed as `SSLV3_ALERT_HANDSHAKE_FAILURE` at the TLS
+    handshake step itself, before certificate validation is even reached (so
+    plain `ssl=False`, which only disables verification, doesn't help).
+    Lowering OpenSSL's security level and allowing older TLS versions
+    accommodates that legacy stack; this is only used for units without a
+    trusted cert on file, so verification is off anyway.
+    """
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    context.minimum_version = ssl.TLSVersion.TLSv1
+    context.set_ciphers("DEFAULT:@SECLEVEL=1")
+    return context
+
+
 class AirconApiError(HomeAssistantError):
     """Raised when the aircon API returns an error"""
 
@@ -57,7 +77,7 @@ class Repository:
         # Previously-discovered communication method (http/https), if the caller
         # persisted one from a prior run - skips rediscovery below.
         self._method: str | None = method if method in ("http", "https") else None
-        self._ssl_context: ssl.SSLContext | bool | None = None
+        self._ssl_context: ssl.SSLContext | None = None
         # Serializes _post() calls so the min-time-between-requests throttle and
         # the method-discovery/reset logic below can't interleave across
         # concurrent callers (a plain timestamp check allowed a race where two
@@ -69,7 +89,7 @@ class Repository:
         """Return the discovered/persisted communication method (http/https), if known."""
         return self._method
 
-    async def _get_ssl_context(self) -> ssl.SSLContext | bool:
+    async def _get_ssl_context(self) -> ssl.SSLContext:
         """Create (once) and cache the SSL context for HTTPS communication.
 
         A certificate file can be stored in the HA configuration directory by
@@ -90,12 +110,16 @@ class Repository:
                 )
                 ssl_context = await self._hass.async_add_executor_job(partial_func)
                 ssl_context.check_hostname = False
-                self._ssl_context = ssl_context
             else:
                 _LOGGER.debug(
-                    "Certificate file not found, falling back to insecure SSL"
+                    "Certificate file not found, falling back to a permissive SSL "
+                    "context (older WF-RAC modules' embedded HTTPS stacks often "
+                    "only support legacy TLS versions/ciphers)"
                 )
-                self._ssl_context = False
+                ssl_context = await self._hass.async_add_executor_job(
+                    _create_permissive_ssl_context
+                )
+            self._ssl_context = ssl_context
         return self._ssl_context
 
     async def _post(
