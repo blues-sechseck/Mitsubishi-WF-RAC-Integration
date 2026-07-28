@@ -50,3 +50,7 @@ the WF-RAC WiFi module itself rather than in this integration. Community-gathere
 - This has not been confirmed against the module's firmware/protocol directly, just observed
   empirically by several users — if it doesn't help in your case, please say so on one of the issues
   above so we can keep the guidance accurate.
+- If none of the above helps and it's a dealbreaker for you, some users have switched to
+  [MHI-AC-Ctrl-ESPHome](https://github.com/ginkage/MHI-AC-Ctrl-ESPHome) instead, which replaces the
+  WF-RAC WiFi module with your own ESP hardware and reports fewer stability issues — at the cost of a
+  DIY hardware install.
