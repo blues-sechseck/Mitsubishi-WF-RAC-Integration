@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import logging
 import os
 import ssl
@@ -122,27 +123,38 @@ class Repository:
         async def _execute_request(protocol: str) -> dict[str, Any]:
             """Executes a single POST request and returns the JSON response."""
             url = f"{protocol}://{self._hostname}:{self._port}/beaver/command/{command}"
+            if protocol == "http":
+                session = self._session
+            elif protocol == "https":
+                session = await self._get_https_session()
+            else:
+                raise AirconApiError(f"Invalid protocol specified: {protocol}")
+
+            _HTTP_LOG.debug("POST %s -> %r", url, data)
             try:
-                if protocol == "http":
-                    async with self._session.post(
-                        url, json=data, timeout=aiohttp.ClientTimeout(total=30)
-                    ) as resp:
-                        resp.raise_for_status()
-                        # Some modules send a valid JSON body with an incorrect
-                        # Content-Type header (e.g. text/plain) - content_type=None
-                        # skips aiohttp's default content-type validation.
-                        return await resp.json(content_type=None)
-                elif protocol == "https":
-                    https_session = await self._get_https_session()
-                    async with https_session.post(
-                        url, json=data, timeout=aiohttp.ClientTimeout(total=30)
-                    ) as resp:
-                        resp.raise_for_status()
-                        return await resp.json(content_type=None)
+                async with session.post(
+                    url, json=data, timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    # Read the raw body ourselves (instead of resp.json()) so we
+                    # can log it - and parse it - regardless of the declared
+                    # Content-Type or HTTP status. Some modules send a valid
+                    # JSON body with an incorrect Content-Type (e.g. text/plain),
+                    # and error responses may carry a useful JSON body too.
+                    body = await resp.text()
+                    _HTTP_LOG.debug(
+                        "<- %s status=%s content_type=%r body=%r",
+                        url,
+                        resp.status,
+                        resp.content_type,
+                        body,
+                    )
+                    if resp.status >= 400:
+                        raise AirconApiError(
+                            f"Aircon returned HTTP {resp.status} for {command!r}: {body}"
+                        )
+                    return json.loads(body)
             except (ClientConnectionError, asyncio.TimeoutError) as ex:
                 raise AirconApiError(f"Aircon returned error: {ex}") from ex
-
-            raise AirconApiError(f"Invalid protocol specified: {protocol}")
 
         data = {
             "apiVer": self.api_version,
