@@ -27,6 +27,26 @@ _HTTP_LOG = _LOGGER.getChild("http")
 _MIN_TIME_BETWEEN_REQUESTS = timedelta(seconds=1)
 
 
+def _create_permissive_ssl_context() -> ssl.SSLContext:
+    """Build a permissive SSL context for units without a known certificate.
+
+    Some WF-RAC modules' embedded HTTPS stacks only support legacy TLS
+    versions/cipher suites that Python's security-hardened defaults reject
+    outright - observed as `SSLV3_ALERT_HANDSHAKE_FAILURE` at the TLS
+    handshake step itself, before certificate validation is even reached (so
+    plain `ssl=False`, which only disables verification, doesn't help).
+    Lowering OpenSSL's security level and allowing older TLS versions
+    accommodates that legacy stack; this is only used for units without a
+    trusted cert on file, so verification is off anyway.
+    """
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    context.minimum_version = ssl.TLSVersion.TLSv1
+    context.set_ciphers("DEFAULT:@SECLEVEL=1")
+    return context
+
+
 class AirconApiError(HomeAssistantError):
     """Raised when the aircon API returns an error"""
 
@@ -85,8 +105,13 @@ class Repository:
             ssl_context.check_hostname = False
             connector = aiohttp.TCPConnector(ssl=ssl_context)
         else:
-            _LOGGER.debug("Certificate file not found, falling back to insecure SSL")
-            connector = aiohttp.TCPConnector(ssl=False)
+            _LOGGER.debug(
+                "Certificate file not found, falling back to a permissive SSL "
+                "context (older WF-RAC modules' embedded HTTPS stacks often "
+                "only support legacy TLS versions/ciphers)"
+            )
+            ssl_context = _create_permissive_ssl_context()
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
 
         self._https_session = aiohttp.ClientSession(connector=connector)
         return self._https_session
