@@ -32,3 +32,21 @@ In HACS go to the three dots int the upper right corner choose add custom reposi
 
 Install manually
 Clone or copy this repository and copy the folder 'custom_components/mitsubishi-wf-rac' into '/custom_components/mitsubishi-wf-rac'
+
+# Troubleshooting
+
+## Unit becomes briefly unavailable / drops connection every so often
+
+This is a long-standing, widely reported issue (see #106, #146, #173) that appears to originate in
+the WF-RAC WiFi module itself rather than in this integration. Community-gathered findings so far:
+
+- Lower "WF-RAC AC Connection" → "Availability retry limit" to `0` or `1`, and disable "Check
+  availability" in the integration's options. Retrying aggressively appears to make the module's own
+  reconnect behavior worse rather than better.
+- Several users who additionally blocked the unit's outbound internet access (router/firewall rule —
+  LAN access for this integration still works fine, only WAN is blocked) report the drops disappearing
+  entirely over several weeks. The working theory is that whatever the module does when it reaches out
+  to Mitsubishi's cloud service periodically interferes with its local HTTP API.
+- This has not been confirmed against the module's firmware/protocol directly, just observed
+  empirically by several users — if it doesn't help in your case, please say so on one of the issues
+  above so we can keep the guidance accurate.
