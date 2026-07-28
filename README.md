@@ -4,9 +4,11 @@
 
 This is a Homeassistant integration for implementing the WF-RAC Airco modules into Homeassistant
 
-`❗ Note: This is an experimental integration that is reversed engineert. Therefore there can by unwanted results ❗`
+## History
 
-This is a fork of [jeatheak/Mitsubishi-WF-RAC-Integration](https://github.com/jeatheak/Mitsubishi-WF-RAC-Integration) with additional fixes merged in (account-eviction recovery, coordinator timeout, HTTPS session reuse, availability-check option key, detached-task error handling, core-readiness cleanup).
+Created by [@jeatheak](https://github.com/jeatheak). In July 2026, jeatheak transferred ownership
+of this repository to [@blues-sechseck](https://github.com/blues-sechseck), who continues to
+maintain it. Thanks, jeatheak, for building this in the first place!
 
 ## ⚠️ Coming from the original repo? Check your automations
 
