@@ -180,6 +180,9 @@
     "switch": {
       "self_clean": {
         "name": "Self Clean"
+      },
+      "home_leave_mode": {
+        "name": "Home Leave Mode"
       }
     }
   }
