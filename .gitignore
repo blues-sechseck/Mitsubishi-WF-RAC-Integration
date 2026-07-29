@@ -164,6 +164,3 @@ test.py
 
 # macOS
 .DS_Store
-
-# IDE
-.vscode/
