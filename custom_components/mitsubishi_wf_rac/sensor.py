@@ -30,6 +30,7 @@ from .const import (
     ATTR_ACCOUNT_EXPIRES,
     ATTR_LED_STATUS,
     ATTR_AUTO_HEATING,
+    ATTR_MODEL_NR,
     MIN_TIME_BETWEEN_UPDATES,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET
@@ -58,6 +59,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         DiagnosticsSensor(device, "Account Expires", ATTR_ACCOUNT_EXPIRES),
         DiagnosticsSensor(device, "LED Status", ATTR_LED_STATUS),
         DiagnosticsSensor(device, "Auto Heating", ATTR_AUTO_HEATING),
+        DiagnosticsSensor(device, "Model Nr", ATTR_MODEL_NR),
     ]
     if device.airco.Electric is not None:
         entities.append(EnergySensor(device))
@@ -101,6 +103,7 @@ class DiagnosticsSensor(SensorEntity):
             "account_expires": "account_expires",
             "led_status": "led_status",
             "auto_heating": "auto_heating",
+            "model_nr": "model_nr",
         }
         self._attr_translation_key = type_map.get(custom_type, custom_type)
         self._update_state()
@@ -126,6 +129,8 @@ class DiagnosticsSensor(SensorEntity):
             self._attr_native_value = self._device.led_status
         elif self._custom_type == ATTR_AUTO_HEATING:
             self._attr_native_value = self._device.auto_heating
+        elif self._custom_type == ATTR_MODEL_NR:
+            self._attr_native_value = self._device.airco.ModelNrRaw
         self._attr_available = self._device.available
 
     async def async_update(self):

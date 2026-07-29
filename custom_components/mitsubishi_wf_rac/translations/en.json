@@ -165,6 +165,9 @@
       "auto_heating": {
         "name": "Auto Heating"
       },
+      "model_nr": {
+        "name": "Model Nr"
+      },
       "energy_usage": {
         "name": "Energy Usage"
       }

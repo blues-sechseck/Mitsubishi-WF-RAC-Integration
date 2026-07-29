@@ -47,6 +47,10 @@ class Aircon(AirconBase):
     Electric: float | None = None
     ErrorCode: str = ""
     IsSelfCleanOperation: bool = False
+    # Raw ModelNr byte (content[0] & 127) before mapping to the known 0/1/2
+    # values - kept around so an unrecognized value (ModelNr == -1) is still
+    # visible as a diagnostic, e.g. for reports like #189.
+    ModelNrRaw: int = 0
 
 
 @dataclass

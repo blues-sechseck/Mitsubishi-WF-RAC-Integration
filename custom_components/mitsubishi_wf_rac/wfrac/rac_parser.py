@@ -192,12 +192,13 @@ class RacParser:
         )
         ac_device.Entrust = 4 == (12 & content[12])
         ac_device.CoolHotJudge = (content[8] & 8) <= 0
-        ac_device.ModelNr = find_match(content[0] & 127, 0, 1, 2)
+        ac_device.ModelNrRaw = content[0] & 127
+        ac_device.ModelNr = find_match(ac_device.ModelNrRaw, 0, 1, 2)
         if ac_device.ModelNr == -1:
             _LOGGER.debug(
                 "Unrecognized ModelNr raw byte %d (content[0]=%d) - "
                 "self-clean/occupancy features will be unavailable",
-                content[0] & 127,
+                ac_device.ModelNrRaw,
                 content[0],
             )
         ac_device.Vacant = (content[10] & 1) != 0
