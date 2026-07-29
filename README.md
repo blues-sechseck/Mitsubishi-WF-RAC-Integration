@@ -67,7 +67,7 @@ This integration creates one device per airco with the following entities.
 | | `fan_mode` | `auto`, `quiet`, `low`, `medium`, `high` | Fan speed. |
 | | `swing_mode` | `up_down_auto`, `highest`, `middle`, `normal`, `lowest`, `3d_auto` | Vertical louver position. `3d_auto` hands vertical *and* horizontal swing over to the unit's own automatic mode. |
 | | `swing_horizontal_mode` | `left_right_auto`, `left_left`, `left_center`, `center_center`, `center_right`, `right_right`, `left_right`, `right_left`, `3d_auto` | Horizontal louver position. `3d_auto` behaves as above. |
-| | `target_temperature` | 18–30 °C | Setpoint. The AC unit itself only accepts this range. |
+| | `target_temperature` | 16–30 °C (cool), 18–30 °C (other modes) | Setpoint. Cooling accepts a lower minimum than heating/auto/dry in practice; heating below 18 °C isn't a reliable plain setpoint (see the Home Leave switch for that instead). |
 | | `current_temperature` | °C | Indoor temperature as measured by the unit, corrected by the "Indoor Temp. Sensor Offset" option if set. |
 | | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. In `auto` mode this reflects the unit's own cool/heat decision, not just the configured mode. |
 
