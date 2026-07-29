@@ -19,13 +19,20 @@ from .const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
+    CONF_CONNECTION_METHOD,
     CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
 )
 from .wfrac.device import Device
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CLIMATE, Platform.SELECT, Platform.SENSOR]
+PLATFORMS = [
+    Platform.BINARY_SENSOR,
+    Platform.CLIMATE,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 
 @dataclass
@@ -77,6 +84,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
     if not _device.available:
         raise ConfigEntryNotReady(f"Could not reach device [{device}]")
 
+    # Persist the discovered connection method (http/https) so we can skip
+    # protocol discovery (and its potential extra round-trip) after the next
+    # restart. Done before the update listener is registered below, so this
+    # does not itself trigger a reload.
+    method = _device.connection_method
+    if method and entry.data.get(CONF_CONNECTION_METHOD) != method:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_CONNECTION_METHOD: method}
+        )
+        _LOGGER.debug(
+            "Persisted connection method [%s] for device [%s]", method, device
+        )
+
     entry.runtime_data = MitsubishiWfRacData(_device)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
@@ -99,8 +119,10 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     availability_retry: bool = entry.options.get(CONF_AVAILABILITY_CHECK, False)
     availability_retry_limit: int = entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3)
     create_swing_mode_select: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
+    connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
     _device = Device(hass, name, device, port, device_id, operator_id, airco_id, availability_retry,
-                     availability_retry_limit, create_swing_mode_select)
+                     availability_retry_limit, create_swing_mode_select,
+                     connection_method=connection_method)
     return _device
 
 

@@ -1,25 +1,53 @@
 """WF-RAC parser to decode and encode wf-rac strings"""
 
+import logging
 from base64 import b64decode, b64encode
 from typing import Final
+
 from .utils import find_match, indoorTempList, outdoorTempList
 from .models.aircon import Aircon, AirconStat
 
+_LOGGER = logging.getLogger(__name__)
+
 # Constants
-INITIAL_BYTE_ARRAY: Final = bytearray([0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 VARIABLE_SUFFIX: Final = bytearray([1, 255, 255, 255, 255])
 CRC_POLYNOMIAL: Final = 4129
 CRC_INITIAL: Final = 65535
 
 # Bit masks
 OPERATION_MASK: Final = 3
-MODE_MASKS: Final = {
-    0: 32,
-    1: 40,
-    2: 48,
-    3: 44,
-    4: 36
+
+# --- command (send) lookup tables ---
+CMD_MODE_MASKS: Final = {0: 32, 1: 40, 2: 48, 3: 44, 4: 36}
+CMD_AIRFLOW_MASKS: Final = {0: 15, 1: 8, 2: 9, 3: 10, 4: 14}
+# WindDirectionUD -> (byte2 mask, byte3 mask)
+CMD_WIND_UD_MASKS: Final = {
+    0: (192, 128),
+    1: (128, 128),
+    2: (128, 144),
+    3: (128, 160),
+    4: (128, 176),
 }
+# WindDirectionLR -> (byte12 mask, byte11 mask)
+CMD_WIND_LR_MASKS: Final = {
+    0: (3, 16),
+    1: (2, 16),
+    2: (2, 17),
+    3: (2, 18),
+    4: (2, 19),
+    5: (2, 20),
+    6: (2, 21),
+    7: (2, 22),
+}
+
+# --- receive lookup tables ---
+RCV_MODE_MASKS: Final = {0: 0, 1: 8, 2: 16, 3: 12, 4: 4}
+RCV_AIRFLOW_MASKS: Final = {0: 7, 1: 0, 2: 1, 3: 2, 4: 6}
+
+
+def _empty_stat_bytes() -> bytearray:
+    return bytearray([0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+
 
 class RacParser:
     """Parser class that is used to parse WF-RAC data"""
@@ -29,7 +57,7 @@ class RacParser:
         try:
             command = self.add_crc16(self.add_variable(self.command_to_byte(aircon_stat)))
             receive = self.add_crc16(self.add_variable(self.receive_to_bytes(aircon_stat)))
-            return str(b64encode(bytes(command + receive)))[2:-1]
+            return b64encode(bytes(command + receive)).decode("ascii")
         except Exception as e:
             raise ValueError(f"Failed to encode aircon state: {e}") from e
 
@@ -37,97 +65,34 @@ class RacParser:
         """Concat byte_buffer with variable suffix."""
         return byte_buffer + VARIABLE_SUFFIX
 
-    def command_to_byte(self, _aircon_stat: AirconStat) -> bytearray:
+    def command_to_byte(self, aircon_stat: AirconStat) -> bytearray:
         """Command to bytes"""
-
-        aircon_stat: AirconStat = _aircon_stat
-        stat_byte: bytearray = bytearray(
-            [0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        )
+        stat_byte = _empty_stat_bytes()
 
         # On/Off
-        if aircon_stat.Operation:
-            stat_byte[2] |= 3
-        else:
-            stat_byte[2] |= 2
+        stat_byte[2] |= 3 if aircon_stat.Operation else 2
 
         # Operating Mode
-        if aircon_stat.OperationMode == 0:
-            stat_byte[2] |= 32
-        elif aircon_stat.OperationMode == 1:
-            stat_byte[2] |= 40
-        elif aircon_stat.OperationMode == 2:
-            stat_byte[2] |= 48
-        elif aircon_stat.OperationMode == 3:
-            stat_byte[2] |= 44
-        elif aircon_stat.OperationMode == 4:
-            stat_byte[2] |= 36
+        stat_byte[2] |= CMD_MODE_MASKS.get(aircon_stat.OperationMode, 0)
 
-        # airflow
-        if aircon_stat.AirFlow == 0:
-            stat_byte[3] |= 15
-        elif aircon_stat.AirFlow == 1:
-            stat_byte[3] |= 8
-        elif aircon_stat.AirFlow == 2:
-            stat_byte[3] |= 9
-        elif aircon_stat.AirFlow == 3:
-            stat_byte[3] |= 10
-        elif aircon_stat.AirFlow == 4:
-            stat_byte[3] |= 14
+        # Airflow
+        stat_byte[3] |= CMD_AIRFLOW_MASKS.get(aircon_stat.AirFlow, 0)
 
         # Vertical wind direction
-        if aircon_stat.WindDirectionUD == 0:
-            stat_byte[2] |= 192
-            stat_byte[3] |= 128
-        elif aircon_stat.WindDirectionUD == 1:
-            stat_byte[2] |= 128
-            stat_byte[3] |= 128
-        elif aircon_stat.WindDirectionUD == 2:
-            stat_byte[2] |= 128
-            stat_byte[3] |= 144
-        elif aircon_stat.WindDirectionUD == 3:
-            stat_byte[2] |= 128
-            stat_byte[3] |= 160
-        elif aircon_stat.WindDirectionUD == 4:
-            stat_byte[2] |= 128
-            stat_byte[3] |= 176
+        mask2, mask3 = CMD_WIND_UD_MASKS.get(aircon_stat.WindDirectionUD, (0, 0))
+        stat_byte[2] |= mask2
+        stat_byte[3] |= mask3
 
         # Horizontal wind direction
-        if aircon_stat.WindDirectionLR == 0:
-            stat_byte[12] |= 3
-            stat_byte[11] |= 16
-        elif aircon_stat.WindDirectionLR == 1:
-            stat_byte[12] |= 2
-            stat_byte[11] |= 16
-        elif aircon_stat.WindDirectionLR == 2:
-            stat_byte[12] |= 2
-            stat_byte[11] |= 17
-        elif aircon_stat.WindDirectionLR == 3:
-            stat_byte[12] |= 2
-            stat_byte[11] |= 18
-        elif aircon_stat.WindDirectionLR == 4:
-            stat_byte[12] |= 2
-            stat_byte[11] |= 19
-        elif aircon_stat.WindDirectionLR == 5:
-            stat_byte[12] |= 2
-            stat_byte[11] |= 20
-        elif aircon_stat.WindDirectionLR == 6:
-            stat_byte[12] |= 2
-            stat_byte[11] |= 21
-        elif aircon_stat.WindDirectionLR == 7:
-            stat_byte[12] |= 2
-            stat_byte[11] |= 22
+        mask12, mask11 = CMD_WIND_LR_MASKS.get(aircon_stat.WindDirectionLR, (0, 0))
+        stat_byte[12] |= mask12
+        stat_byte[11] |= mask11
 
-        # preset temp
-        # preset_temp = 25.0 if aircon_stat.OperationMode == 3 else aircon_stat.PresetTemp
-        preset_temp = aircon_stat.PresetTemp
-        stat_byte[4] |= int(preset_temp / 0.5) + 128
+        # Preset temp
+        stat_byte[4] |= int(aircon_stat.PresetTemp / 0.5) + 128
 
-        # entrust
-        if not aircon_stat.Entrust:
-            stat_byte[12] |= 8
-        else:
-            stat_byte[12] |= 12
+        # Entrust (3D auto)
+        stat_byte[12] |= 12 if aircon_stat.Entrust else 8
 
         if not aircon_stat.CoolHotJudge:
             stat_byte[8] |= 8
@@ -135,7 +100,7 @@ class RacParser:
         if aircon_stat.ModelNr == 1:
             stat_byte[10] |= 1 if aircon_stat.Vacant else 0
 
-        if aircon_stat.ModelNr != 1 and aircon_stat.ModelNr != 2:
+        if aircon_stat.ModelNr not in (1, 2):
             return stat_byte
 
         stat_byte[10] |= 4 if aircon_stat.IsSelfCleanReset else 0
@@ -143,82 +108,44 @@ class RacParser:
 
         return stat_byte
 
-    def receive_to_bytes(self, _aircon_stat: AirconStat) -> bytearray:
+    def receive_to_bytes(self, aircon_stat: AirconStat) -> bytearray:
         """Receive command to bytes"""
-
-        aircon_stat: AirconStat = _aircon_stat
-        stat_byte: bytearray = bytearray(
-            [0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        )
+        stat_byte = _empty_stat_bytes()
 
         # On/Off
         if aircon_stat.Operation:
             stat_byte[2] |= 1
 
         # Operating Mode
-        if aircon_stat.OperationMode == 1:
-            stat_byte[2] |= 8
-        elif aircon_stat.OperationMode == 2:
-            stat_byte[2] |= 16
-        elif aircon_stat.OperationMode == 3:
-            stat_byte[2] |= 12
-        elif aircon_stat.OperationMode == 4:
-            stat_byte[2] |= 4
+        stat_byte[2] |= RCV_MODE_MASKS.get(aircon_stat.OperationMode, 0)
 
-        # airflow
-        if aircon_stat.AirFlow == 0:
-            stat_byte[3] |= 7
-        elif aircon_stat.AirFlow == 2:
-            stat_byte[3] |= 1
-        elif aircon_stat.AirFlow == 3:
-            stat_byte[3] |= 2
-        elif aircon_stat.AirFlow == 4:
-            stat_byte[3] |= 6
+        # Airflow
+        stat_byte[3] |= RCV_AIRFLOW_MASKS.get(aircon_stat.AirFlow, 0)
 
         # Vertical wind direction
         if aircon_stat.WindDirectionUD == 0:
             stat_byte[2] |= 64
-        elif aircon_stat.WindDirectionUD == 2:
-            stat_byte[3] |= 16
-        elif aircon_stat.WindDirectionUD == 3:
-            stat_byte[3] |= 32
-        elif aircon_stat.WindDirectionUD == 4:
-            stat_byte[3] |= 48
+        elif aircon_stat.WindDirectionUD in (2, 3, 4):
+            stat_byte[3] |= (aircon_stat.WindDirectionUD - 1) * 16
 
         # Horizontal wind direction
         if aircon_stat.WindDirectionLR == 0:
             stat_byte[12] |= 1
-        elif aircon_stat.WindDirectionLR == 1:
-            stat_byte[11] |= 0
-        elif aircon_stat.WindDirectionLR == 2:
-            stat_byte[11] |= 1
-        elif aircon_stat.WindDirectionLR == 3:
-            stat_byte[11] |= 2
-        elif aircon_stat.WindDirectionLR == 4:
-            stat_byte[11] |= 3
-        elif aircon_stat.WindDirectionLR == 5:
-            stat_byte[11] |= 4
-        elif aircon_stat.WindDirectionLR == 6:
-            stat_byte[11] |= 5
-        elif aircon_stat.WindDirectionLR == 7:
-            stat_byte[11] |= 6
+        elif 1 <= aircon_stat.WindDirectionLR <= 7:
+            stat_byte[11] |= aircon_stat.WindDirectionLR - 1
 
-        # preset temp
-        # preset_temp = 25.0 if aircon_stat.OperationMode == 3 else aircon_stat.PresetTemp
-        preset_temp = aircon_stat.PresetTemp
-        stat_byte[4] |= int(preset_temp / 0.5)
+        # Preset temp
+        stat_byte[4] |= int(aircon_stat.PresetTemp / 0.5)
 
-        # entrust
+        # Entrust (3D auto)
         if aircon_stat.Entrust:
             stat_byte[12] |= 4
 
         if not aircon_stat.CoolHotJudge:
             stat_byte[8] |= 8
 
-        if aircon_stat.ModelNr == 1:
-            stat_byte[0] |= 1
-        elif aircon_stat.ModelNr == 2:
-            stat_byte[0] |= 2
+        if aircon_stat.ModelNr in (1, 2):
+            stat_byte[0] |= aircon_stat.ModelNr
 
         if aircon_stat.ModelNr == 1:
             stat_byte[10] |= 1 if aircon_stat.Vacant else 0
@@ -267,6 +194,10 @@ class RacParser:
         ac_device.CoolHotJudge = (content[8] & 8) <= 0
         ac_device.ModelNr = find_match(content[0] & 127, 0, 1, 2)
         ac_device.Vacant = (content[10] & 1) != 0
+        if ac_device.ModelNr in (1, 2):
+            # Mirrors the self-clean bit written in receive_to_bytes() above -
+            # experimental, not confirmed against real hardware for all models.
+            ac_device.IsSelfCleanOperation = (content[15] & 1) != 0
         code = content[6] & 127
         ac_device.ErrorCode = (
             "00"
@@ -279,14 +210,31 @@ class RacParser:
     def _parse_temperatures(self, ac_device: Aircon, vals: list[int]) -> None:
         """Parse temperature and electric values."""
         ac_device.Electric = None
-        for i in range(0, len(vals), 4):
+        # `len(vals) - 3` (not `len(vals)`) so a trailing partial 4-byte segment
+        # (segment length not a multiple of 4) can't make vals[i+1]/[i+2]/[i+3]
+        # below raise IndexError.
+        for i in range(0, len(vals) - 3, 4):
             if vals[i] == -128:
                 if vals[i + 1] == 16:
                     ac_device.OutdoorTemp = outdoorTempList[vals[i + 2] & 0xFF]
                 elif vals[i + 1] == 32:
                     ac_device.IndoorTemp = indoorTempList[vals[i + 2] & 0xFF]
+                else:
+                    self._log_unknown_segment(vals, i)
             elif vals[i] == -108 and vals[i + 1] == 16:
                 ac_device.Electric = self._calculate_electric(vals[i + 2:i + 4])
+            else:
+                self._log_unknown_segment(vals, i)
+
+    @staticmethod
+    def _log_unknown_segment(vals: list[int], i: int) -> None:
+        """Log unknown airconStat segments to help future reverse engineering."""
+        _LOGGER.debug(
+            "Unknown airconStat segment: tag=%s sub=%s data=%s",
+            vals[i],
+            vals[i + 1],
+            vals[i + 2:i + 4],
+        )
 
     @staticmethod
     def _calculate_electric(values: list[int]) -> float:
