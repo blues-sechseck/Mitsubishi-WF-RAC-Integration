@@ -77,7 +77,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         """
 
         try:
-            response = await self._api.get_aircon_stats()
+            response = await self._api.get_aircon_stats(self._airco_id)
 
             if response is None:
                 self._set_availability(False)

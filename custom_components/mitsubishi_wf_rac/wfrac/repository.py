@@ -227,9 +227,20 @@ class Repository:
         contents = {"accountId": self._operator_id, "airconId": airco_id}
         return await self._post("deleteAccountInfo", contents)
 
-    async def get_aircon_stats(self, raw=False) -> dict:
-        """Get the Aricon Stats from the Airco"""
-        result = await self._post("getAirconStat")
+    async def get_aircon_stats(self, airco_id: str | None = None, raw=False) -> dict:
+        """Get the Aricon Stats from the Airco
+
+        Sends the airconId in the request body. The official Smart M-Air app and
+        every other reverse-engineered client (homebridge-mhi-wfrac,
+        mqtt2mhi-wf-rac, ioBroker.woso_mitsu_aircon_rac) include it here; the
+        value itself is ignored by the module but its presence is required by
+        some firmware revisions, which otherwise reject getAirconStat with
+        HTTP 400 / result:2. Older firmware tolerated the field being absent,
+        which is why omitting it worked until now. Kept optional so callers
+        without an airconId (none in this integration) still work.
+        """
+        contents = {"airconId": airco_id} if airco_id is not None else None
+        result = await self._post("getAirconStat", contents)
         return result if raw else result["contents"]
 
     async def send_airco_command(self, airco_id: str, command: str) -> str:
