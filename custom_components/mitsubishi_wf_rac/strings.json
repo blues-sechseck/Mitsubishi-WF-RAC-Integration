@@ -43,5 +43,19 @@
         "title": "WF-RAC AC connection info"
       }
     }
+  },
+  "entity": {
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "cool_hot_judge": {
+            "state": {
+              "heating": "Heating",
+              "cooling": "Cooling"
+            }
+          }
+        }
+      }
+    }
   }
 }

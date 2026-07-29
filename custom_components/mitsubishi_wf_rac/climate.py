@@ -313,6 +313,14 @@ class AircoClimate(ClimateEntity):
         # Default to idle if mode is unknown
         return HVACAction.IDLE
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        airco = self._device.airco
+        if not airco.Operation or airco.OperationMode == 3:  # off or FAN_ONLY
+            return {}
+        return {"cool_hot_judge": "heating" if airco.CoolHotJudge else "cooling"}
+
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_update(self):
         """Retrieve latest state."""

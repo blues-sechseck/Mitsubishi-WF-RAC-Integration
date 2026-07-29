@@ -17,7 +17,8 @@
           "name": "Kondicionieriaus pavadinimas",
           "host": "Host (IP) adresas",
           "port": "Portas",
-          "force_update": "Ignoruoti dubliuot1 IP (tikėtinai bus klaidos. Patikrinkite log failus)"
+          "force_update": "Ignoruoti dubliuot1 IP (tikėtinai bus klaidos. Patikrinkite log failus)",
+          "create_swing_mode_select": "Ar kurti papildomus svyravimo režimo pasirinkiklius."
         },
         "description": "Užpildykite teisingą informaciją norėdami pridėti kondicionių rankiniu būdu",
         "title": "WF-RAC AC susijungimo informacija"
@@ -39,6 +40,7 @@
           "host": "Host (IP) adresas",
           "availability_check": "Patikrinti prieinamumą",
           "availability_retry_limit": "Pakartotinio bandymo limitas",
+          "create_swing_mode_select": "Ar kurti papildomus svyravimo režimo pasirinkiklius.",
           "indoor_offset": "Vidaus poslinkis",
           "outdoor_offset": "Lauko poslinkis",
           "target_offset": "Tikslinis poslinkis"
@@ -81,6 +83,12 @@
               "left_right": "Left-Right",
               "right_left": "Right-Left",
               "3d_auto": "3D Auto"
+            }
+          },
+          "cool_hot_judge": {
+            "state": {
+              "heating": "Heating",
+              "cooling": "Cooling"
             }
           }
         }
@@ -151,6 +159,21 @@
       "error": {
         "name": "Klaida"
       },
+      "updated_by": {
+        "name": "Atnaujino"
+      },
+      "account_expires": {
+        "name": "Paskyra baigia galioti"
+      },
+      "led_status": {
+        "name": "LED būsena"
+      },
+      "auto_heating": {
+        "name": "Automatinis šildymas"
+      },
+      "model_nr": {
+        "name": "Modelio Nr."
+      },
       "energy_usage": {
         "name": "Energijos suvartojimas"
       }
@@ -166,6 +189,9 @@
     "switch": {
       "self_clean": {
         "name": "Savaiminis valymas"
+      },
+      "home_leave_mode": {
+        "name": "Išvykimo režimas"
       }
     }
   }

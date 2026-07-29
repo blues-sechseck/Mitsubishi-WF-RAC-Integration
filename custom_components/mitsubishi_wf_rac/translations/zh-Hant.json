@@ -52,7 +52,6 @@
   "entity": {
     "climate": {
       "mitsubishi_wf_rac": {
-        "name": "空調",
         "state_attributes": {
           "fan_mode": {
             "state": {
@@ -84,6 +83,12 @@
               "left_right": "左-右",
               "right_left": "右-左",
               "3d_auto": "3D自動"
+            }
+          },
+          "cool_hot_judge": {
+            "state": {
+              "heating": "加熱",
+              "cooling": "製冷"
             }
           }
         }
@@ -154,6 +159,21 @@
       "error": {
         "name": "錯誤"
       },
+      "updated_by": {
+        "name": "更新者"
+      },
+      "account_expires": {
+        "name": "帳戶到期時間"
+      },
+      "led_status": {
+        "name": "LED 狀態"
+      },
+      "auto_heating": {
+        "name": "自動加熱"
+      },
+      "model_nr": {
+        "name": "型號編號"
+      },
       "energy_usage": {
         "name": "能耗"
       }
@@ -169,6 +189,9 @@
     "switch": {
       "self_clean": {
         "name": "自清潔"
+      },
+      "home_leave_mode": {
+        "name": "離家模式"
       }
     }
   }

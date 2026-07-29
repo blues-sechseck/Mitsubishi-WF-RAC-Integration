@@ -84,6 +84,12 @@
               "right_left": "Right-Left",
               "3d_auto": "3D Auto"
             }
+          },
+          "cool_hot_judge": {
+            "state": {
+              "heating": "Heating",
+              "cooling": "Cooling"
+            }
           }
         }
       }
