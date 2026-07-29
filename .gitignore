@@ -161,3 +161,6 @@ cython_debug/
 
 # files used for debugging should not be commit online
 test.py
+
+# macOS
+.DS_Store
