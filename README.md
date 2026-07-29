@@ -1,6 +1,7 @@
 # Mitsubishi WF-RAC Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![installbadge]][installs]
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="28">](https://buymeacoffee.com/blues.sechseck)
 
 This is a Home Assistant integration for **Mitsubishi Heavy Industries** air conditioners that use
@@ -112,3 +113,6 @@ Only created if "Whether to create an additional swing mode selectors" is enable
 | Horizontal Swing Direction | same as `swing_horizontal_mode` above | |
 | Vertical Swing Direction | same as `swing_mode` above | |
 | Fan Speed | same as `fan_mode` above | |
+
+[installbadge]: https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.mitsubishi_wf_rac.total
+[installs]: https://analytics.home-assistant.io/
