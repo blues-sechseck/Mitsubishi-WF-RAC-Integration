@@ -31,6 +31,7 @@ from .const import (
     ATTR_LED_STATUS,
     ATTR_AUTO_HEATING,
     ATTR_MODEL_NR,
+    ATTR_COOL_HOT_JUDGE,
     MIN_TIME_BETWEEN_UPDATES,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET
@@ -60,6 +61,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         DiagnosticsSensor(device, "LED Status", ATTR_LED_STATUS),
         DiagnosticsSensor(device, "Auto Heating", ATTR_AUTO_HEATING),
         DiagnosticsSensor(device, "Model Nr", ATTR_MODEL_NR),
+        DiagnosticsSensor(device, "Cool Hot Judge", ATTR_COOL_HOT_JUDGE),
     ]
     if device.airco.Electric is not None:
         entities.append(EnergySensor(device))
@@ -104,6 +106,7 @@ class DiagnosticsSensor(SensorEntity):
             "led_status": "led_status",
             "auto_heating": "auto_heating",
             "model_nr": "model_nr",
+            "cool_hot_judge": "cool_hot_judge",
         }
         self._attr_translation_key = type_map.get(custom_type, custom_type)
         self._update_state()
@@ -131,6 +134,12 @@ class DiagnosticsSensor(SensorEntity):
             self._attr_native_value = self._device.auto_heating
         elif self._custom_type == ATTR_MODEL_NR:
             self._attr_native_value = self._device.airco.ModelNrRaw
+        elif self._custom_type == ATTR_COOL_HOT_JUDGE:
+            airco = self._device.airco
+            if not airco.Operation or airco.OperationMode == 3:  # off or FAN_ONLY
+                self._attr_native_value = None
+            else:
+                self._attr_native_value = "heating" if airco.CoolHotJudge else "cooling"
         self._attr_available = self._device.available
 
     async def async_update(self):

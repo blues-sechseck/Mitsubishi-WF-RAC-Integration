@@ -29,6 +29,7 @@ ATTR_ACCOUNT_EXPIRES = "account_expires"
 ATTR_LED_STATUS = "led_status"
 ATTR_AUTO_HEATING = "auto_heating"
 ATTR_MODEL_NR = "model_nr"
+ATTR_COOL_HOT_JUDGE = "cool_hot_judge"
 
 ATTR_INSIDE_TEMPERATURE = "inside_temperature"
 ATTR_OUTSIDE_TEMPERATURE = "outside_temperature"

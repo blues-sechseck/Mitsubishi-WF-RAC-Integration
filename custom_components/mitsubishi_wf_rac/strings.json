@@ -45,16 +45,9 @@
     }
   },
   "entity": {
-    "climate": {
-      "mitsubishi_wf_rac": {
-        "state_attributes": {
-          "cool_hot_judge": {
-            "state": {
-              "heating": "Heating",
-              "cooling": "Cooling"
-            }
-          }
-        }
+    "sensor": {
+      "cool_hot_judge": {
+        "name": "Cool Hot Judge"
       }
     }
   }

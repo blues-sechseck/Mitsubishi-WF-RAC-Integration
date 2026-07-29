@@ -84,12 +84,6 @@
               "right_left": "右-左",
               "3d_auto": "3D自動"
             }
-          },
-          "cool_hot_judge": {
-            "state": {
-              "heating": "加熱",
-              "cooling": "製冷"
-            }
           }
         }
       }
@@ -173,6 +167,9 @@
       },
       "model_nr": {
         "name": "型號編號"
+      },
+      "cool_hot_judge": {
+        "name": "冷熱判斷"
       },
       "energy_usage": {
         "name": "能耗"

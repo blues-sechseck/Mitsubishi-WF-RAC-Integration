@@ -70,7 +70,6 @@ This integration creates one device per airco with the following entities.
 | | `target_temperature` | 18–30 °C | Setpoint. The AC unit itself only accepts this range. |
 | | `current_temperature` | °C | Indoor temperature as measured by the unit, corrected by the "Indoor Temp. Sensor Offset" option if set. |
 | | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. In `auto` mode this reflects the unit's own cool/heat decision, not just the configured mode. |
-| | `cool_hot_judge` | `cooling`, `heating` | Raw cool/heat state reported by the unit's compressor, independent of the configured mode. Only present while the unit is actively cooling/heating/drying (absent when off or in `fan_only`). Useful for detecting the "wait/hold" state on multi-split systems where one indoor unit is blocked because the outdoor unit is already committed to the opposite mode for a sibling unit. |
 
 ## Sensors
 
@@ -91,6 +90,7 @@ This integration creates one device per airco with the following entities.
 | LED Status *(diagnostic)* | text | State of the unit's status LED. |
 | Auto Heating *(diagnostic)* | text | State of the unit's automatic heating assist. |
 | Model Nr *(diagnostic, disabled by default)* | number | Raw model-identifier byte reported by the unit. Used to gate which optional features (self-clean, occupancy) are exposed; mostly useful for diagnosing unsupported models. |
+| Cool Hot Judge *(diagnostic, disabled by default)* | `cooling`, `heating` | Raw cool/heat state reported by the unit's compressor, independent of the configured mode. `unknown` while off or in `fan_only`. Useful for detecting the "wait/hold" state on multi-split systems where one indoor unit is blocked because the outdoor unit is already committed to the opposite mode for a sibling unit. |
 
 ## Binary sensors
 

@@ -84,12 +84,6 @@
               "right_left": "Right-Left",
               "3d_auto": "3D Auto"
             }
-          },
-          "cool_hot_judge": {
-            "state": {
-              "heating": "Heating",
-              "cooling": "Cooling"
-            }
           }
         }
       }
@@ -173,6 +167,9 @@
       },
       "model_nr": {
         "name": "モデル番号"
+      },
+      "cool_hot_judge": {
+        "name": "Cool Hot Judge"
       },
       "energy_usage": {
         "name": "エネルギー使用量"

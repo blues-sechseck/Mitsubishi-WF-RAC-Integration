@@ -84,12 +84,6 @@
               "right_left": "Right-Left",
               "3d_auto": "3D Auto"
             }
-          },
-          "cool_hot_judge": {
-            "state": {
-              "heating": "Heizen",
-              "cooling": "Kühlen"
-            }
           }
         }
       }
@@ -173,6 +167,9 @@
       },
       "model_nr": {
         "name": "Modellnummer"
+      },
+      "cool_hot_judge": {
+        "name": "Kühl-/Heiz-Status"
       },
       "energy_usage": {
         "name": "Energieverbrauch"

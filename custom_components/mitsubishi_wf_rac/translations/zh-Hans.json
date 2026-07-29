@@ -84,12 +84,6 @@
               "right_left": "右-左",
               "3d_auto": "3D自动"
             }
-          },
-          "cool_hot_judge": {
-            "state": {
-              "heating": "加热",
-              "cooling": "制冷"
-            }
           }
         }
       }
@@ -173,6 +167,9 @@
       },
       "model_nr": {
         "name": "型号编号"
+      },
+      "cool_hot_judge": {
+        "name": "冷热判断"
       },
       "energy_usage": {
         "name": "能耗"
