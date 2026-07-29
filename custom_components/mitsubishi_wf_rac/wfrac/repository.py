@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import logging
 import os
 import ssl
@@ -25,6 +26,26 @@ _HTTP_LOG = _LOGGER.getChild("http")
 # ensure that we don't overwhelm the aircon unit by waiting at least
 # this long between successive requests
 _MIN_TIME_BETWEEN_REQUESTS = timedelta(seconds=1)
+
+
+def _create_permissive_ssl_context() -> ssl.SSLContext:
+    """Build a permissive SSL context for units without a known certificate.
+
+    Some WF-RAC modules' embedded HTTPS stacks only support legacy TLS
+    versions/cipher suites that Python's security-hardened defaults reject
+    outright - observed as `SSLV3_ALERT_HANDSHAKE_FAILURE` at the TLS
+    handshake step itself, before certificate validation is even reached (so
+    plain `ssl=False`, which only disables verification, doesn't help).
+    Lowering OpenSSL's security level and allowing older TLS versions
+    accommodates that legacy stack; this is only used for units without a
+    trusted cert on file, so verification is off anyway.
+    """
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    context.minimum_version = ssl.TLSVersion.TLSv1
+    context.set_ciphers("DEFAULT:@SECLEVEL=1")
+    return context
 
 
 class AirconApiError(HomeAssistantError):
@@ -85,8 +106,13 @@ class Repository:
             ssl_context.check_hostname = False
             connector = aiohttp.TCPConnector(ssl=ssl_context)
         else:
-            _LOGGER.debug("Certificate file not found, falling back to insecure SSL")
-            connector = aiohttp.TCPConnector(ssl=False)
+            _LOGGER.debug(
+                "Certificate file not found, falling back to a permissive SSL "
+                "context (older WF-RAC modules' embedded HTTPS stacks often "
+                "only support legacy TLS versions/ciphers)"
+            )
+            ssl_context = _create_permissive_ssl_context()
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
 
         self._https_session = aiohttp.ClientSession(connector=connector)
         return self._https_session
@@ -97,24 +123,38 @@ class Repository:
         async def _execute_request(protocol: str) -> dict[str, Any]:
             """Executes a single POST request and returns the JSON response."""
             url = f"{protocol}://{self._hostname}:{self._port}/beaver/command/{command}"
+            if protocol == "http":
+                session = self._session
+            elif protocol == "https":
+                session = await self._get_https_session()
+            else:
+                raise AirconApiError(f"Invalid protocol specified: {protocol}")
+
+            _HTTP_LOG.debug("POST %s -> %r", url, data)
             try:
-                if protocol == "http":
-                    async with self._session.post(
-                        url, json=data, timeout=aiohttp.ClientTimeout(total=30)
-                    ) as resp:
-                        resp.raise_for_status()
-                        return await resp.json()
-                elif protocol == "https":
-                    https_session = await self._get_https_session()
-                    async with https_session.post(
-                        url, json=data, timeout=aiohttp.ClientTimeout(total=30)
-                    ) as resp:
-                        resp.raise_for_status()
-                        return await resp.json()
+                async with session.post(
+                    url, json=data, timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    # Read the raw body ourselves (instead of resp.json()) so we
+                    # can log it - and parse it - regardless of the declared
+                    # Content-Type or HTTP status. Some modules send a valid
+                    # JSON body with an incorrect Content-Type (e.g. text/plain),
+                    # and error responses may carry a useful JSON body too.
+                    body = await resp.text()
+                    _HTTP_LOG.debug(
+                        "<- %s status=%s content_type=%r body=%r",
+                        url,
+                        resp.status,
+                        resp.content_type,
+                        body,
+                    )
+                    if resp.status >= 400:
+                        raise AirconApiError(
+                            f"Aircon returned HTTP {resp.status} for {command!r}: {body}"
+                        )
+                    return json.loads(body)
             except (ClientConnectionError, asyncio.TimeoutError) as ex:
                 raise AirconApiError(f"Aircon returned error: {ex}") from ex
-
-            raise AirconApiError(f"Invalid protocol specified: {protocol}")
 
         data = {
             "apiVer": self.api_version,
@@ -187,9 +227,20 @@ class Repository:
         contents = {"accountId": self._operator_id, "airconId": airco_id}
         return await self._post("deleteAccountInfo", contents)
 
-    async def get_aircon_stats(self, raw=False) -> dict:
-        """Get the Aricon Stats from the Airco"""
-        result = await self._post("getAirconStat")
+    async def get_aircon_stats(self, airco_id: str | None = None, raw=False) -> dict:
+        """Get the Aricon Stats from the Airco
+
+        Sends the airconId in the request body. The official Smart M-Air app and
+        every other reverse-engineered client (homebridge-mhi-wfrac,
+        mqtt2mhi-wf-rac, ioBroker.woso_mitsu_aircon_rac) include it here; the
+        value itself is ignored by the module but its presence is required by
+        some firmware revisions, which otherwise reject getAirconStat with
+        HTTP 400 / result:2. Older firmware tolerated the field being absent,
+        which is why omitting it worked until now. Kept optional so callers
+        without an airconId (none in this integration) still work.
+        """
+        contents = {"airconId": airco_id} if airco_id is not None else None
+        result = await self._post("getAirconStat", contents)
         return result if raw else result["contents"]
 
     async def send_airco_command(self, airco_id: str, command: str) -> str:

@@ -77,7 +77,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         """
 
         try:
-            response = await self._api.get_aircon_stats()
+            response = await self._api.get_aircon_stats(self._airco_id)
 
             if response is None:
                 self._set_availability(False)
@@ -101,7 +101,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
         try:
             self._connected_accounts = int(response["numOfAccount"])
-            self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
             self._airco = self._parser.translate_bytes(response["airconStat"])
             # Not part of the airconStat blob, present alongside it in the same
             # response. Tolerate absence (.get()) since it's undocumented and
@@ -114,6 +113,15 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         except (KeyError, TypeError, ValueError) as ex:
             _LOGGER.warning("Could not parse airco data", exc_info=ex)
             self._set_availability(False)
+            return
+
+        # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
+        # "mcu"/"wireless" sub-keys entirely (see #189), so their versions are
+        # optional and fall back to "unknown" instead of failing the update.
+        firm_type = response.get("firmType", "unknown")
+        mcu_ver = (response.get("mcu") or {}).get("firmVer", "unknown")
+        wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
+        self._firmware = f"{firm_type}, mcu: {mcu_ver}, wireless: {wireless_ver}"
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
