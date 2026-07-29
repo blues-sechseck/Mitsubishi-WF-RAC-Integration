@@ -31,7 +31,7 @@ Install using [HACS](https://hacs.xyz)
 In HACS go to the three dots int the upper right corner choose add custom repository and add https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration to the list.
 
 Install manually
-Clone or copy this repository and copy the folder 'custom_components/mitsubishi-wf-rac' into '/custom_components/mitsubishi-wf-rac'
+Clone or copy this repository and copy the folder 'custom_components/mitsubishi_wf_rac' into '/custom_components/mitsubishi_wf_rac'
 
 # Troubleshooting
 
@@ -89,6 +89,7 @@ This integration creates one device per airco with the following entities.
 | Account Expires *(diagnostic)* | text | Expiry of the current operator session. |
 | LED Status *(diagnostic)* | text | State of the unit's status LED. |
 | Auto Heating *(diagnostic)* | text | State of the unit's automatic heating assist. |
+| Model Nr *(diagnostic, disabled by default)* | number | Raw model-identifier byte reported by the unit. Used to gate which optional features (self-clean, occupancy) are exposed; mostly useful for diagnosing unsupported models. |
 
 ## Binary sensors
 
@@ -102,6 +103,7 @@ This integration creates one device per airco with the following entities.
 | Entity | Values | Description |
 |---|---|---|
 | Self Clean | on/off | Starts/stops the unit's self-clean cycle. Only created on units that support it. After toggling, the real state is re-read from the unit after a short delay, since the unit's own response can briefly still show the old state. |
+| Home Leave Mode | on/off | Enters/leaves the unit's own frost-protection/low-power standby mode for when nobody's home, by lowering the heat target temperature below the unit's Home Leave threshold. Only created on units confirmed to support it. |
 
 ## Select (optional)
 
