@@ -101,7 +101,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
         try:
             self._connected_accounts = int(response["numOfAccount"])
-            self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
             self._airco = self._parser.translate_bytes(response["airconStat"])
             # Not part of the airconStat blob, present alongside it in the same
             # response. Tolerate absence (.get()) since it's undocumented and
@@ -114,6 +113,18 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         except (KeyError, TypeError, ValueError) as ex:
             _LOGGER.warning("Could not parse airco data", exc_info=ex)
             self._set_availability(False)
+            return
+
+        # Cosmetic (diagnostic sensor only) and structured differently on some
+        # firmware revisions (missing "mcu"/"wireless" sub-keys entirely, see
+        # #189) - kept in its own try/except so it can't take the whole
+        # update down when the actually important airconStat parsed fine.
+        try:
+            self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
+        except (KeyError, TypeError) as ex:
+            _LOGGER.warning(
+                "Could not parse firmware version for device %s", self.device_name, exc_info=ex
+            )
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
