@@ -54,3 +54,61 @@ the WF-RAC WiFi module itself rather than in this integration. Community-gathere
   [MHI-AC-Ctrl-ESPHome](https://github.com/ginkage/MHI-AC-Ctrl-ESPHome) instead, which replaces the
   WF-RAC WiFi module with your own ESP hardware and reports fewer stability issues — at the cost of a
   DIY hardware install.
+
+# Entities
+
+This integration creates one device per airco with the following entities.
+
+## Climate
+
+| Entity | Attribute | Available values | Description |
+|---|---|---|---|
+| `climate.<name>` | `hvac_mode` | `off`, `auto`, `cool`, `heat`, `dry`, `fan_only` | Operating mode of the unit. |
+| | `fan_mode` | `auto`, `quiet`, `low`, `medium`, `high` | Fan speed. |
+| | `swing_mode` | `up_down_auto`, `highest`, `middle`, `normal`, `lowest`, `3d_auto` | Vertical louver position. `3d_auto` hands vertical *and* horizontal swing over to the unit's own automatic mode. |
+| | `swing_horizontal_mode` | `left_right_auto`, `left_left`, `left_center`, `center_center`, `center_right`, `right_right`, `left_right`, `right_left`, `3d_auto` | Horizontal louver position. `3d_auto` behaves as above. |
+| | `target_temperature` | 18–30 °C | Setpoint. The AC unit itself only accepts this range. |
+| | `current_temperature` | °C | Indoor temperature as measured by the unit, corrected by the "Indoor Temp. Sensor Offset" option if set. |
+| | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. In `auto` mode this reflects the unit's own cool/heat decision, not just the configured mode. |
+
+## Sensors
+
+| Entity | Values | Description |
+|---|---|---|
+| Indoor Temperature | °C | Same value as the climate entity's `current_temperature`, exposed as its own sensor. |
+| Outdoor Temperature | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. |
+| Target Temperature | °C | Current setpoint, exposed as its own sensor. |
+| Energy Usage | kWh, increasing | Cumulative energy consumption reported by the unit. Only created if the unit actually reports this value — not all models do. |
+| Airco ID *(diagnostic)* | text | Internal ID of the airco. |
+| Operator ID *(diagnostic, disabled by default)* | text | Internal operator/account ID. |
+| Device ID *(diagnostic, disabled by default)* | text | Internal device ID. |
+| IP *(diagnostic, disabled by default)* | text | Local IP address of the WF-RAC module. |
+| Accounts *(diagnostic, disabled by default)* | number | Number of app accounts currently connected to the unit. |
+| Error *(diagnostic)* | error code | Raw error code reported by the unit; `00` means no error. |
+| Updated By *(diagnostic)* | text | Which account last changed the unit's settings (this integration or the Smart M-Air app). |
+| Account Expires *(diagnostic)* | text | Expiry of the current operator session. |
+| LED Status *(diagnostic)* | text | State of the unit's status LED. |
+| Auto Heating *(diagnostic)* | text | State of the unit's automatic heating assist. |
+
+## Binary sensors
+
+| Entity | Values | Description |
+|---|---|---|
+| Problem | on/off | On whenever the unit reports an error code (`error_code` attribute holds the raw code). |
+| Occupancy | on/off | Only created on units that support presence detection. Reflects whether the unit currently sees the room as occupied. |
+
+## Switch
+
+| Entity | Values | Description |
+|---|---|---|
+| Self Clean | on/off | Starts/stops the unit's self-clean cycle. Only created on units that support it. After toggling, the real state is re-read from the unit after a short delay, since the unit's own response can briefly still show the old state. |
+
+## Select (optional)
+
+Only created if "Whether to create an additional swing mode selectors" is enabled in the integration's options — off by default. These duplicate the climate entity's swing/fan attributes as standalone entities, useful for dashboards or automations that prefer a plain `select` over a `climate` attribute.
+
+| Entity | Values | Description |
+|---|---|---|
+| Horizontal Swing Direction | same as `swing_horizontal_mode` above | |
+| Vertical Swing Direction | same as `swing_mode` above | |
+| Fan Speed | same as `fan_mode` above | |
