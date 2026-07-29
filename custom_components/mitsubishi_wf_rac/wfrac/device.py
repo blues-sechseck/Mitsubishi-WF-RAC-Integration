@@ -115,16 +115,13 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             self._set_availability(False)
             return
 
-        # Cosmetic (diagnostic sensor only) and structured differently on some
-        # firmware revisions (missing "mcu"/"wireless" sub-keys entirely, see
-        # #189) - kept in its own try/except so it can't take the whole
-        # update down when the actually important airconStat parsed fine.
-        try:
-            self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
-        except (KeyError, TypeError) as ex:
-            _LOGGER.warning(
-                "Could not parse firmware version for device %s", self.device_name, exc_info=ex
-            )
+        # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
+        # "mcu"/"wireless" sub-keys entirely (see #189), so their versions are
+        # optional and fall back to "unknown" instead of failing the update.
+        firm_type = response.get("firmType", "unknown")
+        mcu_ver = (response.get("mcu") or {}).get("firmVer", "unknown")
+        wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
+        self._firmware = f"{firm_type}, mcu: {mcu_ver}, wireless: {wireless_ver}"
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
