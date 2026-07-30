@@ -32,7 +32,7 @@ Install using [HACS](https://hacs.xyz)
 In HACS go to the three dots int the upper right corner choose add custom repository and add https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration to the list.
 
 Install manually
-Clone or copy this repository and copy the folder 'custom_components/mitsubishi-wf-rac' into '/custom_components/mitsubishi-wf-rac'
+Clone or copy this repository and copy the folder 'custom_components/mitsubishi_wf_rac' into '/custom_components/mitsubishi_wf_rac'
 
 # Entities
 
@@ -46,7 +46,7 @@ This integration creates one device per airco with the following entities.
 | | `fan_mode` | `auto`, `quiet`, `low`, `medium`, `high` | Fan speed. |
 | | `swing_mode` | `up_down_auto`, `highest`, `middle`, `normal`, `lowest`, `3d_auto` | Vertical louver position. `3d_auto` hands vertical *and* horizontal swing over to the unit's own automatic mode. |
 | | `swing_horizontal_mode` | `left_right_auto`, `left_left`, `left_center`, `center_center`, `center_right`, `right_right`, `left_right`, `right_left`, `3d_auto` | Horizontal louver position. `3d_auto` behaves as above. |
-| | `target_temperature` | 18–30 °C | Setpoint. The AC unit itself only accepts this range. |
+| | `target_temperature` | 16–30 °C (cool), 18–30 °C (other modes) | Setpoint. Cooling accepts a lower minimum than heating/auto/dry in practice; heating below 18 °C isn't a reliable plain setpoint (see the Home Leave switch for that instead). |
 | | `current_temperature` | °C | Indoor temperature as measured by the unit, corrected by the "Indoor Temp. Sensor Offset" option if set. |
 | | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. In `auto` mode this reflects the unit's own cool/heat decision, not just the configured mode. |
 
@@ -68,19 +68,22 @@ This integration creates one device per airco with the following entities.
 | Account Expires *(diagnostic)* | text | Expiry of the current operator session. |
 | LED Status *(diagnostic)* | text | State of the unit's status LED. |
 | Auto Heating *(diagnostic)* | text | State of the unit's automatic heating assist. |
+| Model Nr *(diagnostic, disabled by default)* | number | Raw model-identifier byte reported by the unit. Used to gate which optional features (self-clean, occupancy) are exposed; mostly useful for diagnosing unsupported models. |
+| Cool Hot Judge *(diagnostic, disabled by default)* | `cooling`, `heating` | Raw cool/heat state reported by the unit's compressor, independent of the configured mode. `unknown` while off or in `fan_only`. Useful for detecting the "wait/hold" state on multi-split systems where one indoor unit is blocked because the outdoor unit is already committed to the opposite mode for a sibling unit. |
 
 ## Binary sensors
 
 | Entity | Values | Description |
 |---|---|---|
 | Problem | on/off | On whenever the unit reports an error code (`error_code` attribute holds the raw code). |
-| Occupancy | on/off | Only created on units that support presence detection. Reflects whether the unit currently sees the room as occupied. |
+| Occupancy | on/off | Only created on units that report the "Vacant"/Home Leave bit (see the Home Leave switch below). This is *not* a physical presence/motion sensor - it just mirrors that bit, which is off unless Home Leave mode was actually entered (e.g. via the Home Leave switch). It will read "occupied" even in an empty room if Home Leave was never triggered. |
 
 ## Switch
 
 | Entity | Values | Description |
 |---|---|---|
 | Self Clean | on/off | Starts/stops the unit's self-clean cycle. Only created on units that support it. After toggling, the real state is re-read from the unit after a short delay, since the unit's own response can briefly still show the old state. |
+| Home Leave Mode | on/off | Enters/leaves the unit's own frost-protection/low-power standby mode for when nobody's home, by lowering the heat target temperature below the unit's Home Leave threshold. Only created on units confirmed to support it. |
 
 ## Select (optional)
 

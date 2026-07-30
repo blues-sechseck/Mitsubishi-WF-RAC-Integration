@@ -32,8 +32,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             availability_retry: bool,
             availability_retry_limit: int,
             create_swing_mode_select: bool,
+            connection_method: str | None = None,
     ) -> None:
-        self._api = Repository(hass, hostname, port, operator_id, device_id)
+        self._api = Repository(
+            hass, hostname, port, operator_id, device_id, method=connection_method
+        )
         self._parser = RacParser()
         self._hass = hass
 
@@ -77,7 +80,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         """
 
         try:
-            response = await self._api.get_aircon_stats()
+            response = await self._api.get_aircon_stats(self._airco_id)
 
             if response is None:
                 self._set_availability(False)
@@ -101,7 +104,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
         try:
             self._connected_accounts = int(response["numOfAccount"])
-            self._firmware = f'{response["firmType"]}, mcu: {response["mcu"]["firmVer"]}, wireless: {response["wireless"]["firmVer"]}'
             self._airco = self._parser.translate_bytes(response["airconStat"])
             # Not part of the airconStat blob, present alongside it in the same
             # response. Tolerate absence (.get()) since it's undocumented and
@@ -114,6 +116,15 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         except (KeyError, TypeError, ValueError) as ex:
             _LOGGER.warning("Could not parse airco data", exc_info=ex)
             self._set_availability(False)
+            return
+
+        # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
+        # "mcu"/"wireless" sub-keys entirely (see #189), so their versions are
+        # optional and fall back to "unknown" instead of failing the update.
+        firm_type = response.get("firmType", "unknown")
+        mcu_ver = (response.get("mcu") or {}).get("firmVer", "unknown")
+        wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
+        self._firmware = f"{firm_type}, mcu: {mcu_ver}, wireless: {wireless_ver}"
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
@@ -146,7 +157,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         if self._airco is None:
             raise ValueError("Airco object is empty")
 
-        airco_stat = AirconStat(self._airco)
+        airco_stat = AirconStat.from_aircon(self._airco)
 
         for key, value in params.items():
             setattr(airco_stat, key, value)
@@ -259,6 +270,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def create_swing_mode_select(self) -> bool:
         """Create swing mode select"""
         return self._create_swing_mode_select
+
+    @property
+    def connection_method(self) -> str | None:
+        """Return the discovered/persisted communication method (http/https), if known."""
+        return self._api.method
 
     async def _async_update_data(self):
         """Update data via library."""

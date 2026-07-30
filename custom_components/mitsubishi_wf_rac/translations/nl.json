@@ -17,7 +17,8 @@
           "name": "Airco Naam",
           "host": "Host (IP) adres",
           "port": "Poort",
-          "force_update": "Negeer dubbel IP (kan en zal fouten veroorzaken, dus controleer het foutlog)"
+          "force_update": "Negeer dubbel IP (kan en zal fouten veroorzaken, dus controleer het foutlog)",
+          "create_swing_mode_select": "Of er extra zwaaimodus-selectors moeten worden aangemaakt."
         },
         "description": "Voer de juiste informatie toe om de airco handmatig toe te voegen ",
         "title": "WF-RAC AC verbinding info"
@@ -39,6 +40,7 @@
           "host": "Host (IP) address",
           "availability_check": "Controleer beschikbaarheid",
           "availability_retry_limit": "Herhaal limiet",
+          "create_swing_mode_select": "Of er extra zwaaimodus-selectors moeten worden aangemaakt.",
           "indoor_offset": "Binnen offset",
           "outdoor_offset": "Buiten offset",
           "target_offset": "Doel offset"
@@ -151,8 +153,42 @@
       "error": {
         "name": "Fout"
       },
+      "updated_by": {
+        "name": "Laatst gewijzigd door"
+      },
+      "account_expires": {
+        "name": "Account verloopt"
+      },
+      "led_status": {
+        "name": "LED-status"
+      },
+      "auto_heating": {
+        "name": "Automatisch verwarmen"
+      },
+      "model_nr": {
+        "name": "Modelnummer"
+      },
+      "cool_hot_judge": {
+        "name": "Cool Hot Judge"
+      },
       "energy_usage": {
         "name": "Energieverbruik"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Probleem"
+      },
+      "occupancy": {
+        "name": "Bezetting"
+      }
+    },
+    "switch": {
+      "self_clean": {
+        "name": "Zelfreiniging"
+      },
+      "home_leave_mode": {
+        "name": "Afwezigheidsmodus"
       }
     }
   }

@@ -43,5 +43,12 @@
         "title": "WF-RAC AC connection info"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "cool_hot_judge": {
+        "name": "Cool Hot Judge"
+      }
+    }
   }
 }

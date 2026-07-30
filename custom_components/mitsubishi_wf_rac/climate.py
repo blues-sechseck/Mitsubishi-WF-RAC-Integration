@@ -82,9 +82,11 @@ class AircoClimate(ClimateEntity):
     _attr_swing_mode: str | None = SWING_VERTICAL_AUTO
     _attr_swing_modes: list[str] | None = SUPPORT_SWING_MODES
     # Per Mitsubishi Heavy Industries' official operable table ('21 SRK-T-324,
-    # models SRK60ZSX-W/A and SRK100ZR-W): indoor unit only accepts 18-30C:
-    # values below 18 are not a documented WF-RAC capability.
-    _attr_min_temp: float = 18
+    # models SRK60ZSX-W/A and SRK100ZR-W): indoor unit only accepts 18-30C.
+    # Cooling reliably goes lower than that in practice (see #113), but heating
+    # below 18C only works through the unit's own Vacant/Home Leave mechanism
+    # (see the Home Leave switch) - as a plain setpoint it silently resets to
+    # 18 after a power cycle, so it isn't offered as a free value here.
     _attr_max_temp: float = 30
     _attr_swing_horizontal_mode: str | None = SWING_HORIZONTAL_AUTO
     _attr_swing_horizontal_modes: list[str] | None = SUPPORT_SWING_HORIZONTAL_MODES
@@ -101,14 +103,29 @@ class AircoClimate(ClimateEntity):
         self._consolidated_params = {}
         self._update_state()
 
+    @staticmethod
+    def _min_temp_for_mode(hvac_mode: HVACMode) -> float:
+        """Minimum setpoint depends on hvac_mode - see #113."""
+        return 16 if hvac_mode == HVACMode.COOL else 18
+
+    @property
+    def min_temp(self) -> float:
+        return self._min_temp_for_mode(self._attr_hvac_mode)
+
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
         set_temp = kwargs.get(ATTR_TEMPERATURE)
         if set_temp is None:
             raise ValueError("Temperature is required")
 
-        if set_temp < self._attr_min_temp:
-            raise ValueError(f"Temperature {set_temp} is below minimum {self._attr_min_temp}")
+        # If this call also switches hvac_mode, the minimum must reflect the mode
+        # being switched to, not the (still stale until the next poll) current one.
+        target_hvac_mode = kwargs.get("hvac_mode", self._attr_hvac_mode)
+        target_hvac_mode = HVACMode.OFF if target_hvac_mode is None else target_hvac_mode
+        min_temp = self._min_temp_for_mode(target_hvac_mode)
+
+        if set_temp < min_temp:
+            raise ValueError(f"Temperature {set_temp} is below minimum {min_temp}")
 
         if set_temp > self._attr_max_temp:
             raise ValueError(f"Temperature {set_temp} is above maximum {self._attr_max_temp}")
@@ -121,19 +138,17 @@ class AircoClimate(ClimateEntity):
         # target_temperature itself is unaffected.
         target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
         target_temp = set_temp - target_offset
-        target_temp = max(self._attr_min_temp, min(self._attr_max_temp, target_temp))
+        target_temp = max(min_temp, min(self._attr_max_temp, target_temp))
 
         opts: dict[str, Any] = {AirconCommands.PresetTemp: target_temp}
 
         if "hvac_mode" in kwargs:
-            hvac_mode: HVACMode | None = kwargs.get("hvac_mode")
-            hvac_mode = HVACMode.OFF if hvac_mode is None else hvac_mode
             opts.update(
                 {
                     AirconCommands.OperationMode: self._device.airco.OperationMode
-                    if hvac_mode == HVACMode.OFF
-                    else HVAC_TRANSLATION[hvac_mode],
-                    AirconCommands.Operation: hvac_mode != HVACMode.OFF,
+                    if target_hvac_mode == HVACMode.OFF
+                    else HVAC_TRANSLATION[target_hvac_mode],
+                    AirconCommands.Operation: target_hvac_mode != HVACMode.OFF,
                 }
             )
 

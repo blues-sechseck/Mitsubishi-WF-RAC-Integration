@@ -17,7 +17,8 @@
           "name": "エアコン名",
           "host": "ホスト（IP）アドレス",
           "port": "ポート",
-          "force_update": "重複IPを無視（エラーが発生する可能性があるため、エラーログを確認してください）"
+          "force_update": "重複IPを無視（エラーが発生する可能性があるため、エラーログを確認してください）",
+          "create_swing_mode_select": "追加のスイングモードセレクターを作成するかどうか。"
         },
         "description": "エアコンを手動で追加するために正しい情報を入力してください。",
         "title": "WF-RACエアコン接続情報"
@@ -37,6 +38,9 @@
         "description": "以下は、このエアコンの変更可能なオプションです。",
         "data": {
           "host": "ホスト（IP）アドレス",
+          "availability_check": "可用性を確認",
+          "availability_retry_limit": "リトライ回数の上限",
+          "create_swing_mode_select": "追加のスイングモードセレクターを作成するかどうか。",
           "indoor_offset": "室内オフセット",
           "outdoor_offset": "室外オフセット",
           "target_offset": "設定オフセット"
@@ -149,8 +153,42 @@
       "error": {
         "name": "エラー"
       },
+      "updated_by": {
+        "name": "更新者"
+      },
+      "account_expires": {
+        "name": "アカウント有効期限"
+      },
+      "led_status": {
+        "name": "LEDステータス"
+      },
+      "auto_heating": {
+        "name": "自動暖房"
+      },
+      "model_nr": {
+        "name": "モデル番号"
+      },
+      "cool_hot_judge": {
+        "name": "Cool Hot Judge"
+      },
       "energy_usage": {
         "name": "エネルギー使用量"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "問題"
+      },
+      "occupancy": {
+        "name": "在室"
+      }
+    },
+    "switch": {
+      "self_clean": {
+        "name": "セルフクリーン"
+      },
+      "home_leave_mode": {
+        "name": "留守モード"
       }
     }
   }

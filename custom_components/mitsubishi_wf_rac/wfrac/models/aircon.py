@@ -1,6 +1,7 @@
 """Aircon Base"""
 
-from aenum import StrEnum
+from dataclasses import dataclass
+from enum import StrEnum
 
 
 class AirconCommands(StrEnum):
@@ -13,14 +14,15 @@ class AirconCommands(StrEnum):
     WindDirectionLR = "WindDirectionLR"
     PresetTemp = "PresetTemp"
     Entrust = "Entrust"
+    IsSelfCleanOperation = "IsSelfCleanOperation"
+    IsSelfCleanReset = "IsSelfCleanReset"
     # CoolHotJudge = ''
 
     # Vacant = ''
     # ModelNr = ''
-    # IsSelfCleanOperation = ''
-    # IsSelfCleanReset = ''
 
 
+@dataclass
 class AirconBase:
     """Base class of the aircon class"""
 
@@ -36,31 +38,42 @@ class AirconBase:
     CoolHotJudge: bool = False
 
 
+@dataclass
 class Aircon(AirconBase):
-    """Aircon (recieve) class extends AirconBase class"""
+    """Aircon (receive) class extends AirconBase class"""
 
     IndoorTemp: float = 0.0
     OutdoorTemp: float = 0.0
     Electric: float | None = None
     ErrorCode: str = ""
+    IsSelfCleanOperation: bool = False
+    # Raw ModelNr byte (content[0] & 127) before mapping to the known 0/1/2
+    # values - kept around so an unrecognized value (ModelNr == -1) is still
+    # visible as a diagnostic, e.g. for reports like #189.
+    ModelNrRaw: int = 0
 
 
+@dataclass
 class AirconStat(AirconBase):
     """Aircon (command) class extends AirconBase class"""
 
-    def __init__(self, aircon: Aircon) -> None:
-        self.Operation = aircon.Operation
-        self.OperationMode = aircon.OperationMode
-        self.AirFlow = aircon.AirFlow
-        self.WindDirectionUD = aircon.WindDirectionUD
-        self.WindDirectionLR = aircon.WindDirectionLR
-        self.PresetTemp = aircon.PresetTemp
-        self.Entrust = aircon.Entrust
-        self.ModelNr = aircon.ModelNr
-        self.Vacant = aircon.Vacant
-        self.CoolHotJudge = aircon.CoolHotJudge
-        self.IsSelfCleanOperation = False
-        self.IsSelfCleanReset = False
-
     IsSelfCleanOperation: bool = False
     IsSelfCleanReset: bool = False
+
+    @classmethod
+    def from_aircon(cls, aircon: Aircon) -> "AirconStat":
+        """Create a command object seeded from the current (received) state."""
+        return cls(
+            Operation=aircon.Operation,
+            OperationMode=aircon.OperationMode,
+            AirFlow=aircon.AirFlow,
+            WindDirectionUD=aircon.WindDirectionUD,
+            WindDirectionLR=aircon.WindDirectionLR,
+            PresetTemp=aircon.PresetTemp,
+            Entrust=aircon.Entrust,
+            ModelNr=aircon.ModelNr,
+            Vacant=aircon.Vacant,
+            CoolHotJudge=aircon.CoolHotJudge,
+            IsSelfCleanOperation=aircon.IsSelfCleanOperation,
+            IsSelfCleanReset=False,
+        )
