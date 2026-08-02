@@ -98,6 +98,29 @@ Only created if "Whether to create an additional swing mode selectors" is enable
 | Vertical Swing Direction | same as `swing_mode` above | |
 | Fan Speed | same as `fan_mode` above | |
 
+## Options
+
+Configurable via the integration's "Configure" (options) flow.
+
+| Option | Range | Description |
+|---|---|---|
+| Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. |
+| Outdoor Temp. Sensor Offset | -15..15 °C | Same, for the Outdoor Temperature sensor. |
+| Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
+| Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
+| Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
+
+### Target Temp. Offset sign convention
+
+The unit's internal temperature sensor is a **return-air sensor built into the indoor unit**, not a sensor sitting where you actually care about the temperature. Its reading is therefore biased towards whatever the unit itself just blew out:
+
+- **Cooling**: the sensor sits in the cold air the unit produces, so it reads *below* the true room temperature.
+- **Heating**: the sensor sits in the warm air the unit produces, so it reads *above* the true room temperature.
+
+Target Temp. Offset corrects for this bias: `true_room ≈ PresetTemp + offset`. To land the *room* on the temperature you actually requested, the setpoint sent to the unit is `commanded PresetTemp = requested − offset`.
+
+Concretely: **a negative offset raises the setpoint actually sent to the unit** (a positive offset lowers it). Because the bias flips sign between cooling and heating, no single value is correct for both at once - this is exactly why Target Temp. Offset (Cooling) / (Heating) exist as separate overrides. The offset calibrates the unit's *operating regime* (the return-air bias above), not a fixed mounting/calibration error of the sensor - don't expect one number to be "the correct" offset independent of mode.
+
 # Troubleshooting
 
 ## Unit becomes briefly unavailable / drops connection every so often

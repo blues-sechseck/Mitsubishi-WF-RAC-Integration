@@ -31,6 +31,8 @@ from .const import (
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
     CONF_TARGET_OFFSET,
+    CONF_TARGET_OFFSET_COOL,
+    CONF_TARGET_OFFSET_HEAT,
     DOMAIN,
 )
 from .wfrac.repository import AirconApiError, Repository
@@ -296,6 +298,21 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        offset_range_validator = vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0))
+        # target_offset_cool/heat are optional per-mode overrides that must
+        # stay "unset" (None) unless the user explicitly fills them in - a
+        # default= here would coerce a blank field to 0.0 and defeat the
+        # fallback-to-target_offset resolution in climate.py. suggested_value
+        # (not default=) pre-fills the displayed value without forcing one
+        # when absent.
+        per_mode_offset_fields = {
+            vol.Optional(
+                key,
+                description={"suggested_value": self.config_entry.options.get(key)},  # type: ignore
+            ): vol.Any(None, offset_range_validator)
+            for key in (CONF_TARGET_OFFSET_COOL, CONF_TARGET_OFFSET_HEAT)
+        }
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -323,7 +340,8 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_TARGET_OFFSET,
                         default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0), # type: ignore
-                    ): vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0)),
+                    ): offset_range_validator,
+                    **per_mode_offset_fields,
                 },
             ),
         )

@@ -43,7 +43,9 @@
           "create_swing_mode_select": "Ar kurti papildomus svyravimo režimo pasirinkiklius.",
           "indoor_offset": "Vidaus poslinkis",
           "outdoor_offset": "Lauko poslinkis",
-          "target_offset": "Tikslinis poslinkis"
+          "target_offset": "Tikslinis poslinkis",
+          "target_offset_cool": "Tikslinis poslinkis (vėsinimas)",
+          "target_offset_heat": "Tikslinis poslinkis (šildymas)"
         },
         "title": "WF-RAC oro kondicionieriaus prisijungimo informacija"
       }

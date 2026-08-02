@@ -39,6 +39,8 @@ ATTR_TARGET_TEMPERATURE = "target_temperature"
 CONF_INDOOR_OFFSET = "indoor_offset"
 CONF_OUTDOOR_OFFSET = "outdoor_offset"
 CONF_TARGET_OFFSET = "target_offset"
+CONF_TARGET_OFFSET_COOL = "target_offset_cool"
+CONF_TARGET_OFFSET_HEAT = "target_offset_heat"
 
 SENSOR_TYPE_TEMPERATURE = "temperature"
 

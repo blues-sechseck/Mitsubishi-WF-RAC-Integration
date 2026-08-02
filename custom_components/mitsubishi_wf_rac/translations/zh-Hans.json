@@ -43,7 +43,9 @@
           "create_swing_mode_select": "是否创建额外的摆风模式选择器。",
           "indoor_offset": "室内偏移",
           "outdoor_offset": "室外偏移",
-          "target_offset": "目标偏移"
+          "target_offset": "目标偏移",
+          "target_offset_cool": "目标偏移（制冷）",
+          "target_offset_heat": "目标偏移（制热）"
         },
         "title": "WF-RAC 空调连接信息"
       }

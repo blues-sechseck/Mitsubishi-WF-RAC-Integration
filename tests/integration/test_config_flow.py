@@ -19,6 +19,8 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_OPERATOR_ID,
     CONF_OUTDOOR_OFFSET,
     CONF_TARGET_OFFSET,
+    CONF_TARGET_OFFSET_COOL,
+    CONF_TARGET_OFFSET_HEAT,
     DOMAIN,
 )
 from custom_components.mitsubishi_wf_rac.wfrac.repository import AirconApiError
@@ -352,6 +354,8 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
         (CONF_INDOOR_OFFSET, 100.0),  # outside -15..15
         (CONF_OUTDOOR_OFFSET, -100.0),  # outside -15..15
         (CONF_TARGET_OFFSET, 50.0),  # outside -5..5
+        (CONF_TARGET_OFFSET_COOL, 50.0),  # outside -5..5
+        (CONF_TARGET_OFFSET_HEAT, -50.0),  # outside -5..5
     ],
 )
 async def test_options_flow_enforces_offset_range(hass: HomeAssistant, key, value):
@@ -373,6 +377,61 @@ async def test_options_flow_enforces_offset_range(hass: HomeAssistant, key, valu
 
     with pytest.raises(vol.MultipleInvalid):
         schema({"host": "192.168.1.50", CONF_AVAILABILITY_CHECK: True, key: value})
+
+
+async def test_options_flow_saves_submitted_per_mode_offsets(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "host": "192.168.1.50",
+            CONF_AVAILABILITY_CHECK: True,
+            CONF_TARGET_OFFSET: 0.5,
+            CONF_TARGET_OFFSET_COOL: 1.5,
+            CONF_TARGET_OFFSET_HEAT: -1.5,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_TARGET_OFFSET_COOL] == 1.5
+    assert result["data"][CONF_TARGET_OFFSET_HEAT] == -1.5
+
+
+async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: HomeAssistant):
+    # CONF_TARGET_OFFSET_COOL/_HEAT must persist as genuinely absent (None
+    # via .get()) when left blank, not coerced to 0.0 - that's what makes
+    # the climate.py resolver's fallback to CONF_TARGET_OFFSET work. A
+    # default= on these fields (instead of description={"suggested_value"})
+    # would silently turn a blank field into 0.0 and break that fallback.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "host": "192.168.1.50",
+            CONF_AVAILABILITY_CHECK: True,
+            CONF_TARGET_OFFSET: 0.5,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert CONF_TARGET_OFFSET_COOL not in result["data"]
+    assert CONF_TARGET_OFFSET_HEAT not in result["data"]
+    assert result["data"].get(CONF_TARGET_OFFSET_COOL) is None
+    assert result["data"].get(CONF_TARGET_OFFSET_HEAT) is None
 
 
 # --- WfRacConfigFlow.is_matching() / _name ------------------------------

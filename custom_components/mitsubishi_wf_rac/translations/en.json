@@ -43,7 +43,9 @@
           "create_swing_mode_select": "Whether to create an additional swing mode selectors.",
           "indoor_offset": "Indoor Temp. Sensor Offset",
           "outdoor_offset": "Outdoor Temp. Sensor Offset",
-          "target_offset": "Target Temp. Offset"
+          "target_offset": "Target Temp. Offset",
+          "target_offset_cool": "Target Temp. Offset (Cooling)",
+          "target_offset_heat": "Target Temp. Offset (Heating)"
         },
         "title": "WF-RAC AC connection info"
       }

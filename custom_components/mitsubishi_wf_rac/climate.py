@@ -32,7 +32,9 @@ from .const import (
     SWING_HORIZONTAL_MODE_TRANSLATION,
     SUPPORT_SWING_HORIZONTAL_MODES,
     CONF_INDOOR_OFFSET,
-    CONF_TARGET_OFFSET
+    CONF_TARGET_OFFSET,
+    CONF_TARGET_OFFSET_COOL,
+    CONF_TARGET_OFFSET_HEAT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -102,6 +104,27 @@ class AircoClimate(WfRacEntity, ClimateEntity):
     def min_temp(self) -> float:
         return self._min_temp_for_mode(self._attr_hvac_mode)
 
+    def _resolve_target_offset(self, hvac_mode: HVACMode) -> float:
+        """Resolve the effective target_offset for a given hvac_mode.
+
+        COOL/DRY fall back to CONF_TARGET_OFFSET_COOL, HEAT to
+        CONF_TARGET_OFFSET_HEAT, everything else always uses the global
+        CONF_TARGET_OFFSET - and so does COOL/HEAT when its per-mode option
+        is unset (None), which is what keeps single-target_offset installs
+        unchanged. Called from both the write and read-back path so they can
+        never resolve a different offset for the same mode (see beta2: that
+        divergence is what caused the target_temperature re-send loop).
+        """
+        options = self._device.config_entry.options
+        base_offset = options.get(CONF_TARGET_OFFSET, 0.0)
+        if hvac_mode in (HVACMode.COOL, HVACMode.DRY):
+            override = options.get(CONF_TARGET_OFFSET_COOL)
+        elif hvac_mode == HVACMode.HEAT:
+            override = options.get(CONF_TARGET_OFFSET_HEAT)
+        else:
+            override = None
+        return base_offset if override is None else override
+
     async def async_set_temperature(self, **kwargs) -> None:
         """Set new target temperature."""
         set_temp = kwargs.get(ATTR_TEMPERATURE)
@@ -125,8 +148,10 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         # display (see sensor.py). To make the unit actually reach the
         # user-requested real room temperature despite that bias, the offset is
         # subtracted from the commanded setpoint before sending - the displayed
-        # target_temperature itself is unaffected.
-        target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
+        # target_temperature itself is unaffected. Resolved against the mode
+        # the unit will be in after this command (target_hvac_mode), since
+        # cooling and heating have opposite-sign return-air bias.
+        target_offset = self._resolve_target_offset(target_hvac_mode)
         target_temp = set_temp - target_offset
         target_temp = max(min_temp, min(self._attr_max_temp, target_temp))
 
@@ -207,10 +232,16 @@ class AircoClimate(WfRacEntity, ClimateEntity):
 
         # Apply indoor offset
         indoor_offset = self._device.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0)
+        # airco.OperationMode reports the underlying cool/heat mode even
+        # while the unit is off (self._attr_hvac_mode gets forced to OFF
+        # below in that case) - both the displayed hvac_mode and the
+        # target_offset resolution need that underlying mode, so it's
+        # computed once here and shared between them.
+        mode_from_operation = list(HVAC_TRANSLATION.keys())[airco.OperationMode]
         # Mirror the subtraction in async_set_temperature() so the displayed
         # target_temperature agrees with what the user set - PresetTemp itself
         # holds the offset-lowered value that was actually sent to the device.
-        target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
+        target_offset = self._resolve_target_offset(mode_from_operation)
 
         self._attr_target_temperature = airco.PresetTemp + target_offset
         self._attr_current_temperature = airco.IndoorTemp + indoor_offset
@@ -227,7 +258,7 @@ class AircoClimate(WfRacEntity, ClimateEntity):
                 SWING_HORIZONTAL_MODE_TRANSLATION.keys()
             )[airco.WindDirectionLR]
         )
-        self._attr_hvac_mode = list(HVAC_TRANSLATION.keys())[airco.OperationMode]
+        self._attr_hvac_mode = mode_from_operation
 
         if airco.Operation is False:
             self._attr_hvac_mode = HVACMode.OFF

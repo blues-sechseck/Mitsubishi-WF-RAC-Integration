@@ -43,7 +43,9 @@
           "create_swing_mode_select": "Of er extra zwaaimodus-selectors moeten worden aangemaakt.",
           "indoor_offset": "Binnen offset",
           "outdoor_offset": "Buiten offset",
-          "target_offset": "Doel offset"
+          "target_offset": "Doel offset",
+          "target_offset_cool": "Doel offset (Koelen)",
+          "target_offset_heat": "Doel offset (Verwarmen)"
         },
         "title": "WF-RAC AC connectie info"
       }

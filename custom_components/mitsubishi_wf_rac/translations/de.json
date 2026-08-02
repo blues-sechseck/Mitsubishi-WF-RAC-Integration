@@ -43,7 +43,9 @@
           "create_swing_mode_select": "Ob zusätzliche Schwenkmodus-Auswahlen erstellt werden sollen.",
           "indoor_offset": "Innentemperatur Sensor-Offset",
           "outdoor_offset": "Außentemperatur Sensor-Offset",
-          "target_offset": "Zieltemperatur-Offset"
+          "target_offset": "Zieltemperatur-Offset",
+          "target_offset_cool": "Zieltemperatur-Offset (Kühlen)",
+          "target_offset_heat": "Zieltemperatur-Offset (Heizen)"
         },
         "title": "WF-RAC AC Verbindungs-Info"
       }
