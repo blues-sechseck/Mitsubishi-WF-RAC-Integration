@@ -23,3 +23,20 @@ jobs:
     steps:
       - uses: "actions/checkout@v4"
       - uses: "home-assistant/actions/hassfest@master"
+
+  pytest:
+    name: Pytest
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-python@v5"
+        with:
+          # pytest-homeassistant-custom-component pins an exact homeassistant
+          # version per release; on Python <3.14 pip resolves to an old
+          # release pinned way below our own manifest.json minimum - see
+          # requirements-dev.txt.
+          python-version: "3.14"
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: pytest

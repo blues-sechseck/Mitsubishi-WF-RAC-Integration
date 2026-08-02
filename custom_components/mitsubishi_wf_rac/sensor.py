@@ -14,8 +14,8 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_ERROR,
 )
-from homeassistant.util import Throttle
 
+from .entity import WfRacEntity
 from .wfrac.device import Device
 from .const import (
     ATTR_TARGET_TEMPERATURE,
@@ -32,7 +32,6 @@ from .const import (
     ATTR_AUTO_HEATING,
     ATTR_MODEL_NR,
     ATTR_COOL_HOT_JUDGE,
-    MIN_TIME_BETWEEN_UPDATES,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET
 )
@@ -69,7 +68,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     async_add_entities(entities)
 
 
-class DiagnosticsSensor(SensorEntity):
+class DiagnosticsSensor(WfRacEntity, SensorEntity):
     # pylint: disable = too-many-instance-attributes
     """Representation of a Sensor."""
 
@@ -80,10 +79,9 @@ class DiagnosticsSensor(SensorEntity):
         self, device: Device, name: str, custom_type: str, enable=False
     ) -> None:
         """Initialize the sensor."""
-        self._device = device
+        super().__init__(device)
         self._attr_entity_registry_enabled_default = enable
         self._custom_type = custom_type
-        self._attr_device_info = device.device_info
         self._attr_native_unit_of_measurement = (
             "Accounts" if custom_type == ATTR_CONNECTED_ACCOUNTS else None
         )
@@ -140,14 +138,9 @@ class DiagnosticsSensor(SensorEntity):
                 self._attr_native_value = None
             else:
                 self._attr_native_value = "heating" if airco.CoolHotJudge else "cooling"
-        self._attr_available = self._device.available
-
-    async def async_update(self):
-        """Retrieve latest state."""
-        self._update_state()
 
 
-class TemperatureSensor(SensorEntity):
+class TemperatureSensor(WfRacEntity, SensorEntity):
     """Representation of a Sensor."""
 
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -157,10 +150,9 @@ class TemperatureSensor(SensorEntity):
 
     def __init__(self, device: Device, name: str, custom_type: str, enable=True) -> None:
         """Initialize the sensor."""
-        self._device = device
+        super().__init__(device)
         self._custom_type = custom_type
         self._attr_entity_registry_enabled_default = enable
-        self._attr_device_info = device.device_info
         self._attr_unique_id = (
             f"{DOMAIN}-{self._device.airco_id}-{self._custom_type}-sensor"
         )
@@ -182,15 +174,9 @@ class TemperatureSensor(SensorEntity):
             self._attr_native_value = self._device.airco.OutdoorTemp + outdoor_offset
         elif self._custom_type == ATTR_TARGET_TEMPERATURE:
             self._attr_native_value = self._device.airco.PresetTemp
-        self._attr_available = self._device.available
-
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    async def async_update(self):
-        """Retrieve latest state."""
-        self._update_state()
 
 
-class EnergySensor(SensorEntity):
+class EnergySensor(WfRacEntity, SensorEntity):
     """Representation of a Sensor."""
 
     _attr_translation_key = "energy_usage"
@@ -201,15 +187,9 @@ class EnergySensor(SensorEntity):
 
     def __init__(self, device: Device) -> None:
         """Initialize the sensor."""
-        self._device = device
-        self._attr_device_info = device.device_info
+        super().__init__(device)
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-energy-sensor"
         self._update_state()
 
     def _update_state(self) -> None:
         self._attr_native_value = self._device.airco.Electric
-        self._attr_available = self._device.available
-
-    async def async_update(self):
-        """Retrieve latest state."""
-        self._update_state()

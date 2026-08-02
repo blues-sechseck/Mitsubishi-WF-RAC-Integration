@@ -184,9 +184,6 @@
       }
     },
     "switch": {
-      "self_clean": {
-        "name": "セルフクリーン"
-      },
       "home_leave_mode": {
         "name": "留守モード"
       }

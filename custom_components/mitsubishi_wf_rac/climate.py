@@ -1,8 +1,6 @@
 """for Climate integration."""
 
 from __future__ import annotations
-import asyncio
-from datetime import timedelta
 import logging
 from typing import Any
 
@@ -12,13 +10,11 @@ import voluptuous as vol
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import HVACMode, HVACAction, FAN_AUTO
 from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
-from homeassistant.core import HomeAssistant
-from homeassistant.util import Throttle
 from homeassistant.helpers import config_validation as cv, entity_platform
 
+from .entity import WfRacEntity
 from .wfrac.device import Device
 from .wfrac.models.aircon import AirconCommands
-from .wfrac.repository import AirconApiError
 from .const import (
     DOMAIN,
     FAN_MODE_TRANSLATION,
@@ -34,21 +30,19 @@ from .const import (
     SWING_3D_AUTO,
     SWING_MODE_TRANSLATION,
     SWING_HORIZONTAL_MODE_TRANSLATION,
-    MIN_TIME_BETWEEN_UPDATES,
     SUPPORT_SWING_HORIZONTAL_MODES,
     CONF_INDOOR_OFFSET,
     CONF_TARGET_OFFSET
 )
 
 _LOGGER = logging.getLogger(__name__)
-UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 
 
 async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_entities):
     """Setup climate entities"""
     device: Device = entry.runtime_data.device
     _LOGGER.info("Setup climate for: %s, %s", device.device_name, device.airco_id)
-    async_add_entities([AircoClimate(device, hass)])
+    async_add_entities([AircoClimate(device)])
 
     platform = entity_platform.async_get_current_platform()
 
@@ -69,7 +63,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     )
 
 
-class AircoClimate(ClimateEntity):
+class AircoClimate(WfRacEntity, ClimateEntity):
     """Representation of a climate entity"""
 
     _attr_supported_features: int = SUPPORT_FLAGS
@@ -93,14 +87,10 @@ class AircoClimate(ClimateEntity):
     _enable_turn_on_off_backwards_compatibility = False  # Remove after HA 2025.1
     _attr_translation_key = "mitsubishi_wf_rac"
 
-    def __init__(self, device: Device, hass: HomeAssistant) -> None:
-        self._device = device
-        self._hass = hass
-
+    def __init__(self, device: Device) -> None:
+        super().__init__(device)
         self._attr_name = device.device_name
-        self._attr_device_info = device.device_info
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-climate"
-        self._consolidated_params = {}
         self._update_state()
 
     @staticmethod
@@ -152,19 +142,19 @@ class AircoClimate(ClimateEntity):
                 }
             )
 
-        await self._set_airco(opts)
+        await self._device.async_queue_command(opts)
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new target fan mode."""
-        await self._set_airco({AirconCommands.AirFlow: FAN_MODE_TRANSLATION[fan_mode]})
+        await self._device.async_queue_command({AirconCommands.AirFlow: FAN_MODE_TRANSLATION[fan_mode]})
 
     async def async_turn_on(self) -> None:
         """Turn the entity on."""
-        await self._set_airco({AirconCommands.Operation: True})
+        await self._device.async_queue_command({AirconCommands.Operation: True})
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
-        await self._set_airco(
+        await self._device.async_queue_command(
             {
                 AirconCommands.OperationMode: self._device.airco.OperationMode
                 if hvac_mode == HVACMode.OFF
@@ -177,13 +167,13 @@ class AircoClimate(ClimateEntity):
         """Set new target swing operation."""
         _swing_auto = swing_mode == SWING_3D_AUTO
         if _swing_auto:
-            await self._set_airco(
+            await self._device.async_queue_command(
                 {
                     AirconCommands.Entrust: _swing_auto,
                 }
             )
         else:
-            await self._set_airco(
+            await self._device.async_queue_command(
                 {
                     AirconCommands.WindDirectionUD: SWING_MODE_TRANSLATION[swing_mode],
                     AirconCommands.Entrust: False,
@@ -194,13 +184,13 @@ class AircoClimate(ClimateEntity):
         """Set new target horizontal swing operation."""
         _swing_auto = swing_mode == SWING_3D_AUTO
         if _swing_auto:
-            await self._set_airco(
+            await self._device.async_queue_command(
                 {
                     AirconCommands.Entrust: _swing_auto,
                 }
             )
         else:
-            await self._set_airco(
+            await self._device.async_queue_command(
                 {
                     AirconCommands.WindDirectionLR: SWING_HORIZONTAL_MODE_TRANSLATION[swing_mode],
                     AirconCommands.Entrust: False,
@@ -209,31 +199,7 @@ class AircoClimate(ClimateEntity):
 
     async def async_turn_off(self) -> None:
         """Turn the entity off."""
-        await self._set_airco({AirconCommands.Operation: False})
-
-    async def _set_airco(self, params: dict[str, Any]) -> None:
-        will_do_update = not self._consolidated_params
-        self._consolidated_params.update(params)
-
-        if will_do_update:
-            self._hass.async_create_task(self._set_airco_after_delay())
-
-    async def _set_airco_after_delay(self):
-        await asyncio.sleep(UPDATE_CONSOLIDATION_PERIOD.total_seconds())
-        params = self._consolidated_params.copy()
-        self._consolidated_params.clear()
-        try:
-            await self._device.set_airco(params)
-        except (AirconApiError, KeyError, TypeError, ValueError):
-            # This runs as a detached task (async_create_task, nothing awaits it), so
-            # without this the re-raised error from Device.set_airco() (already logged
-            # there) becomes an orphaned "Task exception was never retrieved" with zero
-            # HA-visible feedback that the command never reached the unit. Still refresh
-            # below so the entity picks up self._device.available if the same failure
-            # already flipped it.
-            pass
-        self._update_state()
-        self.async_write_ha_state()
+        await self._device.async_queue_command({AirconCommands.Operation: False})
 
     def _update_state(self) -> None:
         """Private update attributes"""
@@ -257,7 +223,6 @@ class AircoClimate(ClimateEntity):
                 SWING_HORIZONTAL_MODE_TRANSLATION.keys()
             )[airco.WindDirectionLR]
         )
-        self._attr_available = self._device.available
         self._attr_hvac_mode = list(HVAC_TRANSLATION.keys())[airco.OperationMode]
 
         if airco.Operation is False:
@@ -327,15 +292,3 @@ class AircoClimate(ClimateEntity):
 
         # Default to idle if mode is unknown
         return HVACAction.IDLE
-
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    async def async_update(self):
-        """Retrieve latest state."""
-        try:
-            await self._device.update()
-            self._update_state()
-        except (IndexError, KeyError, AttributeError, ValueError):
-            _LOGGER.warning("Could not update the airco values")
-            self._attr_available = False
-            self._device.set_available(False)
-            self.async_write_ha_state()

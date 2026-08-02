@@ -11,6 +11,7 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.const import EntityCategory
 
 from . import MitsubishiWfRacConfigEntry
+from .entity import WfRacEntity
 from .wfrac.device import Device
 from .const import DOMAIN
 
@@ -32,7 +33,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     async_add_entities(entities)
 
 
-class ProblemBinarySensor(BinarySensorEntity):
+class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
     """Reports whether the unit currently has an error code."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
@@ -42,8 +43,7 @@ class ProblemBinarySensor(BinarySensorEntity):
 
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
-        self._device = device
-        self._attr_device_info = device.device_info
+        super().__init__(device)
         self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-problem"
         self._update_state()
 
@@ -52,14 +52,9 @@ class ProblemBinarySensor(BinarySensorEntity):
         self._attr_extra_state_attributes = {
             "error_code": self._device.airco.ErrorCode
         }
-        self._attr_available = self._device.available
-
-    async def async_update(self):
-        """Retrieve latest state."""
-        self._update_state()
 
 
-class OccupancyBinarySensor(BinarySensorEntity):
+class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
     """Reports the occupancy state of the unit (ModelNr 1 only)."""
 
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
@@ -68,16 +63,10 @@ class OccupancyBinarySensor(BinarySensorEntity):
 
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
-        self._device = device
-        self._attr_device_info = device.device_info
+        super().__init__(device)
         self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-occupancy"
         self._update_state()
 
     def _update_state(self) -> None:
         # Vacant == True means nobody is present.
         self._attr_is_on = not self._device.airco.Vacant
-        self._attr_available = self._device.available
-
-    async def async_update(self):
-        """Retrieve latest state."""
-        self._update_state()

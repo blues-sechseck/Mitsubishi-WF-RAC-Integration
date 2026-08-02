@@ -184,9 +184,6 @@
       }
     },
     "switch": {
-      "self_clean": {
-        "name": "Selbstreinigung"
-      },
       "home_leave_mode": {
         "name": "Abwesenheitsmodus"
       }

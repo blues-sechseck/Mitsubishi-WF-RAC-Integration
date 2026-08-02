@@ -184,9 +184,6 @@
       }
     },
     "switch": {
-      "self_clean": {
-        "name": "自清洁"
-      },
       "home_leave_mode": {
         "name": "离家模式"
       }

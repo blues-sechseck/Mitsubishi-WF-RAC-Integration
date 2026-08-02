@@ -104,7 +104,10 @@ class RacParser:
             return stat_byte
 
         stat_byte[10] |= 4 if aircon_stat.IsSelfCleanReset else 0
-        stat_byte[10] |= 144 if aircon_stat.IsSelfCleanOperation else 128
+        # Byte 12, not 10 - confirmed against the decompiled official app
+        # (fremde-projekte/WF-RAC's COMMAND_OPERATION_MODE2_ON/OFF). Byte 10
+        # here only carries Vacant/SelfCleanReset.
+        stat_byte[12] |= 144 if aircon_stat.IsSelfCleanOperation else 128
 
         return stat_byte
 
@@ -153,7 +156,9 @@ class RacParser:
         if aircon_stat.ModelNr not in (1, 2):
             return stat_byte
 
-        stat_byte[15] |= 1 if aircon_stat.IsSelfCleanOperation else 0
+        # Same byte 12 encoding as command_to_byte - the decompiled official
+        # app writes this field into both segments identically.
+        stat_byte[12] |= 144 if aircon_stat.IsSelfCleanOperation else 128
 
         return stat_byte
 
@@ -203,14 +208,18 @@ class RacParser:
             if ac_device.ModelNr == -1:
                 _LOGGER.debug(
                     "Unrecognized ModelNr raw byte %d (content[0]=%d) - "
-                    "self-clean/occupancy features will be unavailable",
+                    "model-gated features (occupancy, Home Leave) will be "
+                    "unavailable",
                     ac_device.ModelNrRaw,
                     content[0],
                 )
         ac_device.Vacant = (content[10] & 1) != 0
         if ac_device.ModelNr in (1, 2):
-            # Mirrors the self-clean bit written in receive_to_bytes() above -
-            # experimental, not confirmed against real hardware for all models.
+            # Mirrors the self-clean bit written in receive_to_bytes() above.
+            # No longer exposed as an entity: the real cycle can only be
+            # started locally via the IR remote, the WiFi module offers no way
+            # to trigger it (see #209). Kept because it's read-only and would
+            # be needed again if a triggerable path ever turns up.
             ac_device.IsSelfCleanOperation = (content[15] & 1) != 0
         code = content[6] & 127
         ac_device.ErrorCode = (

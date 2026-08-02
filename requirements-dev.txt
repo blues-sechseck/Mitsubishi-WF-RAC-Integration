@@ -1,1 +1,7 @@
+# Needs Python >=3.14: pytest-homeassistant-custom-component releases pin an
+# exact homeassistant version per release, and on Python <3.14 pip resolves
+# to 0.13.205 (pinned to homeassistant==2025.1.4 - far below our own
+# >=2025.12.0). 0.13.206+ requires >=3.13, 0.13.317+ requires >=3.14 and
+# pulls a much more current homeassistant pin.
 homeassistant>=2025.12.0
+pytest-homeassistant-custom-component

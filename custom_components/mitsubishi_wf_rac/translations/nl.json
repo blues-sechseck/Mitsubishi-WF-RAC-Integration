@@ -184,9 +184,6 @@
       }
     },
     "switch": {
-      "self_clean": {
-        "name": "Zelfreiniging"
-      },
       "home_leave_mode": {
         "name": "Afwezigheidsmodus"
       }

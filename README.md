@@ -68,7 +68,7 @@ This integration creates one device per airco with the following entities.
 | Account Expires *(diagnostic)* | text | Expiry of the current operator session. |
 | LED Status *(diagnostic)* | text | State of the unit's status LED. |
 | Auto Heating *(diagnostic)* | text | State of the unit's automatic heating assist. |
-| Model Nr *(diagnostic, disabled by default)* | number | Raw model-identifier byte reported by the unit. Used to gate which optional features (self-clean, occupancy) are exposed; mostly useful for diagnosing unsupported models. |
+| Model Nr *(diagnostic, disabled by default)* | number | Raw model-identifier byte reported by the unit. Used to gate which optional features (occupancy, Home Leave) are exposed; mostly useful for diagnosing unsupported models. |
 | Cool Hot Judge *(diagnostic, disabled by default)* | `cooling`, `heating` | Raw cool/heat state reported by the unit's compressor, independent of the configured mode. `unknown` while off or in `fan_only`. Useful for detecting the "wait/hold" state on multi-split systems where one indoor unit is blocked because the outdoor unit is already committed to the opposite mode for a sibling unit. |
 
 ## Binary sensors
@@ -82,7 +82,6 @@ This integration creates one device per airco with the following entities.
 
 | Entity | Values | Description |
 |---|---|---|
-| Self Clean | on/off | Starts/stops the unit's self-clean cycle. Only created on units that support it. After toggling, the real state is re-read from the unit after a short delay, since the unit's own response can briefly still show the old state. |
 | Home Leave Mode | on/off | Enters/leaves the unit's own frost-protection/low-power standby mode for when nobody's home, by lowering the heat target temperature below the unit's Home Leave threshold. Only created on units confirmed to support it. |
 
 ## Select (optional)
