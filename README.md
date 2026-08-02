@@ -1,6 +1,6 @@
 # Mitsubishi WF-RAC Integration
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/default)
 [![installbadge]][installs]
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="28">](https://buymeacoffee.com/blues.sechseck)
 
@@ -28,11 +28,15 @@ See [Github To Do & Bug List](https://github.com/blues-sechseck/Mitsubishi-WF-RA
 
 # Installation
 
-Install using [HACS](https://hacs.xyz)
-In HACS go to the three dots int the upper right corner choose add custom repository and add https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration to the list.
+### Install using [HACS](https://hacs.xyz)
 
-Install manually
-Clone or copy this repository and copy the folder 'custom_components/mitsubishi_wf_rac' into '/custom_components/mitsubishi_wf_rac'
+This integration is part of the HACS default list — no custom repository needed. In HACS, go to
+**Integrations**, search for **"Mitsubishi WF-RAC"**, and install it from there.
+
+### Install manually
+
+Clone or copy this repository and copy the folder `custom_components/mitsubishi_wf_rac` into
+`/custom_components/mitsubishi_wf_rac`.
 
 # Entities
 
