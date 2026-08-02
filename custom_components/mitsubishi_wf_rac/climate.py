@@ -207,8 +207,12 @@ class AircoClimate(WfRacEntity, ClimateEntity):
 
         # Apply indoor offset
         indoor_offset = self._device.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0)
+        # Mirror the subtraction in async_set_temperature() so the displayed
+        # target_temperature agrees with what the user set - PresetTemp itself
+        # holds the offset-lowered value that was actually sent to the device.
+        target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
 
-        self._attr_target_temperature = airco.PresetTemp
+        self._attr_target_temperature = airco.PresetTemp + target_offset
         self._attr_current_temperature = airco.IndoorTemp + indoor_offset
         self._attr_fan_mode = list(FAN_MODE_TRANSLATION.keys())[airco.AirFlow]
         self._attr_swing_mode = (

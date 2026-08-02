@@ -33,7 +33,8 @@ from .const import (
     ATTR_MODEL_NR,
     ATTR_COOL_HOT_JUDGE,
     CONF_INDOOR_OFFSET,
-    CONF_OUTDOOR_OFFSET
+    CONF_OUTDOOR_OFFSET,
+    CONF_TARGET_OFFSET
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -173,7 +174,10 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
             outdoor_offset = self._device.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0)
             self._attr_native_value = self._device.airco.OutdoorTemp + outdoor_offset
         elif self._custom_type == ATTR_TARGET_TEMPERATURE:
-            self._attr_native_value = self._device.airco.PresetTemp
+            # Kept symmetric with climate.py's target_temperature - see the
+            # comment in ClimateEntity._update_state().
+            target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
+            self._attr_native_value = self._device.airco.PresetTemp + target_offset
 
 
 class EnergySensor(WfRacEntity, SensorEntity):
