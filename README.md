@@ -104,6 +104,9 @@ Configurable via the integration's "Configure" (options) flow.
 
 | Option | Range | Description |
 |---|---|---|
+| Host (IP) address | IP or hostname | Address of the WF-RAC module. |
+| Check availability | on/off, on by default | Whether a failed poll is tolerated before the device is marked unavailable. Off marks it unavailable on the first failed poll. |
+| Retry limit | 2 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes. `0` and `1` mark it unavailable on the first failed poll, identical to Check availability being off. |
 | Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. |
 | Outdoor Temp. Sensor Offset | -15..15 °C | Same, for the Outdoor Temperature sensor. |
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
@@ -123,43 +126,34 @@ Concretely: **a negative offset raises the setpoint actually sent to the unit** 
 
 # Troubleshooting
 
-## Unit becomes briefly unavailable / drops connection every so often
+## Unit goes briefly unavailable about once an hour
 
-This is a long-standing, widely reported issue (see #106, #146, #173) that appears to originate in
-the WF-RAC WiFi module itself rather than in this integration. Community-gathered findings so far:
+The WF-RAC module drops and re-establishes its WiFi association roughly once an hour. This is
+designed behaviour of the module, confirmed by MHI support under ticket reference 813958: the
+interface does "connect / disconnect every one hour … to avoid too much cache by the communication"
+([source](https://community.ui.com/questions/AC-Units-IOT-disconnecting-from-UniFi-Wi-Fi-at-regular-hourly-Intervals/821cd3e4-46a0-4d6b-8fd0-8d5cf182b90f)).
+The reassociation takes seconds to about a minute and cannot be turned off.
 
-- Lower "WF-RAC AC Connection" → "Availability retry limit" to `0` or `1`, and disable "Check
-  availability" in the integration's options. Retrying aggressively appears to make the module's own
-  reconnect behavior worse rather than better.
-- Several users who additionally blocked the unit's outbound internet access (router/firewall rule —
-  LAN access for this integration still works fine, only WAN is blocked) report the drops disappearing
-  entirely over several weeks. The working theory is that whatever the module does when it reaches out
-  to Mitsubishi's cloud service periodically interferes with its local HTTP API.
-- This has not been confirmed against the module's firmware/protocol directly, just observed
-  empirically by several users — if it doesn't help in your case, please say so on one of the issues
-  above so we can keep the guidance accurate.
-- If none of the above helps and it's a dealbreaker for you, some users have switched to
-  [MHI-AC-Ctrl-ESPHome](https://github.com/ginkage/MHI-AC-Ctrl-ESPHome) instead, which replaces the
-  WF-RAC WiFi module with your own ESP hardware and reports fewer stability issues — at the cost of a
-  DIY hardware install.
+This integration polls every 60 seconds, so a reassociation can cost a poll. The availability
+options decide whether that becomes a visible outage:
 
-## Unit drops connection on WiFi roaming / band steering (802.11r / 802.11v)
+- **Check availability**: on (the default).
+- **Retry limit**: `3` (the default) — the device is marked unavailable after 3 consecutive failed
+  polls, about 3 minutes. `0` and `1` mark it unavailable on the first failed poll.
 
-A separate cause from the above, reported in #173: the WF-RAC WiFi module appears to mishandle WiFi
-roaming/steering management frames. One user traced regular ~hourly outages to 802.11v BSS Transition
-Management frames arriving at the exact outage timestamps, and disabling them resolved it. Recommended
-WiFi setup for the module:
+## Unit goes unavailable for 15 minutes or longer
 
-- Put the module on a **dedicated 2.4 GHz-only SSID** — the module is 2.4 GHz only. On a shared
-  2.4/5 GHz SSID, band steering can try to push it onto a band it can't join, and band steering is
-  itself typically implemented via the same 802.11v frames that trigger the drops, so a separate SSID
-  removes both problems at once.
-- Disable **Fast Roaming (802.11r)** and **Handoff Suggestions / BSS Transition (802.11v)** / band
-  steering on that SSID.
-- Use **plain WPA2**, not WPA2/WPA3 mixed mode — the module doesn't reliably handle mixed mode (this
-  also matters during initial pairing).
-- On UniFi specifically, the "Force WiFi 4 Mode" and "DTIM Interval Lock" options under IoT
-  Optimization are safe to enable and may help.
+Outages of this length are a network-side problem rather than the hourly reassociation above: the
+module mishandles WiFi roaming and steering management frames. Recommended setup:
+
+- A **dedicated 2.4 GHz-only SSID**. The module is 2.4 GHz only, and on a shared SSID band steering
+  tries to push it onto a band it cannot join.
+- **802.11r (Fast Roaming)** and **802.11v (BSS Transition / Handoff Suggestions)** off on that
+  SSID. Band steering is itself implemented via the same 802.11v frames.
+- **Plain WPA2**, not WPA2/WPA3 mixed mode. This also matters during initial pairing.
+- On UniFi, "Force WiFi 4 Mode" and "DTIM Interval Lock" under IoT Optimization are safe to enable.
+- Blocking the module's outbound internet access at the router removes longer outages in some
+  setups; this integration only needs LAN access. The hourly reassociation continues either way.
 
 [installbadge]: https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.mitsubishi_wf_rac.total
 [installs]: https://analytics.home-assistant.io/

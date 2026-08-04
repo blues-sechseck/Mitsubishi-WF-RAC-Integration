@@ -59,14 +59,28 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry, data=new_data, options=new_options, version=2
         )
     if entry.version == 2:
-        new_data = entry.data.copy()
-        new_options = entry.options.copy()
-        new_options["availability_retry"] = False
-        new_options["availability_retry_limit"] = 3
+        # This step used to write an "availability_retry" key that nothing ever
+        # reads, and to reset CONF_AVAILABILITY_RETRY_LIMIT back to 3 over any
+        # value the user had picked. Both are gone; the version bump is all that
+        # is left. Entries that already ran the old step get the stale key
+        # cleaned up by the v3 -> v4 step below.
+        hass.config_entries.async_update_entry(entry, version=3)
+    if entry.version == 3:
+        new_options = dict(entry.options)
+        new_options.pop("availability_retry", None)
+        # The v1 -> v2 step above hard-set CONF_AVAILABILITY_CHECK to False at a
+        # time when the flag was dead code (see create_device_from_entry), so
+        # every entry predating v2 has been running with no retry tolerance at
+        # all: one failed poll marks the device unavailable. The WF-RAC module
+        # reassociates on its own roughly once an hour (#173), which a 60s poll
+        # interval turns into a visible outage. Turn the check on, and lift
+        # limits below 2, which are equivalent to it being off (Device.
+        # _set_availability() needs limit-1 consecutive failures to tolerate).
+        new_options[CONF_AVAILABILITY_CHECK] = True
+        if new_options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3) < 2:
+            new_options[CONF_AVAILABILITY_RETRY_LIMIT] = 3
 
-        hass.config_entries.async_update_entry(
-            entry, data=new_data, options=new_options, version=3
-        )
+        hass.config_entries.async_update_entry(entry, options=new_options, version=4)
 
     return True
 
@@ -116,7 +130,11 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     # key is never written anywhere, so this always defaulted to False and the
     # retry-tolerance logic in wfrac/device.py (_availability_retry_limit) was
     # dead code even when the user enabled "Availability Check" in the UI.
-    availability_retry: bool = entry.options.get(CONF_AVAILABILITY_CHECK, False)
+    # The default here is True to match both the value new entries are created
+    # with (config_flow._async_create_common) and the one the options form shows
+    # for a missing key - it used to be False, so an entry without the key ran
+    # with the tolerance off while the form displayed it as on.
+    availability_retry: bool = entry.options.get(CONF_AVAILABILITY_CHECK, True)
     availability_retry_limit: int = entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3)
     create_swing_mode_select: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
