@@ -101,6 +101,32 @@ def test_model_nr_raw_known_values(parser, raw, expected):
     assert ac.ModelNr == expected
 
 
+# --- ErrorCode (byte 6: bit7 = M vs E, low 7 bits = code) ----------------
+# Ground truth cross-checked against the official app's AirconStatCoder.java:
+# bit7 set -> "M<code>" (maintenance code), bit7 clear + code!=0 -> "E<code>".
+# A prior `(content[6] & -128) <= 0` check was always true (AND of a signed
+# byte with -128 can only yield 0 or -128, both <= 0), so the "E" branch was
+# dead code and every non-zero code surfaced as "M".
+
+
+@pytest.mark.parametrize(
+    "byte6,expected",
+    [
+        (0, "00"),
+        (5, "E5"),
+        (127, "E127"),
+        (-128, "M00"),
+        (-127, "M01"),
+        (-1, "M127"),
+    ],
+)
+def test_error_code_decodes_m_vs_e_by_bit7(parser, byte6, expected):
+    ac = Aircon()
+    content = [1] + [0] * 5 + [byte6] + [0] * 11
+    parser._parse_basic_settings(ac, content)
+    assert ac.ErrorCode == expected
+
+
 # --- OperationMode's "-1 => AUTO" edge case ------------------------------
 
 

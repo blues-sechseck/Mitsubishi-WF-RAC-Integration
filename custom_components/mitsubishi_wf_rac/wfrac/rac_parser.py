@@ -223,10 +223,10 @@ class RacParser:
             ac_device.IsSelfCleanOperation = (content[15] & 1) != 0
         code = content[6] & 127
         ac_device.ErrorCode = (
-            "00"
+            f"M{code:02d}"
+            if content[6] < 0
+            else "00"
             if code == 0
-            else f"M{code:02d}"
-            if (content[6] & -128) <= 0
             else "E" + str(code)
         )
 
