@@ -141,10 +141,18 @@ options decide whether that becomes a visible outage:
 - **Retry limit**: `3` (the default) — the device is marked unavailable after 3 consecutive failed
   polls, about 3 minutes. `0` and `1` mark it unavailable on the first failed poll.
 
-## Unit goes unavailable for 15 minutes or longer
+## Unit goes unavailable for about an hour
 
-Outages of this length are a network-side problem rather than the hourly reassociation above: the
-module mishandles WiFi roaming and steering management frames. Recommended setup:
+This is the same hourly reassociation as above, but the module fails to re-bind port `51443`
+afterwards instead of coming back within a minute. The outage starts right on the hourly tick, not
+at a random point in between, which is what distinguishes it from the WiFi roaming problem below.
+There's no router setting that fixes this - it clears itself on the next hourly reassociation, so
+it's a matter of waiting it out.
+
+## Unit goes unavailable for 15-35 minutes
+
+Outages in this range and starting at a random point (not on the hourly tick) are a network-side
+problem: the module mishandles WiFi roaming and steering management frames. Recommended setup:
 
 - A **dedicated 2.4 GHz-only SSID**. The module is 2.4 GHz only, and on a shared SSID band steering
   tries to push it onto a band it cannot join.
@@ -152,7 +160,7 @@ module mishandles WiFi roaming and steering management frames. Recommended setup
   SSID. Band steering is itself implemented via the same 802.11v frames.
 - **Plain WPA2**, not WPA2/WPA3 mixed mode. This also matters during initial pairing.
 - On UniFi, "Force WiFi 4 Mode" and "DTIM Interval Lock" under IoT Optimization are safe to enable.
-- Blocking the module's outbound internet access at the router removes longer outages in some
+- Blocking the module's outbound internet access at the router removes these outages in some
   setups; this integration only needs LAN access. The hourly reassociation continues either way.
 
 [installbadge]: https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.mitsubishi_wf_rac.total
