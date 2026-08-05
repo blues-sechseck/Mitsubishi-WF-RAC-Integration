@@ -1,7 +1,9 @@
 """Aircon Base"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
+
+from ..capabilities import ModelCapabilities, get_capabilities
 
 
 class AirconCommands(StrEnum):
@@ -20,6 +22,30 @@ class AirconCommands(StrEnum):
 
     # Vacant = ''
     # ModelNr = ''
+
+    # HomeLeaveMode (Tag 248 extension segment, capability index 7) - not a
+    # fixed-byte field like the ones above, encoded/decoded as a variable
+    # trailer in rac_parser.py. HomeLeaveModeStatusRequest asks the unit to
+    # report its current values (it omits this segment from a plain
+    # getAirconStat otherwise - confirmed empirically, see #187 notes in
+    # FUNDE.md); the ForCooling/ForHeating pair writes new ones. Both
+    # directions verified live (05.08.2026), see todo.md.
+    HomeLeaveModeStatusRequest = "HomeLeaveModeStatusRequest"
+    HomeLeaveModeForCooling = "HomeLeaveModeForCooling"
+    HomeLeaveModeForHeating = "HomeLeaveModeForHeating"
+
+
+@dataclass
+class HomeLeaveModeSetting:
+    """One side (cooling or heating) of the HomeLeaveMode extension segment
+    (Tag 248, sub-codes 27-32): temp threshold ("TempRule"), temp setting and
+    airflow. AirFlow is the app's own 0=auto/1-4=volume index for this
+    feature specifically - not the same encoding as the main AirFlow field.
+    """
+
+    TempRule: float
+    TempSetting: float
+    AirFlow: int
 
 
 @dataclass
@@ -51,6 +77,15 @@ class Aircon(AirconBase):
     # values - kept around so an unrecognized value (ModelNr == -1) is still
     # visible as a diagnostic, e.g. for reports like #189.
     ModelNrRaw: int = 0
+    # Feature availability per the app's own model_no_type table (#187),
+    # looked up from ModelNrRaw - independent of the ModelNr 0/1/2 grouping
+    # above, which instead reflects the wire-protocol byte layout.
+    Capabilities: ModelCapabilities = field(default_factory=lambda: get_capabilities(0))
+    # Populated only after a HomeLeaveModeStatusRequest round-trip (see
+    # AirconCommands) - stays None otherwise, including on units that
+    # support the feature but haven't been asked yet.
+    HomeLeaveModeForCooling: HomeLeaveModeSetting | None = None
+    HomeLeaveModeForHeating: HomeLeaveModeSetting | None = None
 
 
 @dataclass
@@ -59,6 +94,12 @@ class AirconStat(AirconBase):
 
     IsSelfCleanOperation: bool = False
     IsSelfCleanReset: bool = False
+    # See AirconCommands - only ever set explicitly via
+    # Device.async_request_home_leave_mode_status()/async_set_home_leave_mode(),
+    # never carried over from from_aircon() below.
+    HomeLeaveModeStatusRequest: bool = False
+    HomeLeaveModeForCooling: HomeLeaveModeSetting | None = None
+    HomeLeaveModeForHeating: HomeLeaveModeSetting | None = None
 
     @classmethod
     def from_aircon(cls, aircon: Aircon) -> "AirconStat":

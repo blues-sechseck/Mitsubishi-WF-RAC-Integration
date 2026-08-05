@@ -331,6 +331,102 @@ async def test_availability_retry_disabled_fails_immediately(hass):
     assert dev.available is False
 
 
+
+# --- firmware update check (wfrac/firmware_check.py) ----------------------
+
+
+def _stats_response_with_firmware(payload: str, firm_type: str, wireless_ver: str) -> dict:
+    return {
+        **_stats_response(payload),
+        "firmType": firm_type,
+        "wireless": {"firmVer": wireless_ver},
+    }
+
+
+async def test_update_does_not_check_firmware_when_disabled_by_default(device, monkeypatch):
+    # The firmware check is the only outbound internet call in the
+    # integration - it must stay off unless explicitly enabled via the
+    # firmware_update_check option (see const.py's CONF_FIRMWARE_UPDATE_CHECK).
+    assert device.firmware_update_check_enabled is False
+    fetch = AsyncMock(return_value={"wireless": "026", "mcu": "200"})
+    monkeypatch.setattr(device_module, "fetch_latest_firmware", fetch)
+    device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
+        ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
+    )
+
+    await device.update()
+    await device.hass.async_block_till_done()
+
+    fetch.assert_not_awaited()
+    assert device.firmware_update_available is None
+    assert device.latest_wireless_firmware_version is None
+
+
+async def test_update_detects_available_firmware_update(device, monkeypatch):
+    device._firmware_update_check_enabled = True
+    fetch = AsyncMock(return_value={"wireless": "026", "mcu": "200"})
+    monkeypatch.setattr(device_module, "fetch_latest_firmware", fetch)
+    device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
+        ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
+    )
+
+    await device.update()
+    await device.hass.async_block_till_done()
+
+    fetch.assert_awaited_once_with(device._hass, "WF-RAC-HTTPS")
+    assert device.wireless_firmware_version == "025"
+    assert device.latest_wireless_firmware_version == "026"
+    assert device.firmware_update_available is True
+
+
+async def test_update_does_not_flag_downgrade_or_equal_version_as_update(device, monkeypatch):
+    # Strictly-greater-than only (see FUNDE.md's updateFirmware section): the
+    # module silently no-ops a requested version <= its current one, so
+    # neither "equal" nor "older" may be reported as an available update.
+    device._firmware_update_check_enabled = True
+    fetch = AsyncMock(return_value={"wireless": "025", "mcu": "200"})
+    monkeypatch.setattr(device_module, "fetch_latest_firmware", fetch)
+    device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
+        ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
+    )
+
+    await device.update()
+    await device.hass.async_block_till_done()
+
+    assert device.firmware_update_available is False
+
+
+async def test_update_firmware_check_is_rate_limited(device, monkeypatch):
+    device._firmware_update_check_enabled = True
+    fetch = AsyncMock(return_value={"wireless": "026", "mcu": "200"})
+    monkeypatch.setattr(device_module, "fetch_latest_firmware", fetch)
+    device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
+        ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
+    )
+
+    await device.update()
+    await device.hass.async_block_till_done()
+    await device.update()
+    await device.hass.async_block_till_done()
+
+    fetch.assert_awaited_once()
+
+
+async def test_update_firmware_check_failure_leaves_state_unknown(device, monkeypatch):
+    device._firmware_update_check_enabled = True
+    fetch = AsyncMock(return_value=None)
+    monkeypatch.setattr(device_module, "fetch_latest_firmware", fetch)
+    device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
+        ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
+    )
+
+    await device.update()
+    await device.hass.async_block_till_done()
+
+    assert device.firmware_update_available is None
+    assert device.latest_wireless_firmware_version is None
+
+
 async def test_async_update_data_wraps_exception_in_update_failed(device):
     from homeassistant.helpers.update_coordinator import UpdateFailed
 

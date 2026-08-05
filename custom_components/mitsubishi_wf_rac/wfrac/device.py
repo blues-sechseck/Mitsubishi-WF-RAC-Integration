@@ -1,6 +1,6 @@
 """Device module"""
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 import logging
 
@@ -8,9 +8,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .firmware_check import fetch_latest_firmware
 from .rac_parser import RacParser
 from .repository import AirconApiError, Repository
-from .models.aircon import Aircon, AirconStat
+from .models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
 
 from ..const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
 
@@ -23,6 +24,12 @@ _LOGGER = logging.getLogger(__name__)
 # instead of merging (e.g. a fan-speed change followed shortly by a
 # temperature change loses the fan change).
 UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
+
+# The manufacturer's getFirmware endpoint is unauthenticated and cheap, but
+# there's no reason to call it on every MIN_TIME_BETWEEN_UPDATES (60s) poll -
+# firmware doesn't change that often. Rate-limit background checks to this
+# interval instead.
+FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
 
 class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attributes
@@ -40,6 +47,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             availability_retry: bool,
             availability_retry_limit: int,
             create_swing_mode_select: bool,
+            firmware_update_check_enabled: bool = False,
             connection_method: str | None = None,
     ) -> None:
         self._api = Repository(
@@ -63,6 +71,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._account_expires: int | None = None
         self._led_status: int | None = None
         self._auto_heating: int | None = None
+        self._firm_type: str | None = None
+        self._wireless_firmware_ver: str | None = None
+        self._latest_wireless_firmware_ver: str | None = None
+        self._firmware_update_available: bool | None = None
+        self._last_firmware_check: datetime | None = None
+        self._firmware_update_check_enabled = firmware_update_check_enabled
         self._availability_retry = availability_retry
         self._availability_retry_count = 0
         self._availability_retry_limit = availability_retry_limit
@@ -124,7 +138,9 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
         try:
             self._connected_accounts = int(response["numOfAccount"])
-            self._airco = self._parser.translate_bytes(response["airconStat"])
+            new_airco = self._parser.translate_bytes(response["airconStat"])
+            self._carry_forward_home_leave_mode(new_airco)
+            self._airco = new_airco
             # Not part of the airconStat blob, present alongside it in the same
             # response. Tolerate absence (.get()) since it's undocumented and
             # could be missing on older firmware.
@@ -145,6 +161,59 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         mcu_ver = (response.get("mcu") or {}).get("firmVer", "unknown")
         wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
         self._firmware = f"{firm_type}, mcu: {mcu_ver}, wireless: {wireless_ver}"
+
+        self._firm_type = response.get("firmType")
+        self._wireless_firmware_ver = (response.get("wireless") or {}).get("firmVer")
+        self._maybe_check_firmware_update()
+
+    def _maybe_check_firmware_update(self) -> None:
+        """Kick off a background cloud firmware check if one is due (see
+        FIRMWARE_CHECK_INTERVAL). Fire-and-forget: the result lands whenever
+        the request completes and reaches entities via async_set_updated_data()
+        in _async_check_firmware_update() below, independent of the regular
+        60s poll cycle that triggered this check.
+        """
+        # Hard opt-in gate, checked first and unconditionally: this is the
+        # only outbound internet call anywhere in this integration (every
+        # other request stays on the local network) - users who leave the
+        # option off must get zero cloud traffic, not just a less frequent one.
+        if not self._firmware_update_check_enabled:
+            return
+        if not self._firm_type or not self._wireless_firmware_ver:
+            return
+        now = datetime.now()
+        if (
+            self._last_firmware_check is not None
+            and now - self._last_firmware_check < FIRMWARE_CHECK_INTERVAL
+        ):
+            return
+        self._last_firmware_check = now
+        self._hass.async_create_task(self._async_check_firmware_update())
+
+    async def _async_check_firmware_update(self) -> None:
+        """Compare the locally-reported wireless firmware version against the
+        manufacturer's latest for this firmType."""
+        latest = await fetch_latest_firmware(self._hass, self._firm_type)
+        if latest is None or latest.get("wireless") is None:
+            return
+
+        try:
+            # Strictly-greater-than only: the module treats a requested
+            # firmVer <= its current one as "nothing to do" and returns 200 OK
+            # without flashing (see FUNDE.md, updateFirmware) - a `!=` check
+            # would misreport that harmless case as an available downgrade.
+            update_available = int(latest["wireless"]) > int(self._wireless_firmware_ver)
+        except (TypeError, ValueError):
+            _LOGGER.debug(
+                "Could not compare firmware versions: local=%r latest=%r",
+                self._wireless_firmware_ver,
+                latest["wireless"],
+            )
+            return
+
+        self._latest_wireless_firmware_ver = latest["wireless"]
+        self._firmware_update_available = update_available
+        self.async_set_updated_data(self._airco)
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
@@ -192,7 +261,9 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             try:
                 command = self._parser.to_base64(airco_stat)
                 response = await self._api.send_airco_command(self._airco_id, command)
-                self._airco = self._parser.translate_bytes(response)
+                new_airco = self._parser.translate_bytes(response)
+                self._carry_forward_home_leave_mode(new_airco)
+                self._airco = new_airco
             except (AirconApiError, KeyError, TypeError, ValueError) as ex:
                 _LOGGER.warning("Could not send airco data: %s", str(ex))
                 raise
@@ -209,6 +280,48 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             self._consolidation_task = self.hass.async_create_task(
                 self._async_flush_queued_command()
             )
+
+    def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
+        """The unit only includes the Tag-248 HomeLeaveMode extension segment
+        in the direct response to a HomeLeaveModeStatusRequest - confirmed
+        empirically (05.08.2026, live test): every following plain poll's
+        translate_bytes() builds a fresh Aircon() with both fields back at
+        their None default, which made the diagnostic sensors flash the
+        real value for one update cycle and then revert to unknown. Carry
+        the last known reading forward instead so it survives until the
+        next explicit request or a fresh None response (e.g. reconnect).
+        """
+        if self._airco is None:
+            return
+        if new_airco.HomeLeaveModeForCooling is None:
+            new_airco.HomeLeaveModeForCooling = self._airco.HomeLeaveModeForCooling
+        if new_airco.HomeLeaveModeForHeating is None:
+            new_airco.HomeLeaveModeForHeating = self._airco.HomeLeaveModeForHeating
+
+    async def async_request_home_leave_mode_status(self) -> None:
+        """Ask the unit to report its current HomeLeaveMode (Tag 248, #187
+        capability index 7) thresholds/airflow. Does not change any AC
+        setting by itself - but the unit only includes this extension
+        segment in the direct response to this request, never on a plain
+        getAirconStat poll (confirmed empirically, 05.08.2026 live test,
+        matched byte-for-byte against the official app's own display).
+        _carry_forward_home_leave_mode() keeps the reading available on
+        every following poll instead of it reverting to unknown.
+        """
+        await self.async_queue_command({AirconCommands.HomeLeaveModeStatusRequest: True})
+
+    async def async_set_home_leave_mode(
+        self, cooling: HomeLeaveModeSetting, heating: HomeLeaveModeSetting
+    ) -> None:
+        """Write new HomeLeaveMode thresholds/airflow (Tag 248, sub-codes
+        27-32). Verified live (05.08.2026) - written values round-tripped
+        exactly through a subsequent read, see todo.md."""
+        await self.async_queue_command(
+            {
+                AirconCommands.HomeLeaveModeForCooling: cooling,
+                AirconCommands.HomeLeaveModeForHeating: heating,
+            }
+        )
 
     async def _async_flush_queued_command(self) -> None:
         await asyncio.sleep(UPDATE_CONSOLIDATION_PERIOD.total_seconds())
@@ -290,6 +403,28 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def auto_heating(self) -> int | None:
         """Return the airco's auto-heating flag"""
         return self._auto_heating
+
+    @property
+    def wireless_firmware_version(self) -> str | None:
+        """Return the locally-reported wireless-module firmware version"""
+        return self._wireless_firmware_ver
+
+    @property
+    def latest_wireless_firmware_version(self) -> str | None:
+        """Return the latest wireless-module firmware version known from the
+        manufacturer's cloud, or None if not yet checked/unknown"""
+        return self._latest_wireless_firmware_ver
+
+    @property
+    def firmware_update_available(self) -> bool | None:
+        """Return whether a newer wireless-module firmware is available, or
+        None if that hasn't been determined yet"""
+        return self._firmware_update_available
+
+    @property
+    def firmware_update_check_enabled(self) -> bool:
+        """Return whether the (online, cloud) firmware update check is enabled"""
+        return self._firmware_update_check_enabled
 
     @property
     def device_id(self) -> str:

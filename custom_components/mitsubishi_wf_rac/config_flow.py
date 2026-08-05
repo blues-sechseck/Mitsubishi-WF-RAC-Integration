@@ -27,6 +27,7 @@ from .const import (
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CREATE_SWING_MODE_SELECT,
+    CONF_FIRMWARE_UPDATE_CHECK,
     CONF_OPERATOR_ID,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
@@ -152,7 +153,12 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 info = await self._async_register_airco(self.hass, user_input)
 
                 data_input = user_input.copy()
-                options_input = {CONF_HOST: user_input[CONF_HOST], CONF_AVAILABILITY_CHECK: True, CONF_AVAILABILITY_RETRY_LIMIT: 3}
+                options_input = {
+                    CONF_HOST: user_input[CONF_HOST],
+                    CONF_AVAILABILITY_CHECK: True,
+                    CONF_AVAILABILITY_RETRY_LIMIT: 3,
+                    CONF_FIRMWARE_UPDATE_CHECK: False,
+                }
                 data_input.pop(CONF_HOST)
 
                 return self.async_create_entry(
@@ -329,6 +335,10 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_AVAILABILITY_RETRY_LIMIT,
                         default=self.config_entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3),  # type: ignore
                     ): int,
+                    vol.Required(
+                        CONF_FIRMWARE_UPDATE_CHECK,
+                        default=self.config_entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False),  # type: ignore
+                    ): bool,
                     vol.Optional(
                         CONF_INDOOR_OFFSET,
                         default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0), # type: ignore

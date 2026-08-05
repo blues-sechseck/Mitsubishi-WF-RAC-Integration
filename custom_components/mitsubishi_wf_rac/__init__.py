@@ -20,6 +20,7 @@ from .const import (
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CONNECTION_METHOD,
+    CONF_FIRMWARE_UPDATE_CHECK,
     CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
 )
 from .wfrac.device import Device
@@ -29,9 +30,11 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.CLIMATE,
+    Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.UPDATE,
 ]
 
 
@@ -137,9 +140,14 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     availability_retry: bool = entry.options.get(CONF_AVAILABILITY_CHECK, True)
     availability_retry_limit: int = entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3)
     create_swing_mode_select: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
+    # Off unless the user explicitly opted in via the options flow - this is
+    # the only outbound internet call in the integration (see
+    # wfrac/device.py's _maybe_check_firmware_update()).
+    firmware_update_check_enabled: bool = entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False)
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
     _device = Device(hass, name, device, port, device_id, operator_id, airco_id, availability_retry,
                      availability_retry_limit, create_swing_mode_select,
+                     firmware_update_check_enabled=firmware_update_check_enabled,
                      connection_method=connection_method)
     return _device
 

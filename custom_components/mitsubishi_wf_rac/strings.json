@@ -39,6 +39,7 @@
           "host": "[%key:common::config_flow::data::host%]",
           "availability_check": "[%key:common::config_flow::data::avaiability%]",
           "availability_retry_limit": "[%key:common::config_flow::data::avaiability_retry_limit%]",
+          "firmware_update_check": "Firmware Update Check (Online)",
           "target_offset_cool": "Target Temp. Offset (Cooling)",
           "target_offset_heat": "Target Temp. Offset (Heating)"
         },
@@ -50,6 +51,11 @@
     "sensor": {
       "cool_hot_judge": {
         "name": "Cool Hot Judge"
+      }
+    },
+    "update": {
+      "firmware_update": {
+        "name": "Firmware Update"
       }
     }
   }

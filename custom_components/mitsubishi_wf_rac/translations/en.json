@@ -40,6 +40,7 @@
           "host": "Host (IP) address",
           "availability_check": "Check availability",
           "availability_retry_limit": "Retry limit",
+          "firmware_update_check": "Firmware Update Check (Online)",
           "create_swing_mode_select": "Whether to create an additional swing mode selectors.",
           "indoor_offset": "Indoor Temp. Sensor Offset",
           "outdoor_offset": "Outdoor Temp. Sensor Offset",
@@ -125,6 +126,48 @@
           "medium": "Medium",
           "high": "High"
         }
+      },
+      "home_leave_mode": {
+        "name": "Home Leave Mode",
+        "state": {
+          "off": "Off",
+          "away_cool": "Away Cooling",
+          "away_heat": "Away Heating"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Home Leave Cooling Air Flow",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Home Leave Heating Air Flow",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Home Leave Cooling Outdoor Temp. Threshold"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Home Leave Cooling Target Room Temp."
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Home Leave Heating Outdoor Temp. Threshold"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Home Leave Heating Target Room Temp."
       }
     },
     "sensor": {
@@ -182,12 +225,13 @@
         "name": "Problem"
       },
       "occupancy": {
-        "name": "Occupancy"
+        "name": "Presence"
       }
     },
-    "switch": {
-      "home_leave_mode": {
-        "name": "Home Leave Mode"
+    "switch": {},
+    "update": {
+      "firmware_update": {
+        "name": "Firmware Update"
       }
     }
   }

@@ -14,6 +14,7 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_ERROR,
 )
+from homeassistant.helpers import entity_registry as er
 
 from .entity import WfRacEntity
 from .wfrac.device import Device
@@ -66,7 +67,29 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     if device.airco.Electric is not None:
         entities.append(EnergySensor(device))
 
+    _async_remove_home_leave_mode_sensors(hass, device)
+
     async_add_entities(entities)
+
+
+def _async_remove_home_leave_mode_sensors(hass, device: Device) -> None:
+    """Drop the former Home Leave Mode diagnostic sensors from the entity
+    registry.
+
+    Replaced by writable entities on the Controls section of the device page:
+    HomeLeaveModeNumber (TempRule/TempSetting) in number.py, the AirFlow
+    selects in select.py - editable directly instead of only via the
+    set_home_leave_mode action, see todo.md.
+    """
+    registry = er.async_get(hass)
+    for mode in ("cooling", "heating"):
+        for slug in ("temp_rule", "temp_setting", "air_flow"):
+            entity_id = registry.async_get_entity_id(
+                "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-home-leave-{mode}-{slug}-sensor"
+            )
+            if entity_id:
+                _LOGGER.debug("Removing obsolete home leave mode sensor %s", entity_id)
+                registry.async_remove(entity_id)
 
 
 class DiagnosticsSensor(WfRacEntity, SensorEntity):

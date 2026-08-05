@@ -15,6 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mitsubishi_wf_rac.const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_CHECK,
+    CONF_FIRMWARE_UPDATE_CHECK,
     CONF_INDOOR_OFFSET,
     CONF_OPERATOR_ID,
     CONF_OUTDOOR_OFFSET,
@@ -76,6 +77,8 @@ async def test_user_flow_success_creates_entry(hass: HomeAssistant):
     assert "host" not in result["data"]
     assert result["options"]["host"] == "192.168.1.50"
     assert result["data"][CONF_AIRCO_ID] == "airco-1"
+    # Off by default for new entries too - see CONF_FIRMWARE_UPDATE_CHECK.
+    assert result["options"][CONF_FIRMWARE_UPDATE_CHECK] is False
     assert CONF_OPERATOR_ID in result["data"]
     assert CONF_DEVICE_ID in result["data"]
 
@@ -377,6 +380,48 @@ async def test_options_flow_enforces_offset_range(hass: HomeAssistant, key, valu
 
     with pytest.raises(vol.MultipleInvalid):
         schema({"host": "192.168.1.50", CONF_AVAILABILITY_CHECK: True, key: value})
+
+
+async def test_options_flow_defaults_firmware_update_check_to_off(hass: HomeAssistant):
+    # The firmware check is the only outbound internet call in the
+    # integration and must default to off (see const.py's
+    # CONF_FIRMWARE_UPDATE_CHECK) - confirm the options form defaults it that
+    # way for both brand-new entries and pre-existing ones that predate the
+    # option entirely.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema = result["data_schema"]
+
+    validated = schema({"host": "192.168.1.50", CONF_AVAILABILITY_CHECK: True})
+    assert validated[CONF_FIRMWARE_UPDATE_CHECK] is False
+
+
+async def test_options_flow_saves_submitted_firmware_update_check(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "host": "192.168.1.50",
+            CONF_AVAILABILITY_CHECK: True,
+            CONF_FIRMWARE_UPDATE_CHECK: True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_FIRMWARE_UPDATE_CHECK] is True
 
 
 async def test_options_flow_saves_submitted_per_mode_offsets(hass: HomeAssistant):

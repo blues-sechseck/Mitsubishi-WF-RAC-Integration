@@ -20,6 +20,11 @@ CONF_OPERATOR_ID = "operator_id"
 CONF_AIRCO_ID = "airco_id"
 CONF_AVAILABILITY_CHECK = "availability_check"
 CONF_AVAILABILITY_RETRY_LIMIT = "availability_retry_limit"
+# Gates all outbound internet traffic (as opposed to local-network device
+# polling) - the manufacturer's getFirmware endpoint. Off by default: unlike
+# availability polling, this isn't required for the integration to work, and
+# some users may not want any cloud call at all - see Device._maybe_check_firmware_update().
+CONF_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
 CONF_CREATE_SWING_MODE_SELECT = "create_swing_mode_select"
 CONF_CONNECTION_METHOD = "connection_method"
 ATTR_DEVICE_ID = "device_id"
@@ -59,6 +64,8 @@ SENSOR_TYPES = {
 
 SERVICE_SET_HORIZONTAL_SWING_MODE = "set_horizontal_swing_mode"
 SERVICE_SET_VERTICAL_SWING_MODE = "set_vertical_swing_mode"
+SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS = "request_home_leave_mode_status"
+SERVICE_SET_HOME_LEAVE_MODE = "set_home_leave_mode"
 
 SUPPORT_FLAGS = (
     ClimateEntityFeature.FAN_MODE

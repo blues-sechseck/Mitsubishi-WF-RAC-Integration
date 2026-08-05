@@ -13,6 +13,7 @@ from homeassistant.const import EntityCategory
 from . import MitsubishiWfRacConfigEntry
 from .entity import WfRacEntity
 from .wfrac.device import Device
+from .wfrac.error_codes import describe_error_code
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,8 +27,10 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     entities = [
         ProblemBinarySensor(device),
     ]
-    # Occupancy ("vacant") detection is only reported by ModelNr 1 units.
-    if device.airco.ModelNr == 1:
+    # Occupancy ("vacant") detection is only reported by units whose capability
+    # table (#187) has VacantProperty=true - includes ZT-2025 (raw=3), which
+    # the wire-protocol ModelNr grouping alone would miss (see capabilities.py).
+    if device.airco.Capabilities.vacant_property:
         entities.append(OccupancyBinarySensor(device))
 
     async_add_entities(entities)
@@ -48,14 +51,20 @@ class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
         self._update_state()
 
     def _update_state(self) -> None:
-        self._attr_is_on = self._device.airco.ErrorCode != "00"
-        self._attr_extra_state_attributes = {
-            "error_code": self._device.airco.ErrorCode
-        }
+        code = self._device.airco.ErrorCode
+        self._attr_is_on = code != "00"
+        attrs: dict[str, str] = {"error_code": code}
+        # Deliberately no key at all (rather than a guessed/empty value) for
+        # undocumented codes - every M<n> maintenance code, and any E-number
+        # outside fehlercodes-selfdiagnose.md's tables.
+        description = describe_error_code(code)
+        if description is not None:
+            attrs["error_description"] = description
+        self._attr_extra_state_attributes = attrs
 
 
 class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
-    """Reports the occupancy state of the unit (ModelNr 1 only)."""
+    """Reports the occupancy state of the unit (VacantProperty-capable models only)."""
 
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
     _attr_has_entity_name = True
