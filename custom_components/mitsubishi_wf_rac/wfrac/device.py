@@ -282,14 +282,17 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             )
 
     def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
-        """The unit only includes the Tag-248 HomeLeaveMode extension segment
-        in the direct response to a HomeLeaveModeStatusRequest - confirmed
-        empirically (05.08.2026, live test): every following plain poll's
-        translate_bytes() builds a fresh Aircon() with both fields back at
-        their None default, which made the diagnostic sensors flash the
-        real value for one update cycle and then revert to unknown. Carry
-        the last known reading forward instead so it survives until the
-        next explicit request or a fresh None response (e.g. reconnect).
+        """The unit reports the Tag-248 HomeLeaveMode extension segment exactly
+        once per HomeLeaveModeStatusRequest, then stops: the bridge MCU clears
+        its response cache after handing it to the WiFi side, so the segment is
+        present in a short window's worth of status blocks and absent from every
+        later poll (firmware-confirmed 06.08.2026, see the workspace's
+        firmware-kompatibilitaet.md). Observed effect (05.08.2026 live test):
+        translate_bytes() builds a fresh Aircon() with both fields back at their
+        None default, which made the diagnostic sensors flash the real value for
+        one update cycle and then revert to unknown. Carry the last known
+        reading forward instead so it survives until the next explicit request
+        or a fresh None response (e.g. reconnect).
         """
         if self._airco is None:
             return
@@ -301,12 +304,22 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     async def async_request_home_leave_mode_status(self) -> None:
         """Ask the unit to report its current HomeLeaveMode (Tag 248, #187
         capability index 7) thresholds/airflow. Does not change any AC
-        setting by itself - but the unit only includes this extension
-        segment in the direct response to this request, never on a plain
-        getAirconStat poll (confirmed empirically, 05.08.2026 live test,
-        matched byte-for-byte against the official app's own display).
-        _carry_forward_home_leave_mode() keeps the reading available on
-        every following poll instead of it reverting to unknown.
+        setting by itself - but the unit only reports this extension segment
+        in response to this request, never on an unprompted poll (confirmed
+        empirically, 05.08.2026 live test, matched byte-for-byte against the
+        official app's own display).
+
+        Timing, measured: the value showed up only on a later scheduled poll -
+        up to MIN_TIME_BETWEEN_UPDATES (60s) later - not in the response to
+        this call's own setAirconStat POST. Note that a *single* extension
+        request does come back inside that same POST response (verified
+        06.08.2026 with operation-data codes), so the delay here is most
+        likely because this request sends six segments and the unit answers
+        them one bus frame at a time. Unconfirmed - if it matters, measure it
+        rather than trusting this paragraph.
+
+        _carry_forward_home_leave_mode() keeps the reading available on every
+        following poll instead of it reverting to unknown.
         """
         await self.async_queue_command({AirconCommands.HomeLeaveModeStatusRequest: True})
 
