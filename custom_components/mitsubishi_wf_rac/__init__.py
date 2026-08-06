@@ -145,9 +145,12 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     # the only outbound internet call in the integration (see
     # wfrac/device.py's _maybe_check_firmware_update()).
     firmware_update_check_enabled: bool = entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False)
-    # Off unless the user explicitly opted in via the options flow - see
-    # wfrac/device.py's _maybe_request_service_data().
-    service_data_enabled: bool = entry.options.get(CONF_SERVICE_DATA, False)
+    # Temporarily defaults to True for the 2026.9.2 beta (see config_flow.py's
+    # _async_create_common) so entries that predate this option - i.e. most
+    # testers upgrading from an earlier release - pick it up without a trip
+    # through the options flow. Revert the fallback to False for the final
+    # release. See wfrac/device.py's _maybe_request_service_data().
+    service_data_enabled: bool = entry.options.get(CONF_SERVICE_DATA, True)
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
     _device = Device(hass, name, device, port, device_id, operator_id, airco_id, availability_retry,
                      availability_retry_limit, create_swing_mode_select,

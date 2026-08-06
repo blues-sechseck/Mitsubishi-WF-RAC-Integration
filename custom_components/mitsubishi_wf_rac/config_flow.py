@@ -159,7 +159,10 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_AVAILABILITY_CHECK: True,
                     CONF_AVAILABILITY_RETRY_LIMIT: 3,
                     CONF_FIRMWARE_UPDATE_CHECK: False,
-                    CONF_SERVICE_DATA: False,
+                    # Temporarily True for the 2026.9.2 beta so testers get the
+                    # new operation-data sensors without an extra options-flow
+                    # trip - revert to False for the final release.
+                    CONF_SERVICE_DATA: True,
                 }
                 data_input.pop(CONF_HOST)
 

@@ -32,11 +32,11 @@ UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
 # Service data (operation-data codes) is opt-in and costs an extra
-# setAirconStat write on top of the regular read-only poll - unlike the
-# firmware check above, this stays on the local network, but there's still no
-# reason to send it every MIN_TIME_BETWEEN_UPDATES (60s). See
-# Device._maybe_request_service_data().
-SERVICE_DATA_REQUEST_INTERVAL = timedelta(minutes=5)
+# setAirconStat write on top of the regular read-only poll, but it stays on
+# the local network and a batched request answers all four codes in one
+# round trip (see todo.md), so there's no reason to throttle it below the
+# regular poll cadence. See Device._maybe_request_service_data().
+SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
 
 class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attributes

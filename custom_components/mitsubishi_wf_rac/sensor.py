@@ -237,16 +237,19 @@ class EnergySensor(WfRacEntity, SensorEntity):
 
 class ServiceDataSensor(WfRacEntity, SensorEntity):
     """Operation-data sensors (compressor frequency, current, hot gas temp,
-    EEV pulses) - see rac_parser.SERVICE_DATA_CODES. Always created but
-    disabled by default (niche, like the other diagnostic sensors above):
-    stays unknown until CONF_SERVICE_DATA is enabled in the options flow,
-    since that's what actually makes Device request these values - see
+    EEV pulses) - see rac_parser.SERVICE_DATA_CODES. Always created; stays
+    unknown until CONF_SERVICE_DATA is enabled, since that's what actually
+    makes Device request these values - see
     Device._maybe_request_service_data().
+
+    Temporarily enabled by default for the 2026.9.2 beta so this new feature
+    actually gets exercised by testers - revert to False (niche, like the
+    other diagnostic sensors above) for the final release.
     """
 
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     _FIELD_BY_TYPE = {
         ATTR_COMPRESSOR_FREQUENCY: "CompressorFrequency",
