@@ -427,6 +427,51 @@ async def test_update_firmware_check_failure_leaves_state_unknown(device, monkey
     assert device.latest_wireless_firmware_version is None
 
 
+# --- service data request (opt-in, rac_parser.SERVICE_DATA_CODES) ---------
+
+
+async def test_update_does_not_request_service_data_when_disabled_by_default(device, monkeypatch):
+    # Unlike the firmware check, this stays on the local network - but it's
+    # still an extra setAirconStat write on top of the regular read-only
+    # poll, so it must stay off unless explicitly enabled via the
+    # service_data option (see const.py's CONF_SERVICE_DATA).
+    assert device.service_data_enabled is False
+    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_not_awaited()
+
+
+async def test_update_requests_service_data_when_enabled(device, monkeypatch):
+    device._service_data_enabled = True
+    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_awaited_once()
+
+
+async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
+    device._service_data_enabled = True
+    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    await asyncio.sleep(0.05)
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_awaited_once()
+
+
 async def test_async_update_data_wraps_exception_in_update_failed(device):
     from homeassistant.helpers.update_coordinator import UpdateFailed
 

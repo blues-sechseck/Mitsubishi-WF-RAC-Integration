@@ -62,6 +62,10 @@ This integration creates one device per airco with the following entities.
 | Outdoor Temperature | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. |
 | Target Temperature | °C | Current setpoint, exposed as its own sensor. |
 | Energy Usage | kWh, increasing | Cumulative energy consumption reported by the unit. Only created if the unit actually reports this value — not all models do. |
+| Compressor Frequency *(disabled by default)* | Hz | Actual compressor speed, not just on/off. Requires the "Service Data (Experimental)" option below - always `unknown` otherwise. |
+| Operating Current *(disabled by default)* | A | Compressor operating current. Same "Service Data (Experimental)" requirement as above. |
+| Hot Gas Temperature *(disabled by default)* | °C | Compressor discharge (hot gas) temperature. Same "Service Data (Experimental)" requirement as above. |
+| EEV Pulses *(disabled by default)* | pulses | Electronic expansion valve position. Same "Service Data (Experimental)" requirement as above. |
 | Airco ID *(diagnostic)* | text | Internal ID of the airco. |
 | Operator ID *(diagnostic, disabled by default)* | text | Internal operator/account ID. |
 | Device ID *(diagnostic, disabled by default)* | text | Internal device ID. |
@@ -113,6 +117,7 @@ Configurable via the integration's "Configure" (options) flow.
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
+| Service Data (Experimental) | on/off, off by default | Requests compressor frequency/current/hot gas temperature/EEV pulses every 5 minutes (see the sensors above). Unlike every other request this integration sends, this is an extra write to the unit purely to piggy-back a read request on it - leave off unless you actually want these values. |
 
 ### Target Temp. Offset sign convention
 

@@ -229,12 +229,12 @@ def test_home_leave_mode_trailer_default_is_the_plain_sentinel(parser):
     # integration sent before this feature existed) must keep producing the
     # same 5-byte "nothing to send" sentinel.
     stat = _base_stat()
-    assert parser._home_leave_mode_trailer(stat) == bytearray([1, 255, 255, 255, 255])
+    assert parser._variable_trailer(stat) == bytearray([1, 255, 255, 255, 255])
 
 
 def test_home_leave_mode_trailer_status_request(parser):
     stat = _base_stat(HomeLeaveModeStatusRequest=True)
-    trailer = parser._home_leave_mode_trailer(stat)
+    trailer = parser._variable_trailer(stat)
     assert trailer[0] == 6  # six 4-byte groups
     groups = [trailer[1 + i * 4:5 + i * 4] for i in range(6)]
     for group, sub in zip(groups, (27, 28, 29, 30, 31, 32)):
@@ -246,7 +246,7 @@ def test_home_leave_mode_trailer_set_values(parser):
         HomeLeaveModeForCooling=HomeLeaveModeSetting(TempRule=35.0, TempSetting=33.0, AirFlow=0),
         HomeLeaveModeForHeating=HomeLeaveModeSetting(TempRule=0.0, TempSetting=10.0, AirFlow=4),
     )
-    trailer = parser._home_leave_mode_trailer(stat)
+    trailer = parser._variable_trailer(stat)
     assert trailer[0] == 6
     groups = [trailer[1 + i * 4:5 + i * 4] for i in range(6)]
     expected = [
@@ -264,7 +264,7 @@ def test_home_leave_mode_encode_decode_round_trip(parser):
         HomeLeaveModeForCooling=HomeLeaveModeSetting(TempRule=35.0, TempSetting=33.0, AirFlow=2),
         HomeLeaveModeForHeating=HomeLeaveModeSetting(TempRule=0.0, TempSetting=10.0, AirFlow=1),
     )
-    trailer = parser._home_leave_mode_trailer(stat)
+    trailer = parser._variable_trailer(stat)
     signed = lambda b: b - 256 if b > 127 else b
     groups = [trailer[1 + i * 4:5 + i * 4] for i in range(6)]
     vals = []
@@ -276,6 +276,52 @@ def test_home_leave_mode_encode_decode_round_trip(parser):
     parser._parse_temperatures(ac, vals)
     assert ac.HomeLeaveModeForCooling == stat.HomeLeaveModeForCooling
     assert ac.HomeLeaveModeForHeating == stat.HomeLeaveModeForHeating
+
+
+def test_service_data_trailer_status_request(parser):
+    stat = _base_stat(ServiceDataStatusRequest=True)
+    trailer = parser._variable_trailer(stat)
+    assert trailer[0] == 4  # four 4-byte segments
+    groups = [trailer[1 + i * 4:5 + i * 4] for i in range(4)]
+    for group, code in zip(groups, (0x11, 0x90, 0x85, 0x13)):
+        # OP1=OP2=OP3=255 -> "report current value", never 0 (a write to the
+        # climate MCU) - see CLAUDE.md's telemetry-segment guardrail.
+        assert list(group) == [code, 255, 255, 255]
+
+
+def test_parse_temperatures_service_data_segments(parser):
+    # Real values from a live batched request (06.08.2026, Klima
+    # Schlafzimmer) - see wf-rac-module-reference.md §5.4/todo.md. Unlike
+    # HomeLeaveMode's Tag 248, op1 carries data (part of the frequency
+    # formula) rather than a fixed status marker.
+    signed = lambda b: b - 256 if b > 127 else b
+    vals = []
+    for code, op1, op2 in (
+        (0x11, 0x10, 0xC8),
+        (0x90, 0x10, 0x04),
+        (0x85, 0x10, 0x15),
+        (0x13, 0x10, 0x6A),
+    ):
+        vals += [signed(code), op1, op2, 0]
+
+    ac = Aircon()
+    parser._parse_temperatures(ac, vals)
+
+    assert ac.CompressorFrequency == pytest.approx(20.0)
+    assert ac.OperatingCurrent == pytest.approx(4 * 14 / 51)
+    assert ac.HotGasTemp == pytest.approx(42.5)
+    assert ac.EevPulses == 106
+
+
+def test_parse_temperatures_service_data_absent_by_default(parser):
+    # A plain poll without a prior ServiceDataStatusRequest must leave all
+    # four fields at their None default (see AirconCommands), not e.g. 0.
+    ac = Aircon()
+    parser._parse_temperatures(ac, [])
+    assert ac.CompressorFrequency is None
+    assert ac.OperatingCurrent is None
+    assert ac.HotGasTemp is None
+    assert ac.EevPulses is None
 
 
 def test_to_base64_default_length_unchanged_by_home_leave_mode(parser):

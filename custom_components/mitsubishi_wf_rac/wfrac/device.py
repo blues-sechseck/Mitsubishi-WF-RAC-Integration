@@ -31,6 +31,13 @@ UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 # interval instead.
 FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
+# Service data (operation-data codes) is opt-in and costs an extra
+# setAirconStat write on top of the regular read-only poll - unlike the
+# firmware check above, this stays on the local network, but there's still no
+# reason to send it every MIN_TIME_BETWEEN_UPDATES (60s). See
+# Device._maybe_request_service_data().
+SERVICE_DATA_REQUEST_INTERVAL = timedelta(minutes=5)
+
 
 class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attributes
     """Device Class"""
@@ -48,6 +55,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             availability_retry_limit: int,
             create_swing_mode_select: bool,
             firmware_update_check_enabled: bool = False,
+            service_data_enabled: bool = False,
             connection_method: str | None = None,
     ) -> None:
         self._api = Repository(
@@ -77,6 +85,8 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._firmware_update_available: bool | None = None
         self._last_firmware_check: datetime | None = None
         self._firmware_update_check_enabled = firmware_update_check_enabled
+        self._service_data_enabled = service_data_enabled
+        self._last_service_data_request: datetime | None = None
         self._availability_retry = availability_retry
         self._availability_retry_count = 0
         self._availability_retry_limit = availability_retry_limit
@@ -140,6 +150,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             self._connected_accounts = int(response["numOfAccount"])
             new_airco = self._parser.translate_bytes(response["airconStat"])
             self._carry_forward_home_leave_mode(new_airco)
+            self._carry_forward_service_data(new_airco)
             self._airco = new_airco
             # Not part of the airconStat blob, present alongside it in the same
             # response. Tolerate absence (.get()) since it's undocumented and
@@ -165,6 +176,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._firm_type = response.get("firmType")
         self._wireless_firmware_ver = (response.get("wireless") or {}).get("firmVer")
         self._maybe_check_firmware_update()
+        self._maybe_request_service_data()
 
     def _maybe_check_firmware_update(self) -> None:
         """Kick off a background cloud firmware check if one is due (see
@@ -215,6 +227,42 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._firmware_update_available = update_available
         self.async_set_updated_data(self._airco)
 
+    def _maybe_request_service_data(self) -> None:
+        """Kick off a background service-data request if due and enabled (see
+        SERVICE_DATA_REQUEST_INTERVAL). Opt-in like the firmware check above,
+        but for a different reason: this stays on the local network, but it's
+        an extra setAirconStat write (see rac_parser.SERVICE_DATA_CODES) on
+        top of the regular read-only poll, not just a cheap read.
+        """
+        if not self._service_data_enabled:
+            return
+        now = datetime.now()
+        if (
+            self._last_service_data_request is not None
+            and now - self._last_service_data_request < SERVICE_DATA_REQUEST_INTERVAL
+        ):
+            return
+        self._last_service_data_request = now
+        self._hass.async_create_task(
+            self.async_queue_command({AirconCommands.ServiceDataStatusRequest: True})
+        )
+
+    def _carry_forward_service_data(self, new_airco: Aircon) -> None:
+        """Same rationale as _carry_forward_home_leave_mode() above: the unit
+        reports these extension segments exactly once (confirmed live
+        06.08.2026, see todo.md), so without this the sensors would flash the
+        real value for one update cycle and then revert to unknown."""
+        if self._airco is None:
+            return
+        if new_airco.CompressorFrequency is None:
+            new_airco.CompressorFrequency = self._airco.CompressorFrequency
+        if new_airco.OperatingCurrent is None:
+            new_airco.OperatingCurrent = self._airco.OperatingCurrent
+        if new_airco.HotGasTemp is None:
+            new_airco.HotGasTemp = self._airco.HotGasTemp
+        if new_airco.EevPulses is None:
+            new_airco.EevPulses = self._airco.EevPulses
+
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
         try:
@@ -263,6 +311,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 response = await self._api.send_airco_command(self._airco_id, command)
                 new_airco = self._parser.translate_bytes(response)
                 self._carry_forward_home_leave_mode(new_airco)
+                self._carry_forward_service_data(new_airco)
                 self._airco = new_airco
             except (AirconApiError, KeyError, TypeError, ValueError) as ex:
                 _LOGGER.warning("Could not send airco data: %s", str(ex))
@@ -438,6 +487,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def firmware_update_check_enabled(self) -> bool:
         """Return whether the (online, cloud) firmware update check is enabled"""
         return self._firmware_update_check_enabled
+
+    @property
+    def service_data_enabled(self) -> bool:
+        """Return whether the (local, opt-in) service data request is enabled"""
+        return self._service_data_enabled
 
     @property
     def device_id(self) -> str:

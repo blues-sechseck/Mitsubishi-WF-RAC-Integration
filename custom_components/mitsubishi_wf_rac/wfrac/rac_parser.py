@@ -32,6 +32,25 @@ HOME_LEAVE_MODE_SUBCODES: Final = (27, 28, 29, 30, 31, 32)
 # encode the main AirFlow field.
 HOME_LEAVE_MODE_AIRFLOW_BYTES: Final = (0, 3, 5, 7, 14)
 
+# --- service data extension segments (operation-data codes) ---
+# Ground truth: live-measured against the official app's own service-data
+# screen equivalent (there isn't one - MHI-AC-Ctrl's code/formula naming),
+# cross-checked in a load test and a batched request, see
+# wf-rac-module-reference.md §5.4 and todo.md. Unlike HomeLeaveMode's Tag 248,
+# the second byte carries data (part of the value, see the frequency formula
+# below) rather than a fixed status marker - do not gate on it like
+# HOME_LEAVE_MODE_READ_MARKER.
+SERVICE_DATA_COMPRESSOR_FREQ: Final = 0x11
+SERVICE_DATA_OPERATING_CURRENT: Final = 0x90
+SERVICE_DATA_HOT_GAS_TEMP: Final = 0x85
+SERVICE_DATA_EEV_PULSES: Final = 0x13
+SERVICE_DATA_CODES: Final = (
+    SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_OPERATING_CURRENT,
+    SERVICE_DATA_HOT_GAS_TEMP,
+    SERVICE_DATA_EEV_PULSES,
+)
+
 # Bit masks
 OPERATION_MASK: Final = 3
 # Not in any vendor doc - correlated live against operation-data code 0x11
@@ -78,7 +97,7 @@ class RacParser:
         """Convert AirconStat to Base64 string."""
         try:
             command = self.add_crc16(
-                self.command_to_byte(aircon_stat) + self._home_leave_mode_trailer(aircon_stat)
+                self.command_to_byte(aircon_stat) + self._variable_trailer(aircon_stat)
             )
             receive = self.add_crc16(self.add_variable(self.receive_to_bytes(aircon_stat)))
             return b64encode(bytes(command + receive)).decode("ascii")
@@ -90,18 +109,35 @@ class RacParser:
         return byte_buffer + VARIABLE_SUFFIX
 
     @staticmethod
-    def _home_leave_mode_trailer(aircon_stat: AirconStat) -> bytearray:
-        """Variable trailer for the command stream - HomeLeaveMode status
-        request/set, or the plain "nothing to send" sentinel otherwise (the
-        default for every command that doesn't touch HomeLeaveMode, including
-        every command this integration sent before this feature existed).
-        Mirrors AirconStatCoder.addCommandVariableData(); unverified on real
-        hardware - see todo.md.
+    def _build_trailer(segments: list[tuple[int, int, int, int]]) -> bytearray:
+        """Generic variable-trailer encoding: a count byte followed by that
+        many 4-byte (tag, op1, op2, op3) segments, or the plain "nothing to
+        send" sentinel if there's nothing to encode."""
+        if not segments:
+            return VARIABLE_SUFFIX
+        trailer = bytearray([len(segments)])
+        for segment in segments:
+            trailer += bytearray(b & 0xFF for b in segment)
+        return trailer
+
+    @classmethod
+    def _variable_trailer(cls, aircon_stat: AirconStat) -> bytearray:
+        """Variable trailer for the command stream - whichever one-shot
+        extension request/set is queued on aircon_stat (HomeLeaveMode,
+        service data), or the plain sentinel otherwise (the default for every
+        command that doesn't touch either, including every command this
+        integration sent before these features existed). Mirrors
+        AirconStatCoder.addCommandVariableData(); unverified on real hardware
+        except where noted - see todo.md.
         """
         if aircon_stat.HomeLeaveModeStatusRequest:
-            groups = [(sub, 0) for sub in HOME_LEAVE_MODE_SUBCODES]
-            marker = HOME_LEAVE_MODE_STATUS_REQUEST_MARKER
-        elif (
+            segments = [
+                (HOME_LEAVE_MODE_TAG_BYTE, HOME_LEAVE_MODE_STATUS_REQUEST_MARKER, sub, 0)
+                for sub in HOME_LEAVE_MODE_SUBCODES
+            ]
+            return cls._build_trailer(segments)
+
+        if (
             aircon_stat.HomeLeaveModeForCooling is not None
             and aircon_stat.HomeLeaveModeForHeating is not None
         ):
@@ -115,15 +151,21 @@ class RacParser:
                 HOME_LEAVE_MODE_AIRFLOW_BYTES[cooling.AirFlow],
                 HOME_LEAVE_MODE_AIRFLOW_BYTES[heating.AirFlow],
             )
-            groups = list(zip(HOME_LEAVE_MODE_SUBCODES, values))
-            marker = HOME_LEAVE_MODE_SET_MARKER
-        else:
-            return VARIABLE_SUFFIX
+            segments = [
+                (HOME_LEAVE_MODE_TAG_BYTE, HOME_LEAVE_MODE_SET_MARKER, sub, value)
+                for sub, value in zip(HOME_LEAVE_MODE_SUBCODES, values)
+            ]
+            return cls._build_trailer(segments)
 
-        trailer = bytearray([len(groups)])
-        for sub, value in groups:
-            trailer += bytearray([HOME_LEAVE_MODE_TAG_BYTE, marker, sub, value & 0xFF])
-        return trailer
+        if aircon_stat.ServiceDataStatusRequest:
+            # OP1=255 -> "report current value" (see rac_parser docstring/
+            # CLAUDE.md guardrail: never 0, that would be a write to the
+            # climate MCU). Confirmed live (06.08.2026) to answer all four in
+            # the direct setAirconStat response - see todo.md.
+            segments = [(code, 255, 255, 255) for code in SERVICE_DATA_CODES]
+            return cls._build_trailer(segments)
+
+        return VARIABLE_SUFFIX
 
     def command_to_byte(self, aircon_stat: AirconStat) -> bytearray:
         """Command to bytes"""
@@ -318,6 +360,10 @@ class RacParser:
                 and vals[i + 1] == HOME_LEAVE_MODE_READ_MARKER
             ):
                 home_leave_mode_raw[vals[i + 2] & 0xFF] = vals[i + 3] & 0xFF
+            elif (vals[i] & 0xFF) in SERVICE_DATA_CODES:
+                self._apply_service_data_segment(
+                    ac_device, vals[i] & 0xFF, vals[i + 1] & 0xFF, vals[i + 2] & 0xFF
+                )
             else:
                 self._log_unknown_segment(vals, i)
         self._apply_home_leave_mode(ac_device, home_leave_mode_raw)
@@ -340,6 +386,22 @@ class RacParser:
             TempSetting=raw[30] / 2,
             AirFlow=find_match(raw[32] & 15, *HOME_LEAVE_MODE_AIRFLOW_BYTES),
         )
+
+    @staticmethod
+    def _apply_service_data_segment(ac_device: Aircon, code: int, op1: int, op2: int) -> None:
+        """Decode one operation-data segment (see SERVICE_DATA_CODES).
+        Formulas and op1/op2 naming from MHI-AC-Ctrl, cross-checked live
+        against a load test (varying compressor frequency) and a batched
+        request - see wf-rac-module-reference.md §5.4/todo.md. Op3 carries no
+        known data for any of these four codes."""
+        if code == SERVICE_DATA_COMPRESSOR_FREQ:
+            ac_device.CompressorFrequency = (op1 - 0x10) * 25.6 + 0.1 * op2
+        elif code == SERVICE_DATA_OPERATING_CURRENT:
+            ac_device.OperatingCurrent = op2 * 14 / 51
+        elif code == SERVICE_DATA_HOT_GAS_TEMP:
+            ac_device.HotGasTemp = op2 / 2 + 32
+        elif code == SERVICE_DATA_EEV_PULSES:
+            ac_device.EevPulses = op2
 
     @staticmethod
     def _log_unknown_segment(vals: list[int], i: int) -> None:

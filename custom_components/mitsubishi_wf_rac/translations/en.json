@@ -41,6 +41,7 @@
           "availability_check": "Check availability",
           "availability_retry_limit": "Retry limit",
           "firmware_update_check": "Firmware Update Check (Online)",
+          "service_data": "Service Data (Experimental)",
           "create_swing_mode_select": "Whether to create an additional swing mode selectors.",
           "indoor_offset": "Indoor Temp. Sensor Offset",
           "outdoor_offset": "Outdoor Temp. Sensor Offset",
@@ -218,6 +219,18 @@
       },
       "energy_usage": {
         "name": "Energy Usage"
+      },
+      "compressor_frequency": {
+        "name": "Compressor Frequency"
+      },
+      "operating_current": {
+        "name": "Operating Current"
+      },
+      "hot_gas_temp": {
+        "name": "Hot Gas Temperature"
+      },
+      "eev_pulses": {
+        "name": "EEV Pulses"
       }
     },
     "binary_sensor": {

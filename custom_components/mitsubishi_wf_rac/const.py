@@ -25,6 +25,11 @@ CONF_AVAILABILITY_RETRY_LIMIT = "availability_retry_limit"
 # availability polling, this isn't required for the integration to work, and
 # some users may not want any cloud call at all - see Device._maybe_check_firmware_update().
 CONF_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
+# Gates the periodic service-data (operation-data) request - stays on the
+# local network, but is an extra setAirconStat write on top of the regular
+# read-only poll, so off by default like the firmware check above. See
+# Device._maybe_request_service_data().
+CONF_SERVICE_DATA = "service_data"
 CONF_CREATE_SWING_MODE_SELECT = "create_swing_mode_select"
 CONF_CONNECTION_METHOD = "connection_method"
 ATTR_DEVICE_ID = "device_id"
@@ -39,6 +44,12 @@ ATTR_COOL_HOT_JUDGE = "cool_hot_judge"
 ATTR_INSIDE_TEMPERATURE = "inside_temperature"
 ATTR_OUTSIDE_TEMPERATURE = "outside_temperature"
 ATTR_TARGET_TEMPERATURE = "target_temperature"
+
+# Service data (operation-data codes), see CONF_SERVICE_DATA above
+ATTR_COMPRESSOR_FREQUENCY = "compressor_frequency"
+ATTR_OPERATING_CURRENT = "operating_current"
+ATTR_HOT_GAS_TEMP = "hot_gas_temp"
+ATTR_EEV_PULSES = "eev_pulses"
 
 # New offset constants
 CONF_INDOOR_OFFSET = "indoor_offset"

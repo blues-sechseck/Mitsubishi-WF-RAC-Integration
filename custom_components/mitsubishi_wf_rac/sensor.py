@@ -8,7 +8,9 @@ from . import MitsubishiWfRacConfigEntry
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
+    UnitOfElectricCurrent,
     UnitOfEnergy,
+    UnitOfFrequency,
     UnitOfTemperature,
     EntityCategory,
     CONF_HOST,
@@ -20,6 +22,10 @@ from .entity import WfRacEntity
 from .wfrac.device import Device
 from .const import (
     ATTR_TARGET_TEMPERATURE,
+    ATTR_COMPRESSOR_FREQUENCY,
+    ATTR_OPERATING_CURRENT,
+    ATTR_HOT_GAS_TEMP,
+    ATTR_EEV_PULSES,
     DOMAIN,
     ATTR_INSIDE_TEMPERATURE,
     ATTR_OUTSIDE_TEMPERATURE,
@@ -66,6 +72,13 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     ]
     if device.airco.Electric is not None:
         entities.append(EnergySensor(device))
+
+    entities += [
+        ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
+        ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
+        ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
+        ServiceDataSensor(device, ATTR_EEV_PULSES),
+    ]
 
     _async_remove_home_leave_mode_sensors(hass, device)
 
@@ -220,3 +233,47 @@ class EnergySensor(WfRacEntity, SensorEntity):
 
     def _update_state(self) -> None:
         self._attr_native_value = self._device.airco.Electric
+
+
+class ServiceDataSensor(WfRacEntity, SensorEntity):
+    """Operation-data sensors (compressor frequency, current, hot gas temp,
+    EEV pulses) - see rac_parser.SERVICE_DATA_CODES. Always created but
+    disabled by default (niche, like the other diagnostic sensors above):
+    stays unknown until CONF_SERVICE_DATA is enabled in the options flow,
+    since that's what actually makes Device request these values - see
+    Device._maybe_request_service_data().
+    """
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_registry_enabled_default = False
+
+    _FIELD_BY_TYPE = {
+        ATTR_COMPRESSOR_FREQUENCY: "CompressorFrequency",
+        ATTR_OPERATING_CURRENT: "OperatingCurrent",
+        ATTR_HOT_GAS_TEMP: "HotGasTemp",
+        ATTR_EEV_PULSES: "EevPulses",
+    }
+
+    def __init__(self, device: Device, custom_type: str) -> None:
+        """Initialize the sensor."""
+        super().__init__(device)
+        self._custom_type = custom_type
+        self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-{custom_type}-sensor"
+        self._attr_translation_key = custom_type
+        if custom_type == ATTR_COMPRESSOR_FREQUENCY:
+            self._attr_device_class = SensorDeviceClass.FREQUENCY
+            self._attr_native_unit_of_measurement = UnitOfFrequency.HERTZ
+        elif custom_type == ATTR_OPERATING_CURRENT:
+            self._attr_device_class = SensorDeviceClass.CURRENT
+            self._attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+        elif custom_type == ATTR_HOT_GAS_TEMP:
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+            self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        elif custom_type == ATTR_EEV_PULSES:
+            self._attr_native_unit_of_measurement = "pulses"
+            self._attr_icon = "mdi:pulse"
+        self._update_state()
+
+    def _update_state(self) -> None:
+        self._attr_native_value = getattr(self._device.airco, self._FIELD_BY_TYPE[self._custom_type])

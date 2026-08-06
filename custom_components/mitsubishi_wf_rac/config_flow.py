@@ -31,6 +31,7 @@ from .const import (
     CONF_OPERATOR_ID,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
+    CONF_SERVICE_DATA,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -158,6 +159,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_AVAILABILITY_CHECK: True,
                     CONF_AVAILABILITY_RETRY_LIMIT: 3,
                     CONF_FIRMWARE_UPDATE_CHECK: False,
+                    CONF_SERVICE_DATA: False,
                 }
                 data_input.pop(CONF_HOST)
 
@@ -338,6 +340,10 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_FIRMWARE_UPDATE_CHECK,
                         default=self.config_entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False),  # type: ignore
+                    ): bool,
+                    vol.Required(
+                        CONF_SERVICE_DATA,
+                        default=self.config_entry.options.get(CONF_SERVICE_DATA, False),  # type: ignore
                     ): bool,
                     vol.Optional(
                         CONF_INDOOR_OFFSET,

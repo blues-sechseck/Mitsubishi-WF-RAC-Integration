@@ -34,6 +34,12 @@ class AirconCommands(StrEnum):
     HomeLeaveModeForCooling = "HomeLeaveModeForCooling"
     HomeLeaveModeForHeating = "HomeLeaveModeForHeating"
 
+    # Service data (operation-data codes 0x11/0x90/0x85/0x13) - same one-shot
+    # request pattern as HomeLeaveModeStatusRequest, see rac_parser.py's
+    # SERVICE_DATA_CODES. Triggered periodically by Device, not by a climate
+    # action - see Device._maybe_request_service_data().
+    ServiceDataStatusRequest = "ServiceDataStatusRequest"
+
 
 @dataclass
 class HomeLeaveModeSetting:
@@ -89,6 +95,14 @@ class Aircon(AirconBase):
     # support the feature but haven't been asked yet.
     HomeLeaveModeForCooling: HomeLeaveModeSetting | None = None
     HomeLeaveModeForHeating: HomeLeaveModeSetting | None = None
+    # Populated only after a ServiceDataStatusRequest round-trip (see
+    # AirconCommands) - stays None otherwise. Carried forward across polls by
+    # Device._carry_forward_service_data(), same rationale as HomeLeaveMode
+    # above: the unit reports these extension segments exactly once.
+    CompressorFrequency: float | None = None  # Hz
+    OperatingCurrent: float | None = None  # A
+    HotGasTemp: float | None = None  # deg C
+    EevPulses: int | None = None
 
 
 @dataclass
@@ -103,6 +117,8 @@ class AirconStat(AirconBase):
     HomeLeaveModeStatusRequest: bool = False
     HomeLeaveModeForCooling: HomeLeaveModeSetting | None = None
     HomeLeaveModeForHeating: HomeLeaveModeSetting | None = None
+    # See AirconCommands - only ever set via Device._maybe_request_service_data().
+    ServiceDataStatusRequest: bool = False
 
     @classmethod
     def from_aircon(cls, aircon: Aircon) -> "AirconStat":
