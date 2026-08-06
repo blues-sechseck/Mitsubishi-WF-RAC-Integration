@@ -426,6 +426,18 @@ def test_parse_basic_settings_self_clean_reads_byte15_bit0(parser):
     assert ac_off.IsSelfCleanOperation is False
 
 
+def test_parse_basic_settings_compressor_running_reads_byte9_bit1(parser):
+    ac_on = Aircon()
+    content_on = [0] * 9 + [2] + [0] * 8  # byte[9] bit 0x02 set
+    parser._parse_basic_settings(ac_on, content_on)
+    assert ac_on.CompressorRunning is True
+
+    ac_off = Aircon()
+    content_off = [0] * 18
+    parser._parse_basic_settings(ac_off, content_off)
+    assert ac_off.CompressorRunning is False
+
+
 # --- to_base64() smoke test ----------------------------------------------
 
 

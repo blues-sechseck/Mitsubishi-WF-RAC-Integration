@@ -73,6 +73,9 @@ class Aircon(AirconBase):
     Electric: float | None = None
     ErrorCode: str = ""
     IsSelfCleanOperation: bool = False
+    # content[9] & 0x02 - not gated by ModelNr/Capabilities, present in every
+    # ordinary status poll. See rac_parser.COMPRESSOR_RUNNING_MASK.
+    CompressorRunning: bool = False
     # Raw ModelNr byte (content[0] & 127) before mapping to the known 0/1/2
     # values - kept around so an unrecognized value (ModelNr == -1) is still
     # visible as a diagnostic, e.g. for reports like #189.

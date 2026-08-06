@@ -26,6 +26,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
 
     entities = [
         ProblemBinarySensor(device),
+        CompressorBinarySensor(device),
     ]
     # Occupancy ("vacant") detection is only reported by units whose capability
     # table (#187) has VacantProperty=true - includes ZT-2025 (raw=3), which
@@ -61,6 +62,24 @@ class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
         if description is not None:
             attrs["error_description"] = description
         self._attr_extra_state_attributes = attrs
+
+
+class CompressorBinarySensor(WfRacEntity, BinarySensorEntity):
+    """Reports whether the compressor is actually running (content[9] & 0x02),
+    as opposed to just the unit being powered on - see rac_parser.py."""
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_has_entity_name = True
+    _attr_translation_key = "compressor"
+
+    def __init__(self, device: Device) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(device)
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-compressor"
+        self._update_state()
+
+    def _update_state(self) -> None:
+        self._attr_is_on = self._device.airco.CompressorRunning
 
 
 class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):

@@ -226,6 +226,9 @@
       },
       "occupancy": {
         "name": "Anwesenheit"
+      },
+      "compressor": {
+        "name": "Kompressor"
       }
     },
     "switch": {},

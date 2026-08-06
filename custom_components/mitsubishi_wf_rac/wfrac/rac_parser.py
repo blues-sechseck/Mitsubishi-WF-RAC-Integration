@@ -34,6 +34,10 @@ HOME_LEAVE_MODE_AIRFLOW_BYTES: Final = (0, 3, 5, 7, 14)
 
 # Bit masks
 OPERATION_MASK: Final = 3
+# Not in any vendor doc - correlated live against operation-data code 0x11
+# (compressor frequency), see wf-rac-module-reference.md §4.6. Distinguishes
+# "unit on" from "compressor actually running" (e.g. temperature satisfied).
+COMPRESSOR_RUNNING_MASK: Final = 2
 
 # --- command (send) lookup tables ---
 CMD_MODE_MASKS: Final = {0: 32, 1: 40, 2: 48, 3: 44, 4: 36}
@@ -275,6 +279,7 @@ class RacParser:
                     content[0],
                 )
         ac_device.Vacant = (content[10] & 1) != 0
+        ac_device.CompressorRunning = (content[9] & COMPRESSOR_RUNNING_MASK) != 0
         if ac_device.ModelNr in (1, 2):
             # Mirrors the self-clean bit written in receive_to_bytes() above.
             # No longer exposed as an entity: the real cycle can only be

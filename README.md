@@ -81,6 +81,7 @@ This integration creates one device per airco with the following entities.
 |---|---|---|
 | Problem | on/off | On whenever the unit reports an error code (`error_code` attribute holds the raw code). |
 | Occupancy | on/off | Only created on units that report the "Vacant"/Home Leave bit (see the Home Leave switch below). This is *not* a physical presence/motion sensor - it just mirrors that bit, which is off unless Home Leave mode was actually entered (e.g. via the Home Leave switch). It will read "occupied" even in an empty room if Home Leave was never triggered. |
+| Compressor | on/off | Whether the compressor is actually running, as opposed to the unit just being powered on (e.g. off while a setpoint is already satisfied). Comes from the same status poll as every other sensor - no extra request needed. |
 
 ## Switch
 
