@@ -185,5 +185,16 @@ problem: the module mishandles WiFi roaming and steering management frames. Reco
 - Blocking the module's outbound internet access at the router removes these outages in some
   setups; this integration only needs LAN access. The hourly reassociation continues either way.
 
+# Protocol reference
+
+If you are writing your own client against the WF-RAC module — or building a CNS/SPI replacement
+such as an ESP32 running MHI-AC-Ctrl — [**docs/wf-rac-module-reference.md**](docs/wf-rac-module-reference.md)
+documents the interface end to end: mDNS discovery, the HTTPS API and its envelope rules, the
+`airconStat` blob, the 18-byte state block and how it maps onto the CNS/SPI frame, the operation-data
+channel, and what the module deliberately does not forward. Every non-obvious claim carries a
+confidence tag saying whether it was observed on hardware, read out of a firmware image, or inferred.
+
+It is written for people outside this project, so nothing in it assumes Home Assistant.
+
 [installbadge]: https://img.shields.io/badge/dynamic/json?style=for-the-badge&logo=home-assistant&logoColor=ccc&label=usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.mitsubishi_wf_rac.total
 [installs]: https://analytics.home-assistant.io/
