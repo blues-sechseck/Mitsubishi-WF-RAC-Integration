@@ -78,6 +78,12 @@ SERVICE_SET_HORIZONTAL_SWING_MODE = "set_horizontal_swing_mode"
 SERVICE_SET_VERTICAL_SWING_MODE = "set_vertical_swing_mode"
 SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS = "request_home_leave_mode_status"
 SERVICE_SET_HOME_LEAVE_MODE = "set_home_leave_mode"
+SERVICE_SET_ENERGY_TOTAL = "set_energy_total"
+
+# Carries a new total from the reset button (button.py) to the accumulating
+# sensor (sensor.py). Suffixed with the airco id so a button only reaches its
+# own device's sensor.
+SIGNAL_SET_ENERGY_TOTAL = f"{DOMAIN}_set_energy_total"
 
 SUPPORT_FLAGS = (
     ClimateEntityFeature.FAN_MODE

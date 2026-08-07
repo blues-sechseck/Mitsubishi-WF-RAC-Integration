@@ -159,10 +159,11 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_AVAILABILITY_CHECK: True,
                     CONF_AVAILABILITY_RETRY_LIMIT: 3,
                     CONF_FIRMWARE_UPDATE_CHECK: False,
-                    # Temporarily True for the 2026.9.2 beta so testers get the
-                    # new operation-data sensors without an extra options-flow
-                    # trip - revert to False for the final release.
-                    CONF_SERVICE_DATA: True,
+                    # Off by default: each poll would otherwise carry an
+                    # extra write to the unit just to piggy-back a read
+                    # request on it - see wfrac/device.py's
+                    # _maybe_request_service_data().
+                    CONF_SERVICE_DATA: False,
                 }
                 data_input.pop(CONF_HOST)
 

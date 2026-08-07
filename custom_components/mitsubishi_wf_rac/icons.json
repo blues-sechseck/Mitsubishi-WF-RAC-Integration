@@ -32,6 +32,11 @@
                     }
                 }
             }
+        },
+        "button": {
+            "reset_energy_total": {
+                "default": "mdi:restart"
+            }
         }
     }
 }

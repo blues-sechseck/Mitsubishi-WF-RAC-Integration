@@ -60,13 +60,14 @@ This integration creates one device per airco with the following entities.
 |---|---|---|
 | Indoor Temperature | °C | Same value as the climate entity's `current_temperature`, exposed as its own sensor. |
 | Outdoor Temperature *(shared on multi-split)* | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. On multi-split systems this is an outdoor-unit-level value - reads identically on every indoor unit sharing one outdoor unit, since there's only one outdoor sensor. |
-| Target Temperature | °C | Current setpoint, exposed as its own sensor. |
-| Energy Usage | kWh, increasing | Cumulative energy consumption reported by the unit. Only created if the unit actually reports this value — not all models do. |
-| Compressor Frequency *(disabled by default, shared on multi-split)* | Hz | Actual compressor speed, not just on/off. Requires the "Service Data (Experimental)" option below - always `unknown` otherwise. Outdoor-unit-level - identical on every indoor unit sharing one outdoor unit. |
-| Operating Current *(disabled by default, shared on multi-split)* | A | Compressor operating current. Same "Service Data (Experimental)" requirement as above, and the same outdoor-unit-level sharing as Compressor Frequency. |
-| Hot Gas Temperature *(disabled by default, shared on multi-split)* | °C | Compressor discharge (hot gas) temperature. Same "Service Data (Experimental)" requirement as above, and the same outdoor-unit-level sharing as Compressor Frequency. |
-| EEV Pulses *(disabled by default)* | pulses | Electronic expansion valve position, raw pulse count (0-255). Same "Service Data (Experimental)" requirement as above. |
-| EEV Position *(disabled by default)* | % | Same value as EEV Pulses, linearly mapped to 0-255=0-100%. The real full-open pulse count is unknown, so treat this as relative, not calibrated - useful for comparing indoor units on the same system. Same "Service Data (Experimental)" requirement as above. |
+| Target Temperature *(disabled by default)* | °C | Current setpoint, exposed as its own sensor. Off by default because the climate entity already carries the same value as its `target_temperature` attribute. |
+| Energy Usage (current run) | kWh, increasing | Energy consumption of the **current run**, as reported by the unit. The unit clears this counter to 0 every time it is switched on, and holds the last value while it is off — so a low or zero reading is normal, not a fault. For a lifetime figure use Energy Usage Total below. Only created if the unit actually reports this value — not all models do. |
+| Energy Usage Total | kWh, increasing | Lifetime total, accumulated by the integration from the counter above and kept across restarts. This is the one to put on the Energy dashboard. Reset it with the "Reset Energy Usage Total" button on the device page, or set it to a specific value with the `mitsubishi_wf_rac.set_energy_total` action (useful when carrying a figure over from an existing meter). Resetting it does not erase the history already recorded in Home Assistant's long-term statistics. |
+| Compressor Frequency *(diagnostic, only with Service Data on, shared on multi-split)* | Hz | Actual compressor speed, not just on/off. Only exists while the "Service Data" option below is on. Outdoor-unit-level - identical on every indoor unit sharing one outdoor unit. On older firmware (`mcu131`/`wireless010`) this reads a constant 0 even with the compressor confirmed running ([#207](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/207)). |
+| Operating Current *(diagnostic, only with Service Data on, shared on multi-split)* | A | Compressor operating current. Same "Service Data" requirement as above, the same outdoor-unit-level sharing as Compressor Frequency, and the same constant-0 reading on older firmware ([#207](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/207)). |
+| Hot Gas Temperature *(diagnostic, only with Service Data on, shared on multi-split)* | °C | Compressor discharge (hot gas) temperature. Same "Service Data" requirement as above, and the same outdoor-unit-level sharing as Compressor Frequency. |
+| EEV Pulses *(diagnostic, only with Service Data on)* | pulses | Electronic expansion valve position, raw pulse count (0-255). Same "Service Data" requirement as above. |
+| EEV Position *(diagnostic, only with Service Data on)* | % | Same value as EEV Pulses, linearly mapped to 0-255=0-100%. The real full-open pulse count is unknown, so treat this as relative, not calibrated - useful for comparing indoor units on the same system. Same "Service Data" requirement as above. |
 | Airco ID *(diagnostic)* | text | Internal ID of the airco. |
 | Operator ID *(diagnostic, disabled by default)* | text | Internal operator/account ID. |
 | Device ID *(diagnostic, disabled by default)* | text | Internal device ID. |
@@ -75,7 +76,7 @@ This integration creates one device per airco with the following entities.
 | Error *(diagnostic)* | error code | Raw error code reported by the unit; `00` means no error. |
 | Updated By *(diagnostic)* | text | Which account last changed the unit's settings (this integration or the Smart M-Air app). |
 | Account Expires *(diagnostic)* | text | Expiry of the current operator session. |
-| LED Status *(diagnostic)* | text | State of the unit's status LED. |
+| LED Status *(diagnostic, disabled by default)* | text | State of the unit's status LED. |
 | Auto Heating *(diagnostic)* | text | State of the unit's automatic heating assist. |
 | Model Nr *(diagnostic, disabled by default)* | number | Raw model-identifier byte reported by the unit. Used to gate which optional features (occupancy, Home Leave) are exposed; mostly useful for diagnosing unsupported models. |
 | Cool Hot Judge *(diagnostic, disabled by default)* | `cooling`, `heating` | Raw cool/heat state reported by the unit's compressor, independent of the configured mode. `unknown` while off or in `fan_only`. Useful for detecting the "wait/hold" state on multi-split systems where one indoor unit is blocked because the outdoor unit is already committed to the opposite mode for a sibling unit. |
@@ -132,7 +133,7 @@ Configurable via the integration's "Configure" (options) flow.
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
-| Service Data (Experimental) | on/off, off by default | Requests compressor frequency/current/hot gas temperature/EEV pulses every 5 minutes (see the sensors above). Unlike every other request this integration sends, this is an extra write to the unit purely to piggy-back a read request on it - leave off unless you actually want these values. |
+| Service Data | on/off, off by default | Requests compressor frequency/current/hot gas temperature/EEV pulses/position every 5 minutes, and creates the matching sensors listed above - turning it off removes them again. Unlike every other request this integration sends, this is an extra write to the unit purely to piggy-back a read request on it, so leave it off unless you actually want these values. |
 
 ### Target Temp. Offset sign convention
 

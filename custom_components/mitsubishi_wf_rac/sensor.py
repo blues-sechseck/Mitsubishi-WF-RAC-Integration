@@ -2,11 +2,22 @@
 # pylint: disable = too-few-public-methods
 
 from __future__ import annotations
+from dataclasses import dataclass
 import logging
+from typing import Any, Self
+
+import voluptuous as vol
 
 from . import MitsubishiWfRacConfigEntry
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorEntity,
+    SensorExtraStoredData,
+)
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_platform
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
@@ -43,7 +54,10 @@ from .const import (
     ATTR_COOL_HOT_JUDGE,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
-    CONF_TARGET_OFFSET
+    CONF_TARGET_OFFSET,
+    CONF_SERVICE_DATA,
+    SERVICE_SET_ENERGY_TOTAL,
+    SIGNAL_SET_ENERGY_TOTAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,33 +73,92 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         TemperatureSensor(device, "Indoor", ATTR_INSIDE_TEMPERATURE),
         TemperatureSensor(device, "Outdoor", ATTR_OUTSIDE_TEMPERATURE),
         TemperatureSensor(device, "Target", ATTR_TARGET_TEMPERATURE, False),
-        DiagnosticsSensor(device, "Airco ID", CONF_AIRCO_ID),
-        DiagnosticsSensor(device, "Operator ID", CONF_OPERATOR_ID, True),
-        DiagnosticsSensor(device, "Device ID", ATTR_DEVICE_ID, True),
-        DiagnosticsSensor(device, "IP", CONF_HOST, True),
-        DiagnosticsSensor(device, "Accounts", ATTR_CONNECTED_ACCOUNTS, True),
-        DiagnosticsSensor(device, "Error", CONF_ERROR),
-        DiagnosticsSensor(device, "Updated By", ATTR_UPDATED_BY),
-        DiagnosticsSensor(device, "Account Expires", ATTR_ACCOUNT_EXPIRES),
+        # The `enable` flag decides entity_registry_enabled_default: on for
+        # readings that say something about the unit, off for the internal
+        # plumbing (ids, session, addressing) that only matters when
+        # diagnosing a connection problem. All of these come out of the
+        # regular poll, so enabling one costs no extra request.
+        DiagnosticsSensor(device, "Airco ID", CONF_AIRCO_ID, True),
+        DiagnosticsSensor(device, "Operator ID", CONF_OPERATOR_ID),
+        DiagnosticsSensor(device, "Device ID", ATTR_DEVICE_ID),
+        DiagnosticsSensor(device, "IP", CONF_HOST),
+        DiagnosticsSensor(device, "Accounts", ATTR_CONNECTED_ACCOUNTS),
+        DiagnosticsSensor(device, "Error", CONF_ERROR, True),
+        DiagnosticsSensor(device, "Updated By", ATTR_UPDATED_BY, True),
+        DiagnosticsSensor(device, "Account Expires", ATTR_ACCOUNT_EXPIRES, True),
+        # Off until it is understood: reads a constant 1 on both test units
+        # regardless of what the machine is doing, so it does not currently
+        # track the unit's LED - see todo.md.
         DiagnosticsSensor(device, "LED Status", ATTR_LED_STATUS),
-        DiagnosticsSensor(device, "Auto Heating", ATTR_AUTO_HEATING),
+        DiagnosticsSensor(device, "Auto Heating", ATTR_AUTO_HEATING, True),
         DiagnosticsSensor(device, "Model Nr", ATTR_MODEL_NR),
         DiagnosticsSensor(device, "Cool Hot Judge", ATTR_COOL_HOT_JUDGE),
     ]
     if device.airco.Electric is not None:
         entities.append(EnergySensor(device))
+        entities.append(EnergyTotalSensor(device))
 
-    entities += [
-        ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
-        ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
-        ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
-        ServiceDataSensor(device, ATTR_EEV_PULSES),
-        ServiceDataSensor(device, ATTR_EEV_POSITION),
-    ]
+    # Tied to CONF_SERVICE_DATA rather than merely disabled by default: the
+    # option is what makes Device request these values at all, so without it
+    # the entities could only ever read `unknown`. Changing the option reloads
+    # the entry (see async_update_options), so they appear and disappear with
+    # it.
+    if entry.options.get(CONF_SERVICE_DATA, False):
+        entities += [
+            ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
+            ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
+            ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
+            ServiceDataSensor(device, ATTR_EEV_PULSES),
+            ServiceDataSensor(device, ATTR_EEV_POSITION),
+        ]
+    else:
+        _async_remove_service_data_sensors(hass, device)
 
     _async_remove_home_leave_mode_sensors(hass, device)
 
     async_add_entities(entities)
+
+    entity_platform.async_get_current_platform().async_register_entity_service(
+        SERVICE_SET_ENERGY_TOTAL,
+        {vol.Required("value"): vol.All(vol.Coerce(float), vol.Range(min=0))},
+        _async_set_energy_total,
+    )
+
+
+async def _async_set_energy_total(entity: SensorEntity, call) -> None:
+    """Entity-service handler for SERVICE_SET_ENERGY_TOTAL.
+
+    Registered as a callable rather than a method name so targeting any other
+    sensor of this integration fails with a readable message instead of an
+    AttributeError - entity services apply to every entity on the platform.
+    """
+    if not isinstance(entity, EnergyTotalSensor):
+        raise ServiceValidationError(
+            f"{entity.entity_id} is not an Energy Usage Total sensor"
+        )
+    await entity.async_set_total(call.data["value"])
+
+
+def _async_remove_service_data_sensors(hass, device: Device) -> None:
+    """Drop the operation-data sensors once CONF_SERVICE_DATA is turned off.
+
+    Without this they would linger in the registry reading `unknown` forever,
+    since nothing requests their values any more.
+    """
+    registry = er.async_get(hass)
+    for custom_type in (
+        ATTR_COMPRESSOR_FREQUENCY,
+        ATTR_OPERATING_CURRENT,
+        ATTR_HOT_GAS_TEMP,
+        ATTR_EEV_PULSES,
+        ATTR_EEV_POSITION,
+    ):
+        entity_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-{custom_type}-sensor"
+        )
+        if entity_id:
+            _LOGGER.debug("Removing service data sensor %s", entity_id)
+            registry.async_remove(entity_id)
 
 
 def _async_remove_home_leave_mode_sensors(hass, device: Device) -> None:
@@ -238,21 +311,125 @@ class EnergySensor(WfRacEntity, SensorEntity):
         self._attr_native_value = self._device.airco.Electric
 
 
+@dataclass
+class EnergyTotalExtraStoredData(SensorExtraStoredData):
+    """Adds the raw reading the total was last derived from.
+
+    Restoring the total alone is not enough: without knowing which raw value
+    it already covers, the first poll after a restart would either re-add the
+    whole current run or drop it.
+    """
+
+    last_raw: float | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {**super().as_dict(), "last_raw": self.last_raw}
+
+    @classmethod
+    def from_dict(cls, restored: dict[str, Any]) -> Self | None:
+        if (base := SensorExtraStoredData.from_dict(restored)) is None:
+            return None
+        return cls(
+            base.native_value,
+            base.native_unit_of_measurement,
+            restored.get("last_raw"),
+        )
+
+
+class EnergyTotalSensor(WfRacEntity, RestoreSensor):
+    """Lifetime energy total, accumulated from the unit's per-run counter.
+
+    Aircon.Electric is cleared to 0 by the unit on every power-on, so it can
+    never show a lifetime figure by itself (see EnergySensor). This sensor
+    sums its upward steps instead - the same arithmetic utility_meter does for
+    a resetting source - and restores its total across restarts.
+
+    Energy consumed between two polls of the same run that is followed by a
+    power-on before the next poll is lost. Home Assistant's own long-term
+    statistics have that same gap, since they work off the identical state
+    stream.
+    """
+
+    _attr_translation_key = "energy_usage_total"
+    _attr_native_unit_of_measurement: str | None = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class: SensorDeviceClass | str | None = SensorDeviceClass.ENERGY
+    _attr_state_class: SensorStateClass | str | None = SensorStateClass.TOTAL_INCREASING
+    _attr_has_entity_name: bool = True
+    _attr_suggested_display_precision: int | None = 2
+
+    def __init__(self, device: Device) -> None:
+        """Initialize the sensor."""
+        super().__init__(device)
+        self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-energy-total-sensor"
+        self._total = 0.0
+        # Anchored to the current reading so a brand-new sensor starts at 0
+        # instead of claiming whatever the running cycle already accumulated.
+        self._last_raw: float | None = self._device.airco.Electric
+        self._attr_native_value = 0.0
+
+    @property
+    def extra_restore_state_data(self) -> EnergyTotalExtraStoredData:
+        return EnergyTotalExtraStoredData(
+            self.native_value, self.native_unit_of_measurement, self._last_raw
+        )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        if (stored := await self.async_get_last_extra_data()) is not None:
+            restored = EnergyTotalExtraStoredData.from_dict(stored.as_dict())
+            if restored is not None and restored.native_value is not None:
+                self._total = float(restored.native_value)
+                self._last_raw = restored.last_raw
+                self._attr_native_value = round(self._total, 2)
+
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"{SIGNAL_SET_ENERGY_TOTAL}_{self._device.airco_id}",
+                self.async_set_total,
+            )
+        )
+
+        self._update_state()
+        self.async_write_ha_state()
+
+    def _update_state(self) -> None:
+        raw = self._device.airco.Electric
+        if raw is None:
+            return
+        # Only upward steps count; a drop means the unit was switched on and
+        # started a new run, and what came before is already in the total.
+        if self._last_raw is not None and raw > self._last_raw:
+            self._total += raw - self._last_raw
+        self._last_raw = raw
+        self._attr_native_value = round(self._total, 2)
+
+    async def async_set_total(self, value: float) -> None:
+        """Set the accumulated total - reset to 0, or carry over a reading
+        from a meter the user kept before. Re-anchors last_raw so the next
+        poll does not re-add the delta that led up to the change."""
+        self._total = float(value)
+        self._last_raw = self._device.airco.Electric
+        self._attr_native_value = round(self._total, 2)
+        self.async_write_ha_state()
+
+
 class ServiceDataSensor(WfRacEntity, SensorEntity):
     """Operation-data sensors (compressor frequency, current, hot gas temp,
-    EEV pulses/position) - see rac_parser.SERVICE_DATA_CODES. Always created; stays
-    unknown until CONF_SERVICE_DATA is enabled, since that's what actually
-    makes Device request these values - see
-    Device._maybe_request_service_data().
+    EEV pulses/position) - see rac_parser.SERVICE_DATA_CODES. Only created
+    while CONF_SERVICE_DATA is on, which is what makes Device request these
+    values in the first place - see Device._maybe_request_service_data().
 
-    Temporarily enabled by default for the 2026.9.2 beta so this new feature
-    actually gets exercised by testers - revert to False (niche, like the
-    other diagnostic sensors above) for the final release.
+    Enabled once they exist: switching the option on is already the opt-in,
+    so making the user enable five entities on top would be a second hurdle
+    for nothing. Diagnostic because they describe how the machine is running
+    rather than what it is set to.
     """
 
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_entity_registry_enabled_default = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     _FIELD_BY_TYPE = {
         ATTR_COMPRESSOR_FREQUENCY: "CompressorFrequency",

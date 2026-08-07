@@ -41,7 +41,7 @@
           "availability_check": "Check availability",
           "availability_retry_limit": "Retry limit",
           "firmware_update_check": "Firmware Update Check (Online)",
-          "service_data": "Service Data (Experimental)",
+          "service_data": "Service Data",
           "create_swing_mode_select": "Whether to create an additional swing mode selectors.",
           "indoor_offset": "Indoor Temp. Sensor Offset",
           "outdoor_offset": "Outdoor Temp. Sensor Offset",
@@ -218,7 +218,10 @@
         "name": "Cool Hot Judge"
       },
       "energy_usage": {
-        "name": "Energy Usage"
+        "name": "Energy Usage (current run)"
+      },
+      "energy_usage_total": {
+        "name": "Energy Usage Total"
       },
       "compressor_frequency": {
         "name": "Compressor Frequency"
@@ -251,6 +254,11 @@
     "update": {
       "firmware_update": {
         "name": "Firmware Update"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Reset Energy Usage Total"
       }
     }
   }

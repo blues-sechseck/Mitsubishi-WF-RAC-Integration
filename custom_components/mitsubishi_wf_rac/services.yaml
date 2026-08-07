@@ -181,3 +181,28 @@ set_home_leave_mode:
               value: "3"
             - label: "4"
               value: "4"
+# Service ID
+set_energy_total:
+  name: Set Energy Usage Total
+  description: >-
+    Overwrites the accumulated Energy Usage Total for one unit. Use 0 to
+    reset it, or a reading from a meter you kept previously to carry that
+    figure over. Only affects the integration's own total - the unit's
+    counter cannot be written.
+  target:
+    entity:
+      integration: mitsubishi_wf_rac
+      domain: sensor
+  fields:
+    value:
+      name: Value
+      description: New total in kWh.
+      required: true
+      example: 412.5
+      selector:
+        number:
+          min: 0
+          max: 1000000
+          step: 0.01
+          mode: box
+          unit_of_measurement: "kWh"
