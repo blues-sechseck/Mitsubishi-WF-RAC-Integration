@@ -391,28 +391,41 @@ Bit 7 selects the family, and the bit-7 test must come **before** the
 zero test. `[APP]` Getting this wrong is a well-worn bug: a naive
 implementation makes the `E` branch dead code.
 
-### 4.6 `state[9] & 0x02` — compressor running
+### 4.6 `state[9] & 0x02` — compressor demand
 
-Not documented anywhere, but directly correlated against operation-data code
-`0x11` (compressor frequency) on 06.08.2026 `[HW]`:
+Not documented anywhere else. It carries the distinction between *powered on*
+and *actually calling for the compressor* — the AC reports `hvac_action:
+cooling` either way, and this bit costs nothing to read, since it rides along
+in every ordinary status poll with no operation-data request needed.
 
-| Compressor frequency | `state[9] & 0x02` |
-| --- | --- |
-| 0.0 Hz (unit on, cooling satisfied) | **0** |
-| 23.0 Hz | 1 |
-| 22.7 Hz | 1 |
-| 20.7 Hz | 1 |
-| 19.7 Hz | 1 |
+Correlated against operation-data code `0x11` (compressor frequency) across a
+multi-day recorder history of two indoor units on one outdoor unit `[HW]`:
 
-This is the distinction between *powered on* and *actually running* — the AC
-reports `hvac_action: cooling` in both cases. Worth having because it costs
-nothing: the bit is in every ordinary status poll, no operation-data request
-needed.
+| Situation | `state[9] & 0x02` | Code `0x11` |
+| --- | --- | --- |
+| Unit calling for compressor | 1 | > 0 Hz |
+| Unit satisfied, sibling unit also idle | 0 | 0.0 Hz |
+| Unit satisfied, **sibling still calling** | 0 | > 0 Hz |
 
-Caveat: one idle sample against four load samples. The falsifying direction
-(watching the bit drop back to 0 as the compressor winds down) has not been
-captured yet. `state[7] & 0x10` stayed set in every single sample, at 0 Hz and
-at 23 Hz alike, so whatever it means, it is not compressor state.
+Both directions are covered. Where no sibling was demanding, the bit and the
+frequency moved together within a single poll: five clean 1 → 0 transitions,
+each followed by the frequency reading 0.0 Hz two seconds later, and the
+matching 0 → 1 transitions with the frequency picking up in the same poll.
+
+**The apparent counterexamples are the important part.** In four further cases
+the bit dropped to 0 while the frequency stayed at 20–35 Hz. Every one of them
+lines up with the *other* indoor unit still demanding at that moment. That is
+the relationship worth remembering:
+
+- `state[9] & 0x02` is **per indoor unit** — does this unit want the compressor.
+- Code `0x11` is **outdoor-unit-level** (§5.4) — is the shared compressor
+  turning, for whoever asked.
+
+On a single-split system the two are interchangeable. On a multi-split they are
+not, and the bit is the one that answers "is this room being served".
+
+`state[7] & 0x10` stayed set in every sample, at 0 Hz and at full load alike,
+so whatever it means, it is not compressor state.
 
 ### 4.5 Temperatures — prefer the segments over `state[5]`
 
@@ -478,8 +491,9 @@ and is cleared to 0 at the next power-on — the value read right after an
 off→on transition is 0. `[HW]` (Six resets across two units, each one within a
 minute of an off→on transition, including one initiated from the unit itself
 rather than over the network; no reset ever occurred without a power-on, and
-ordinary `setAirconStat` commands do not clear it.) In Home Assistant terms
-this is a `total_increasing` counter, not `total`.
+ordinary `setAirconStat` commands do not clear it.) Treat it as a counter that
+may restart at any time: accumulate its upward steps yourself if you want a
+lifetime figure, and never read a low value as a fault.
 
 ### 5.3 Requesting anything else — the generic path
 
@@ -492,7 +506,7 @@ There is no whitelist on this path. The only special case is the *matching*
 step: for code `248` the sub-code in `OP2` is compared as well, because that
 code alone would not identify which of six answers came back.
 
-**Recipe** — verified end to end on real hardware, 06.08.2026 `[HW]`:
+**Recipe** — verified end to end on real hardware `[HW]`:
 
 ```
 1. build a COMMAND block for the *current* state (change nothing)
@@ -530,8 +544,8 @@ your own poll interval, not the device.
 ### 5.4 Operation-data codes
 
 The bridge firmware contains per-code plausibility rules for these codes `[FW]`.
-**All fifteen were requested over the WF-RAC HTTP path on 06.08.2026 and all
-fifteen answered** (SRK35ZS-WF, `WF-RAC-HTTPS 025/200`) `[HW]`. Measured twice:
+**All fifteen were requested over the WF-RAC HTTP path and all fifteen
+answered** (SRK35ZS-WF, `WF-RAC-HTTPS 025/200`) `[HW]`. Measured twice:
 once with the compressor idle, once under load (setpoint forced 6 K below room
 temperature). Where a value moved sensibly between the two, that is noted —
 those readings are consistent with the MHI-AC-Ctrl formulas `[EXT]`, but two
@@ -571,14 +585,25 @@ Notes on the shape of the answers `[HW]`:
   current, discharge temperature) read identically from every indoor unit
   sharing the outdoor unit — they are outdoor-unit-level values, not
   per-indoor. `0x13` (EEV) differs per indoor unit, since each has its own
-  expansion valve. Confirmed live 06.08.2026: one indoor unit cooling, the
-  other idle, identical frequency/current/temperature on both, EEV 57 vs. 0.
-  `[HW]`
+  expansion valve. Confirmed live: one indoor unit cooling, the other idle,
+  identical frequency/current/temperature on both, EEV 57 vs. 0. `[HW]`
 - `0x13`'s full-open pulse count is unknown. MHI-AC-Ctrl reads the same
   quantity as 16 bits (`DB12<<8 | DB11`, its `OU-EEV1`), while this bridge's
   `OP2` is a single byte — likely a narrowed/derived value, not a raw pass
   of the same counter. No reference project (MHI-AC-Ctrl or its ESPHome
   port) converts it to a percentage either; both publish raw pulses. `[EXT]`
+  Mapping the byte linearly onto 0–100 % is fine as a *relative* reading —
+  idle against load, or one indoor unit against another — but do not present
+  it as a calibrated valve opening.
+- `0x13` reads 0 on an indoor unit whose compressor is not running, and a
+  normal value on an active one at the same moment. `[HW]`
+- **Not every firmware branch answers usefully.** On `mcu131`/`wireless010`,
+  `0x11` and `0x90` (compressor frequency, operating current) have been
+  reported to return a constant 0 even with the compressor confirmed running,
+  while `0x85` and `0x13` return real, unit-specific values on those same
+  units. `[EXT]` Both formulas produce exactly `0.0` for `OP1 = 0x10,
+  OP2 = 0`, so a decoded zero cannot be told apart from a genuine one — keep
+  the raw bytes if you need to distinguish "no data" from "not running".
 
 Codes that MHI-AC-Ctrl uses but that are **absent** from the bridge's list, and
 therefore doubtful over this path: `0x7C` (protection number), `0x0C` (defrost).
@@ -762,9 +787,11 @@ things are worth knowing before anyone goes looking:
 | --- | --- |
 | Can I run an ESP32 on CNS *and* keep the WF-RAC module? | No. Two active slaves on the bus conflict. A purely passive sniffer that never drives MISO is fine. `[EXT]` |
 | Is there a local MQTT broker? | No. MQTT is cloud-only, endpoint fetched from `iot.smartmair.com`, mutual TLS with a device certificate in flash. `[FW]` |
-| Can I get compressor/current/hours without opening the unit? | Probably yes, via §5.3. Untested. |
+| Can I get compressor/current/hours without opening the unit? | Yes, via §5.3 — verified end to end, all fifteen codes in §5.4 answer. Watch the firmware caveat there. |
 | Can I feed an external room temperature without opening the unit? | Probably yes, via §5.6. Untested. |
 | Does the module do anything smart with the state bytes? | No. It is a base64 pipe. All semantics live in the RL78 and the AC. `[FW]` |
+| Why does the energy counter keep dropping to zero? | It is a per-run counter, not a lifetime one (§5.2). Nothing is broken. |
+| How do I tell "unit is on" from "compressor is actually running"? | `state[9] & 0x02` (§4.6), free in every poll. On a multi-split it answers per indoor unit, unlike compressor frequency. |
 | Why does my client work on one unit and fail on another? | Almost always `airconId` missing (§2.5), TLS too modern (§2.2), or the four account slots being full. |
 
 ---
