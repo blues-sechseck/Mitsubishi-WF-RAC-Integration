@@ -372,15 +372,14 @@ class AircoClimate(WfRacEntity, ClimateEntity):
             self._attr_hvac_action = self._determine_hvac_action(airco)
 
     def _determine_hvac_action(self, airco) -> HVACAction:
-        """Determine the current HVAC action based on operation mode and state.
+        """Determine the current HVAC action from operation mode and state.
 
-        CoolHotJudge logic (from rac_parser.py line 267):
-        - CoolHotJudge = (content[8] & 8) <= 0
-        - When bit is SET (1): CoolHotJudge = False → COOLING
-        - When bit is NOT SET (0): CoolHotJudge = True → HEATING
-
-        The CoolHotJudge flag is set by the AC unit itself and indicates what
-        action the unit is currently performing in AUTO mode.
+        CoolHotJudge (content[8] & 8) reflects what the unit's own AUTO logic
+        is doing - set means COOLING, clear means HEATING. CompressorRunning
+        (content[9] & 2) distinguishes "unit on" from "compressor actually
+        running" (e.g. setpoint satisfied), same signal as the Compressor
+        binary sensor - used here so COOL/HEAT/AUTO can report IDLE instead
+        of claiming to cool/heat while the compressor is stopped.
         """
         if not airco.Operation:
             return HVACAction.OFF
@@ -395,25 +394,20 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         if _mode == 4:
             return HVACAction.DRYING
 
-        # AUTO mode - use CoolHotJudge directly (unit tells us what it's doing)
-        # CoolHotJudge is set by the AC unit based on its internal logic
-        if _mode == 0:
-            # CoolHotJudge = True means HEATING (bit NOT set in byte 8)
-            # CoolHotJudge = False means COOLING (bit IS set in byte 8)
-            if airco.CoolHotJudge:
-                return HVACAction.HEATING
-            else:
-                return HVACAction.COOLING
+        if not airco.CompressorRunning:
+            return HVACAction.IDLE
 
-        # COOL mode - unit is actively cooling when on
-        # The AC unit manages its own cycles, so we report COOLING when on
+        # AUTO mode - use CoolHotJudge directly (unit tells us what it's doing)
+        if _mode == 0:
+            return HVACAction.HEATING if airco.CoolHotJudge else HVACAction.COOLING
+
+        # COOL mode
         if _mode == 1:
             return HVACAction.COOLING
 
-        # HEAT mode - unit is actively heating when on
-        # The AC unit manages its own cycles, so we report HEATING when on
+        # HEAT mode
         if _mode == 2:
             return HVACAction.HEATING
 
-        # Default to idle if mode is unknown
+        # Unknown mode with compressor running - nothing better to report
         return HVACAction.IDLE

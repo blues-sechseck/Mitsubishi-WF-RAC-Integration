@@ -103,6 +103,7 @@ class Aircon(AirconBase):
     OperatingCurrent: float | None = None  # A
     HotGasTemp: float | None = None  # deg C
     EevPulses: int | None = None
+    EevPosition: int | None = None  # % of raw pulse range 0-255, full-open pulse count unknown
 
 
 @dataclass

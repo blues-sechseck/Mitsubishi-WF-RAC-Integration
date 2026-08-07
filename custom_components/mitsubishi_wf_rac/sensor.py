@@ -8,6 +8,7 @@ from . import MitsubishiWfRacConfigEntry
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
+    PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfEnergy,
     UnitOfFrequency,
@@ -26,6 +27,7 @@ from .const import (
     ATTR_OPERATING_CURRENT,
     ATTR_HOT_GAS_TEMP,
     ATTR_EEV_PULSES,
+    ATTR_EEV_POSITION,
     DOMAIN,
     ATTR_INSIDE_TEMPERATURE,
     ATTR_OUTSIDE_TEMPERATURE,
@@ -78,6 +80,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
         ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
         ServiceDataSensor(device, ATTR_EEV_PULSES),
+        ServiceDataSensor(device, ATTR_EEV_POSITION),
     ]
 
     _async_remove_home_leave_mode_sensors(hass, device)
@@ -237,7 +240,7 @@ class EnergySensor(WfRacEntity, SensorEntity):
 
 class ServiceDataSensor(WfRacEntity, SensorEntity):
     """Operation-data sensors (compressor frequency, current, hot gas temp,
-    EEV pulses) - see rac_parser.SERVICE_DATA_CODES. Always created; stays
+    EEV pulses/position) - see rac_parser.SERVICE_DATA_CODES. Always created; stays
     unknown until CONF_SERVICE_DATA is enabled, since that's what actually
     makes Device request these values - see
     Device._maybe_request_service_data().
@@ -256,6 +259,7 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         ATTR_OPERATING_CURRENT: "OperatingCurrent",
         ATTR_HOT_GAS_TEMP: "HotGasTemp",
         ATTR_EEV_PULSES: "EevPulses",
+        ATTR_EEV_POSITION: "EevPosition",
     }
 
     def __init__(self, device: Device, custom_type: str) -> None:
@@ -276,6 +280,9 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         elif custom_type == ATTR_EEV_PULSES:
             self._attr_native_unit_of_measurement = "pulses"
             self._attr_icon = "mdi:pulse"
+        elif custom_type == ATTR_EEV_POSITION:
+            self._attr_native_unit_of_measurement = PERCENTAGE
+            self._attr_icon = "mdi:valve"
         self._update_state()
 
     def _update_state(self) -> None:

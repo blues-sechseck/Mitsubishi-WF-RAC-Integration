@@ -50,6 +50,7 @@ ATTR_COMPRESSOR_FREQUENCY = "compressor_frequency"
 ATTR_OPERATING_CURRENT = "operating_current"
 ATTR_HOT_GAS_TEMP = "hot_gas_temp"
 ATTR_EEV_PULSES = "eev_pulses"
+ATTR_EEV_POSITION = "eev_position"
 
 # New offset constants
 CONF_INDOOR_OFFSET = "indoor_offset"

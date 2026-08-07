@@ -311,17 +311,19 @@ def test_parse_temperatures_service_data_segments(parser):
     assert ac.OperatingCurrent == pytest.approx(4 * 14 / 51)
     assert ac.HotGasTemp == pytest.approx(42.5)
     assert ac.EevPulses == 106
+    assert ac.EevPosition == 42
 
 
 def test_parse_temperatures_service_data_absent_by_default(parser):
     # A plain poll without a prior ServiceDataStatusRequest must leave all
-    # four fields at their None default (see AirconCommands), not e.g. 0.
+    # five fields at their None default (see AirconCommands), not e.g. 0.
     ac = Aircon()
     parser._parse_temperatures(ac, [])
     assert ac.CompressorFrequency is None
     assert ac.OperatingCurrent is None
     assert ac.HotGasTemp is None
     assert ac.EevPulses is None
+    assert ac.EevPosition is None
 
 
 def test_to_base64_default_length_unchanged_by_home_leave_mode(parser):

@@ -231,6 +231,9 @@
       },
       "eev_pulses": {
         "name": "EEV Pulses"
+      },
+      "eev_position": {
+        "name": "EEV Position"
       }
     },
     "binary_sensor": {

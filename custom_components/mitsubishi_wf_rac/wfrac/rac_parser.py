@@ -402,6 +402,7 @@ class RacParser:
             ac_device.HotGasTemp = op2 / 2 + 32
         elif code == SERVICE_DATA_EEV_PULSES:
             ac_device.EevPulses = op2
+            ac_device.EevPosition = round(op2 * 100 / 255)
 
     @staticmethod
     def _log_unknown_segment(vals: list[int], i: int) -> None:

@@ -50,9 +50,9 @@ This integration creates one device per airco with the following entities.
 | | `fan_mode` | `auto`, `quiet`, `low`, `medium`, `high` | Fan speed. |
 | | `swing_mode` | `up_down_auto`, `highest`, `middle`, `normal`, `lowest`, `3d_auto` | Vertical louver position. `3d_auto` hands vertical *and* horizontal swing over to the unit's own automatic mode. |
 | | `swing_horizontal_mode` | `left_right_auto`, `left_left`, `left_center`, `center_center`, `center_right`, `right_right`, `left_right`, `right_left`, `3d_auto` | Horizontal louver position. `3d_auto` behaves as above. |
-| | `target_temperature` | 16–30 °C (cool), 18–30 °C (other modes) | Setpoint. Cooling accepts a lower minimum than heating/auto/dry in practice; heating below 18 °C isn't a reliable plain setpoint (see the Home Leave switch for that instead). |
+| | `target_temperature` | 16–30 °C (cool), 18–30 °C (other modes) | Setpoint. Cooling accepts a lower minimum than heating/auto/dry in practice; heating below 18 °C isn't a reliable plain setpoint (see Home Leave Mode for that instead). |
 | | `current_temperature` | °C | Indoor temperature as measured by the unit, corrected by the "Indoor Temp. Sensor Offset" option if set. |
-| | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. In `auto` mode this reflects the unit's own cool/heat decision, not just the configured mode. |
+| | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. `idle` means the unit is on but the compressor is stopped (e.g. setpoint satisfied) - same signal as the Compressor binary sensor below. In `auto` mode, `cooling`/`heating` reflects the unit's own cool/heat decision, not just the configured mode. |
 
 ## Sensors
 
@@ -65,7 +65,8 @@ This integration creates one device per airco with the following entities.
 | Compressor Frequency *(disabled by default)* | Hz | Actual compressor speed, not just on/off. Requires the "Service Data (Experimental)" option below - always `unknown` otherwise. |
 | Operating Current *(disabled by default)* | A | Compressor operating current. Same "Service Data (Experimental)" requirement as above. |
 | Hot Gas Temperature *(disabled by default)* | °C | Compressor discharge (hot gas) temperature. Same "Service Data (Experimental)" requirement as above. |
-| EEV Pulses *(disabled by default)* | pulses | Electronic expansion valve position. Same "Service Data (Experimental)" requirement as above. |
+| EEV Pulses *(disabled by default)* | pulses | Electronic expansion valve position, raw pulse count (0-255). Same "Service Data (Experimental)" requirement as above. |
+| EEV Position *(disabled by default)* | % | Same value as EEV Pulses, linearly mapped to 0-255=0-100%. The real full-open pulse count is unknown, so treat this as relative, not calibrated - useful for comparing indoor units on the same system. Same "Service Data (Experimental)" requirement as above. |
 | Airco ID *(diagnostic)* | text | Internal ID of the airco. |
 | Operator ID *(diagnostic, disabled by default)* | text | Internal operator/account ID. |
 | Device ID *(diagnostic, disabled by default)* | text | Internal device ID. |
@@ -83,15 +84,28 @@ This integration creates one device per airco with the following entities.
 
 | Entity | Values | Description |
 |---|---|---|
-| Problem | on/off | On whenever the unit reports an error code (`error_code` attribute holds the raw code). |
-| Occupancy | on/off | Only created on units that report the "Vacant"/Home Leave bit (see the Home Leave switch below). This is *not* a physical presence/motion sensor - it just mirrors that bit, which is off unless Home Leave mode was actually entered (e.g. via the Home Leave switch). It will read "occupied" even in an empty room if Home Leave was never triggered. |
-| Compressor | on/off | Whether the compressor is actually running, as opposed to the unit just being powered on (e.g. off while a setpoint is already satisfied). Comes from the same status poll as every other sensor - no extra request needed. |
+| Problem | on/off | On whenever the unit reports an error code (`error_code` attribute holds the raw code; `error_description` is added when the code is documented in the MHI service/user manuals). |
+| Occupancy | on/off | Only created on units that report the "Vacant"/Home Leave bit (see Home Leave Mode below). This is *not* a physical presence/motion sensor - it just mirrors that bit, which is off unless Home Leave mode was actually entered. It will read "occupied" even in an empty room if Home Leave was never triggered. |
+| Compressor | on/off | Whether the compressor is actually running, as opposed to the unit just being powered on (e.g. off while a setpoint is already satisfied). Comes from the same status poll as every other sensor - no extra request needed. On multi-split systems, this reflects whether *this* indoor unit is currently demanding compressor operation, not whether the shared outdoor unit's compressor is physically spinning - on a shared compressor, one indoor unit can read "on" while a sibling reads "off" at the same moment. To determine whether the outdoor unit's compressor is actually running at all, either check this sensor across every indoor unit on the system, or use Compressor Frequency, which is identical across all indoor units sharing one outdoor unit. |
 
-## Switch
+## Update
 
 | Entity | Values | Description |
 |---|---|---|
-| Home Leave Mode | on/off | Enters/leaves the unit's own frost-protection/low-power standby mode for when nobody's home, by lowering the heat target temperature below the unit's Home Leave threshold. Only created on units confirmed to support it. |
+| Firmware Update *(opt-in)* | on/off | Reports whether newer WF-RAC module firmware is available, by comparing the version reported locally against the manufacturer's `getFirmware` endpoint. Only created if "Check for firmware updates" is enabled in the integration's options - off by default, since it's the only call this integration makes outside the local network. Read-only; installing an update isn't offered here. |
+
+## Home Leave Mode
+
+The unit's own frost-protection/low-power standby mode for when nobody's home, with independent cooling and heating away-targets. Only created on units confirmed to support it.
+
+| Entity | Values | Description |
+|---|---|---|
+| Home Leave Mode (select) | `off`, `away_cool`, `away_heat` | Enters/leaves Home Leave mode in either direction. |
+| Home Leave Cooling/Heating Temp Rule *(number, disabled by default)* | 10–50 °C | Outdoor/room temperature threshold at which Home Leave engages for that mode. |
+| Home Leave Cooling/Heating Temp Setting *(number, disabled by default)* | 10–50 °C | Target temperature while Home Leave is active for that mode. |
+| Home Leave Cooling/Heating Airflow *(select, disabled by default)* | `auto`, `1`–`4` | Fan speed while Home Leave is active for that mode. |
+
+The number/select entities above stay `unknown` until the climate entity's "Request Home Leave Mode status" action has been called once - the unit omits these values from a plain poll otherwise. Writing to them before that is refused rather than guessed at. See the `request_home_leave_mode_status`/`set_home_leave_mode` climate actions.
 
 ## Select (optional)
 
@@ -117,6 +131,7 @@ Configurable via the integration's "Configure" (options) flow.
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
+| Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 | Service Data (Experimental) | on/off, off by default | Requests compressor frequency/current/hot gas temperature/EEV pulses every 5 minutes (see the sensors above). Unlike every other request this integration sends, this is an extra write to the unit purely to piggy-back a read request on it - leave off unless you actually want these values. |
 
 ### Target Temp. Offset sign convention
