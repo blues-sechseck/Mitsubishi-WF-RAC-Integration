@@ -24,8 +24,6 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     CONF_AIRCO_ID,
-    CONF_AVAILABILITY_CHECK,
-    CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CREATE_SWING_MODE_SELECT,
     CONF_FIRMWARE_UPDATE_CHECK,
     CONF_OPERATOR_ID,
@@ -45,7 +43,7 @@ _LOGGER = logging.getLogger(__name__)
 class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow."""
 
-    VERSION = 4
+    VERSION = 5
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
     _discovery_info = {}
     DOMAIN = DOMAIN
@@ -156,8 +154,6 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data_input = user_input.copy()
                 options_input = {
                     CONF_HOST: user_input[CONF_HOST],
-                    CONF_AVAILABILITY_CHECK: True,
-                    CONF_AVAILABILITY_RETRY_LIMIT: 3,
                     CONF_FIRMWARE_UPDATE_CHECK: False,
                     # Off by default: each poll would otherwise carry an
                     # extra write to the unit just to piggy-back a read
@@ -333,14 +329,6 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_HOST,
                         default=self.config_entry.options.get(CONF_HOST),  # type: ignore
                     ): str,
-                    vol.Required(
-                        CONF_AVAILABILITY_CHECK,
-                        default=self.config_entry.options.get(CONF_AVAILABILITY_CHECK, True),  # type: ignore
-                    ): bool,
-                    vol.Optional(
-                        CONF_AVAILABILITY_RETRY_LIMIT,
-                        default=self.config_entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3),  # type: ignore
-                    ): int,
                     vol.Required(
                         CONF_FIRMWARE_UPDATE_CHECK,
                         default=self.config_entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False),  # type: ignore

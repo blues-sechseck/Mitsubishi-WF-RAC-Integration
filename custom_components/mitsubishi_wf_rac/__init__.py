@@ -86,6 +86,18 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             new_options[CONF_AVAILABILITY_RETRY_LIMIT] = 3
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=4)
+    if entry.version == 4:
+        # Drop the availability options. Neither had a defensible setting: the
+        # module's hourly reassociation makes some tolerance always right, and
+        # values below 2 were arithmetically identical to switching tolerance
+        # off. The v3 -> v4 step above already had to correct user-chosen
+        # values, which is the argument for it not being a user choice.
+        # Behaviour is now Device.AVAILABILITY_FAILURE_LIMIT.
+        new_options = dict(entry.options)
+        new_options.pop(CONF_AVAILABILITY_CHECK, None)
+        new_options.pop(CONF_AVAILABILITY_RETRY_LIMIT, None)
+
+        hass.config_entries.async_update_entry(entry, options=new_options, version=5)
 
     return True
 
@@ -130,17 +142,6 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     operator_id: str = entry.data[CONF_OPERATOR_ID]
     port: int = entry.data[CONF_PORT]
     airco_id: str = entry.data[CONF_AIRCO_ID]
-    # Bugfix: config_flow.py stores this toggle under CONF_AVAILABILITY_CHECK
-    # ("availability_check") via the Options Flow; the literal "availability_retry"
-    # key is never written anywhere, so this always defaulted to False and the
-    # retry-tolerance logic in wfrac/device.py (_availability_retry_limit) was
-    # dead code even when the user enabled "Availability Check" in the UI.
-    # The default here is True to match both the value new entries are created
-    # with (config_flow._async_create_common) and the one the options form shows
-    # for a missing key - it used to be False, so an entry without the key ran
-    # with the tolerance off while the form displayed it as on.
-    availability_retry: bool = entry.options.get(CONF_AVAILABILITY_CHECK, True)
-    availability_retry_limit: int = entry.options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3)
     create_swing_mode_select: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
     # Off unless the user explicitly opted in via the options flow - this is
     # the only outbound internet call in the integration (see
@@ -151,8 +152,8 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     # wfrac/device.py's _maybe_request_service_data().
     service_data_enabled: bool = entry.options.get(CONF_SERVICE_DATA, False)
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
-    _device = Device(hass, name, device, port, device_id, operator_id, airco_id, availability_retry,
-                     availability_retry_limit, create_swing_mode_select,
+    _device = Device(hass, name, device, port, device_id, operator_id, airco_id,
+                     create_swing_mode_select,
                      firmware_update_check_enabled=firmware_update_check_enabled,
                      service_data_enabled=service_data_enabled,
                      connection_method=connection_method)

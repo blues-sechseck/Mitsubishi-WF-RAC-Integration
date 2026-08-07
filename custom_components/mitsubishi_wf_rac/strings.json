@@ -37,8 +37,6 @@
         "description": "Below are the options you can change for this airco.",
         "data": {
           "host": "[%key:common::config_flow::data::host%]",
-          "availability_check": "[%key:common::config_flow::data::avaiability%]",
-          "availability_retry_limit": "[%key:common::config_flow::data::avaiability_retry_limit%]",
           "firmware_update_check": "Firmware Update Check (Online)",
           "service_data": "Service Data",
           "target_offset_cool": "Target Temp. Offset (Cooling)",
