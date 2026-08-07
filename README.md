@@ -59,12 +59,12 @@ This integration creates one device per airco with the following entities.
 | Entity | Values | Description |
 |---|---|---|
 | Indoor Temperature | °C | Same value as the climate entity's `current_temperature`, exposed as its own sensor. |
-| Outdoor Temperature | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. |
+| Outdoor Temperature *(shared on multi-split)* | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. On multi-split systems this is an outdoor-unit-level value - reads identically on every indoor unit sharing one outdoor unit, since there's only one outdoor sensor. |
 | Target Temperature | °C | Current setpoint, exposed as its own sensor. |
 | Energy Usage | kWh, increasing | Cumulative energy consumption reported by the unit. Only created if the unit actually reports this value — not all models do. |
-| Compressor Frequency *(disabled by default)* | Hz | Actual compressor speed, not just on/off. Requires the "Service Data (Experimental)" option below - always `unknown` otherwise. |
-| Operating Current *(disabled by default)* | A | Compressor operating current. Same "Service Data (Experimental)" requirement as above. |
-| Hot Gas Temperature *(disabled by default)* | °C | Compressor discharge (hot gas) temperature. Same "Service Data (Experimental)" requirement as above. |
+| Compressor Frequency *(disabled by default, shared on multi-split)* | Hz | Actual compressor speed, not just on/off. Requires the "Service Data (Experimental)" option below - always `unknown` otherwise. Outdoor-unit-level - identical on every indoor unit sharing one outdoor unit. |
+| Operating Current *(disabled by default, shared on multi-split)* | A | Compressor operating current. Same "Service Data (Experimental)" requirement as above, and the same outdoor-unit-level sharing as Compressor Frequency. |
+| Hot Gas Temperature *(disabled by default, shared on multi-split)* | °C | Compressor discharge (hot gas) temperature. Same "Service Data (Experimental)" requirement as above, and the same outdoor-unit-level sharing as Compressor Frequency. |
 | EEV Pulses *(disabled by default)* | pulses | Electronic expansion valve position, raw pulse count (0-255). Same "Service Data (Experimental)" requirement as above. |
 | EEV Position *(disabled by default)* | % | Same value as EEV Pulses, linearly mapped to 0-255=0-100%. The real full-open pulse count is unknown, so treat this as relative, not calibrated - useful for comparing indoor units on the same system. Same "Service Data (Experimental)" requirement as above. |
 | Airco ID *(diagnostic)* | text | Internal ID of the airco. |
