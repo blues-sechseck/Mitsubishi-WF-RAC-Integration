@@ -9,7 +9,7 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues",
   "requirements": [],
-  "version": "2026.9.2-beta3",
+  "version": "2026.9.2-beta4",
   "zeroconf": [
     "_beaver._tcp.local."
   ]
