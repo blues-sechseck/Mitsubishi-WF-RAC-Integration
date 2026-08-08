@@ -1,5 +1,8 @@
-"""Tests for __init__.py: config-entry migration and the availability-check
-default that create_device_from_entry() falls back to.
+"""Tests for __init__.py: config-entry migration.
+
+The availability options were removed in v5. Older steps still reference them
+because entries created under those versions carry the keys, but nothing reads
+them at runtime any more - the migration's job is to leave no trace of them.
 """
 
 from homeassistant.const import CONF_HOST
@@ -21,6 +24,8 @@ _DATA = {
     "port": 51443,
 }
 
+_CURRENT_VERSION = 5
+
 
 def _entry(hass: HomeAssistant, version: int, data: dict, options: dict) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, version=version, data=data, options=options)
@@ -28,63 +33,45 @@ def _entry(hass: HomeAssistant, version: int, data: dict, options: dict) -> Mock
     return entry
 
 
-async def test_migrate_v1_moves_host_into_options_and_ends_at_v4(hass: HomeAssistant):
-    """A v1 entry runs through every step in one go. The v1 -> v2 step still
-    writes CONF_AVAILABILITY_CHECK False, but v3 -> v4 must turn it back on.
-    """
+async def test_migrate_v1_moves_host_into_options(hass: HomeAssistant):
+    """A v1 entry runs through every step in one go."""
     entry = _entry(hass, 1, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 4
+    assert entry.version == _CURRENT_VERSION
     assert CONF_HOST not in entry.data
     assert entry.options[CONF_HOST] == "192.168.1.50"
-    assert entry.options[CONF_AVAILABILITY_CHECK] is True
-    assert entry.options[CONF_AVAILABILITY_RETRY_LIMIT] == 3
 
 
-async def test_migrate_v2_keeps_user_retry_limit(hass: HomeAssistant):
-    """The v2 -> v3 step used to reset the limit to 3 over whatever the user
-    had configured.
+async def test_migrate_drops_the_check_and_floors_the_retry_limit(hass: HomeAssistant):
+    """From any version that could carry them. A limit above the floor is the
+    user's choice and survives; anything below it - including the check being
+    off, which was the same thing - comes out at the floor.
     """
-    entry = _entry(
-        hass,
-        2,
-        _DATA,
-        {CONF_HOST: "192.168.1.50", CONF_AVAILABILITY_CHECK: True, CONF_AVAILABILITY_RETRY_LIMIT: 8},
-    )
+    for version, options, expected_limit in (
+        (2, {CONF_AVAILABILITY_CHECK: True, CONF_AVAILABILITY_RETRY_LIMIT: 8}, 8),
+        (3, {CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 0}, 3),
+        (4, {CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 1}, 3),
+        (4, {CONF_AVAILABILITY_CHECK: True}, 3),
+    ):
+        entry = _entry(hass, version, _DATA, {CONF_HOST: "192.168.1.50", **options})
 
-    assert await async_migrate_entry(hass, entry)
+        assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 4
-    assert entry.options[CONF_AVAILABILITY_RETRY_LIMIT] == 8
-
-
-async def test_migrate_v3_enables_availability_check(hass: HomeAssistant):
-    entry = _entry(
-        hass,
-        3,
-        _DATA,
-        {CONF_HOST: "192.168.1.50", CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 3},
-    )
-
-    assert await async_migrate_entry(hass, entry)
-
-    assert entry.version == 4
-    assert entry.options[CONF_AVAILABILITY_CHECK] is True
+        assert entry.version == _CURRENT_VERSION
+        assert CONF_AVAILABILITY_CHECK not in entry.options
+        assert entry.options[CONF_AVAILABILITY_RETRY_LIMIT] == expected_limit
+        assert entry.options[CONF_HOST] == "192.168.1.50"
 
 
 async def test_migrate_v3_drops_dead_availability_retry_key(hass: HomeAssistant):
+    """The v1 -> v2 step used to write a key nothing ever read."""
     entry = _entry(
         hass,
         3,
         _DATA,
-        {
-            CONF_HOST: "192.168.1.50",
-            CONF_AVAILABILITY_CHECK: True,
-            CONF_AVAILABILITY_RETRY_LIMIT: 3,
-            "availability_retry": False,
-        },
+        {CONF_HOST: "192.168.1.50", "availability_retry": False},
     )
 
     assert await async_migrate_entry(hass, entry)
@@ -92,61 +79,35 @@ async def test_migrate_v3_drops_dead_availability_retry_key(hass: HomeAssistant)
     assert "availability_retry" not in entry.options
 
 
-async def test_migrate_v3_lifts_retry_limits_below_two(hass: HomeAssistant):
-    """0 and 1 both mean "give up on the first failed poll" in
-    Device._set_availability(), i.e. they cancel out the check being on.
-    """
-    for limit in (0, 1):
-        entry = _entry(
-            hass,
-            3,
-            _DATA,
-            {
-                CONF_HOST: "192.168.1.50",
-                CONF_AVAILABILITY_CHECK: False,
-                CONF_AVAILABILITY_RETRY_LIMIT: limit,
-            },
-        )
-
-        assert await async_migrate_entry(hass, entry)
-
-        assert entry.options[CONF_AVAILABILITY_RETRY_LIMIT] == 3
-
-
-async def test_migrate_v3_keeps_deliberate_higher_retry_limit(hass: HomeAssistant):
+async def test_migrate_keeps_unrelated_options(hass: HomeAssistant):
     entry = _entry(
         hass,
-        3,
+        4,
         _DATA,
-        {CONF_HOST: "192.168.1.50", CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 10},
+        {CONF_HOST: "192.168.1.50", "indoor_offset": -1.5, CONF_AVAILABILITY_CHECK: True},
     )
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.options[CONF_AVAILABILITY_RETRY_LIMIT] == 10
-
-
-async def test_availability_check_defaults_to_on_when_key_missing(hass: HomeAssistant):
-    """The options form shows this as on for a missing key, so the runtime has
-    to agree - otherwise the form and the actual behaviour disagree.
-    """
-    entry = _entry(hass, 4, _DATA, {CONF_HOST: "192.168.1.50"})
-
-    device = await create_device_from_entry(entry, hass)
-
-    assert device._availability_retry is True  # pylint: disable=protected-access
-    assert device._availability_retry_limit == 3  # pylint: disable=protected-access
+    assert entry.options["indoor_offset"] == -1.5
 
 
 async def test_migrate_is_idempotent_at_current_version(hass: HomeAssistant):
-    options = {
-        CONF_HOST: "192.168.1.50",
-        CONF_AVAILABILITY_CHECK: False,
-        CONF_AVAILABILITY_RETRY_LIMIT: 1,
-    }
-    entry = _entry(hass, 4, _DATA, options)
+    options = {CONF_HOST: "192.168.1.50"}
+    entry = _entry(hass, _CURRENT_VERSION, _DATA, options)
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 4
+    assert entry.version == _CURRENT_VERSION
     assert entry.options == options
+
+
+async def test_device_is_built_without_availability_options(hass: HomeAssistant):
+    """Tolerance is a property of the module's behaviour, not a setting - an
+    entry carrying nothing but the host must still get it.
+    """
+    entry = _entry(hass, _CURRENT_VERSION, _DATA, {CONF_HOST: "192.168.1.50"})
+
+    device = await create_device_from_entry(entry, hass)
+
+    assert device._consecutive_failures == 0  # pylint: disable=protected-access

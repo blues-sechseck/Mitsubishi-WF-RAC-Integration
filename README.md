@@ -125,8 +125,7 @@ Configurable via the integration's "Configure" (options) flow.
 | Option | Range | Description |
 |---|---|---|
 | Host (IP) address | IP or hostname | Address of the WF-RAC module. |
-| Check availability | on/off, on by default | Whether a failed poll is tolerated before the device is marked unavailable. Off marks it unavailable on the first failed poll. |
-| Retry limit | 2 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes. `0` and `1` mark it unavailable on the first failed poll, identical to Check availability being off. |
+| Retry limit | 3 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link; it cannot be set lower. |
 | Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. |
 | Outdoor Temp. Sensor Offset | -15..15 °C | Same, for the Outdoor Temperature sensor. |
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
@@ -156,12 +155,10 @@ interface does "connect / disconnect every one hour … to avoid too much cache 
 ([source](https://community.ui.com/questions/AC-Units-IOT-disconnecting-from-UniFi-Wi-Fi-at-regular-hourly-Intervals/821cd3e4-46a0-4d6b-8fd0-8d5cf182b90f)).
 The reassociation takes seconds to about a minute and cannot be turned off.
 
-This integration polls every 60 seconds, so a reassociation can cost a poll. The availability
-options decide whether that becomes a visible outage:
-
-- **Check availability**: on (the default).
-- **Retry limit**: `3` (the default) — the device is marked unavailable after 3 consecutive failed
-  polls, about 3 minutes. `0` and `1` mark it unavailable on the first failed poll.
+This integration polls every 60 seconds, so a reassociation can cost a poll. That does not become a
+visible outage: the device is only reported unavailable after three consecutive failed polls, about
+three minutes, which rides through the reassociation. If your link is weak enough that this still
+shows up, raise **Retry limit** in the options; three is the minimum, not a target.
 
 ## Unit goes unavailable for about an hour
 

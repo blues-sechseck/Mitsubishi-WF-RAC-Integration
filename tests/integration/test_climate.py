@@ -34,8 +34,6 @@ async def device(hass):
         "device-id",
         "operator-id",
         "airco-id",
-        availability_retry=False,
-        availability_retry_limit=3,
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()

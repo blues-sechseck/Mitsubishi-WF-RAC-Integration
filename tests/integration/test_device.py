@@ -13,7 +13,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.mitsubishi_wf_rac.wfrac import device as device_module
-from custom_components.mitsubishi_wf_rac.wfrac.device import Device
+from custom_components.mitsubishi_wf_rac.wfrac.device import (
+    AVAILABILITY_FAILURE_LIMIT_MIN,
+    Device,
+)
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
 from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import RacParser
 from custom_components.mitsubishi_wf_rac.wfrac.repository import AirconApiError
@@ -66,8 +69,6 @@ async def device(hass):
         "device-id",
         "operator-id",
         "airco-id",
-        availability_retry=False,
-        availability_retry_limit=3,
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()
@@ -295,10 +296,11 @@ async def test_delete_account_failure_returns_none(device):
     assert await device.delete_account() is None
 
 
-async def test_availability_retry_tolerates_failures_below_limit(hass):
+async def test_availability_tolerates_failures_below_limit(hass):
+    """The module reassociates to WiFi about once an hour and misses a poll
+    while it does; only a sustained run of failures is a real outage."""
     dev = Device(
         hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
-        availability_retry=True, availability_retry_limit=3,
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()
@@ -317,16 +319,57 @@ async def test_availability_retry_tolerates_failures_below_limit(hass):
     assert dev.available is False  # 3rd failure - limit reached
 
 
-async def test_availability_retry_disabled_fails_immediately(hass):
+async def test_availability_limit_can_be_raised_but_not_lowered(hass):
+    """The option exists for weak links, where three minutes of grace isn't
+    enough. Below the floor it only ever produced phantom outages, so a lower
+    value is clamped rather than honoured."""
+    raised = Device(
+        hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
+        create_swing_mode_select=True, availability_failure_limit=5,
+    )
+    assert raised._availability_failure_limit == 5
+
+    lowered = Device(
+        hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
+        create_swing_mode_select=True, availability_failure_limit=1,
+    )
+    assert lowered._availability_failure_limit == AVAILABILITY_FAILURE_LIMIT_MIN
+
+    lowered._api = AsyncMock()
+    lowered._api.update_account_info = AsyncMock()
+    lowered._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await lowered.update()
+
+    lowered._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    await lowered.update()
+    assert lowered.available is True  # would already be unavailable at limit 1
+
+
+async def test_availability_recovers_and_resets_the_failure_count(hass):
+    """A success in between must clear the run, not leave it part-way to the
+    limit."""
     dev = Device(
         hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
-        availability_retry=False, availability_retry_limit=3,
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()
-    dev._api.get_aircon_stats.side_effect = AirconApiError("boom")
     dev._api.update_account_info = AsyncMock()
+    dev._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await dev.update()
 
+    dev._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    await dev.update()
+    await dev.update()
+    assert dev.available is True
+
+    dev._api.get_aircon_stats.side_effect = None
+    await dev.update()
+    assert dev.available is True
+
+    dev._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    await dev.update()
+    await dev.update()
+    assert dev.available is True  # count restarted, not resumed at 2
     await dev.update()
     assert dev.available is False
 

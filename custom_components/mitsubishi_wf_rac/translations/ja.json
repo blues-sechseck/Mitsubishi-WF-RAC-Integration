@@ -38,8 +38,7 @@
         "description": "以下は、このエアコンの変更可能なオプションです。",
         "data": {
           "host": "ホスト（IP）アドレス",
-          "availability_check": "可用性を確認",
-          "availability_retry_limit": "リトライ回数の上限",
+          "availability_retry_limit": "リトライ回数の上限（最小 3）",
           "create_swing_mode_select": "追加のスイングモードセレクターを作成するかどうか。",
           "indoor_offset": "室内オフセット",
           "outdoor_offset": "室外オフセット",

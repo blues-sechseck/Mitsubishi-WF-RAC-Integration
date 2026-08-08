@@ -38,8 +38,7 @@
         "description": "Hieronder zijn instellingen die je kan aanpassen voor deze airco.",
         "data": {
           "host": "Host (IP) address",
-          "availability_check": "Controleer beschikbaarheid",
-          "availability_retry_limit": "Herhaal limiet",
+          "availability_retry_limit": "Herhaal limiet (minimaal 3)",
           "create_swing_mode_select": "Of er extra zwaaimodus-selectors moeten worden aangemaakt.",
           "indoor_offset": "Binnen offset",
           "outdoor_offset": "Buiten offset",

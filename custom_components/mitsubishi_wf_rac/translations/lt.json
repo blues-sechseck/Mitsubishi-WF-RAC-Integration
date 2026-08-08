@@ -38,8 +38,7 @@
         "description": "Žemiau pateikiamos parinktys, kurias galite keisti šiam oro kondicionieriui.",
         "data": {
           "host": "Host (IP) adresas",
-          "availability_check": "Patikrinti prieinamumą",
-          "availability_retry_limit": "Pakartotinio bandymo limitas",
+          "availability_retry_limit": "Pakartotinio bandymo limitas (min. 3)",
           "create_swing_mode_select": "Ar kurti papildomus svyravimo režimo pasirinkiklius.",
           "indoor_offset": "Vidaus poslinkis",
           "outdoor_offset": "Lauko poslinkis",

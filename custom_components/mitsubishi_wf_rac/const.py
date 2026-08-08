@@ -18,7 +18,11 @@ MIN_TIME_BETWEEN_UPDATES=timedelta(seconds=60)
 
 CONF_OPERATOR_ID = "operator_id"
 CONF_AIRCO_ID = "airco_id"
+# Removed option, kept only so async_migrate_entry can strip it from entries
+# that predate v5. Nothing outside the migration reads it.
 CONF_AVAILABILITY_CHECK = "availability_check"
+# Consecutive failed polls before the device is reported unavailable; floored
+# at wfrac/device.py's AVAILABILITY_FAILURE_LIMIT_MIN.
 CONF_AVAILABILITY_RETRY_LIMIT = "availability_retry_limit"
 # Gates all outbound internet traffic (as opposed to local-network device
 # polling) - the manufacturer's getFirmware endpoint. Off by default: unlike

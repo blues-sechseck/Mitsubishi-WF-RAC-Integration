@@ -53,3 +53,6 @@ class EnergyTotalResetButton(WfRacEntity, ButtonEntity):
             f"{SIGNAL_SET_ENERGY_TOTAL}_{self._device.airco_id}",
             0.0,
         )
+
+    def _update_state(self) -> None:
+        """No state to reflect - the button has none."""

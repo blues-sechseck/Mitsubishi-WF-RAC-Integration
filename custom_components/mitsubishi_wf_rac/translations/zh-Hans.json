@@ -38,8 +38,7 @@
         "description": "以下是你可以为此空调更改的选项。",
         "data": {
           "host": "主机（IP）地址",
-          "availability_check": "检查可用性",
-          "availability_retry_limit": "重试次数上限",
+          "availability_retry_limit": "重试次数上限（最少 3）",
           "create_swing_mode_select": "是否创建额外的摆风模式选择器。",
           "indoor_offset": "室内偏移",
           "outdoor_offset": "室外偏移",

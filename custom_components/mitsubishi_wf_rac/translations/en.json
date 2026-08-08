@@ -38,8 +38,7 @@
         "description": "Below are the options you can change for this airco.",
         "data": {
           "host": "Host (IP) address",
-          "availability_check": "Check availability",
-          "availability_retry_limit": "Retry limit",
+          "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
           "service_data": "Service Data",
           "create_swing_mode_select": "Whether to create an additional swing mode selectors.",

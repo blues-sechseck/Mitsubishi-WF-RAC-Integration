@@ -38,8 +38,7 @@
         "description": "Nachfolgend finden Sie die Optionen, die Sie für diese Klimaanlage ändern können.",
         "data": {
           "host": "Host (IP) Adresse",
-          "availability_check": "Verfügbarkeit prüfen",
-          "availability_retry_limit": "max. Anzahl Wiederholungen",
+          "availability_retry_limit": "max. Anzahl Wiederholungen (mind. 3)",
           "firmware_update_check": "Firmware-Update-Prüfung (Online)",
           "service_data": "Servicedaten",
           "create_swing_mode_select": "Ob zusätzliche Schwenkmodus-Auswahlen erstellt werden sollen.",

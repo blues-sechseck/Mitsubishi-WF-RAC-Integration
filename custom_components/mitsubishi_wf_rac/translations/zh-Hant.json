@@ -38,8 +38,7 @@
         "description": "以下是你可以為此空調更改的選項。",
         "data": {
           "host": "主機（IP）地址",
-          "availability_check": "檢查可用性",
-          "availability_retry_limit": "重試次數上限",
+          "availability_retry_limit": "重試次數上限（最少 3）",
           "create_swing_mode_select": "是否建立額外的擺風模式選擇器。",
           "indoor_offset": "室內偏移",
           "outdoor_offset": "室外偏移",
