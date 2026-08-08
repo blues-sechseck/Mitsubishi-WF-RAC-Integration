@@ -24,7 +24,7 @@ from .const import (
     CONF_SERVICE_DATA,
     CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
 )
-from .wfrac.device import Device
+from .wfrac.device import AVAILABILITY_FAILURE_LIMIT_MIN, Device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,15 +87,19 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=4)
     if entry.version == 4:
-        # Drop the availability options. Neither had a defensible setting: the
-        # module's hourly reassociation makes some tolerance always right, and
-        # values below 2 were arithmetically identical to switching tolerance
-        # off. The v3 -> v4 step above already had to correct user-chosen
-        # values, which is the argument for it not being a user choice.
-        # Behaviour is now Device.AVAILABILITY_FAILURE_LIMIT.
+        # Drop the on/off toggle and put a floor under the retry limit. The
+        # toggle was never a defensible choice - the module's hourly
+        # reassociation makes some tolerance always right, and switching it off
+        # was arithmetically identical to a limit of 1. Raising the limit is a
+        # real choice on a weak link, so the number stays; only values below
+        # AVAILABILITY_FAILURE_LIMIT_MIN are lifted, which is what the v3 -> v4
+        # step above was already having to do by hand.
         new_options = dict(entry.options)
         new_options.pop(CONF_AVAILABILITY_CHECK, None)
-        new_options.pop(CONF_AVAILABILITY_RETRY_LIMIT, None)
+        new_options[CONF_AVAILABILITY_RETRY_LIMIT] = max(
+            AVAILABILITY_FAILURE_LIMIT_MIN,
+            new_options.get(CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN),
+        )
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=5)
 
@@ -151,9 +155,15 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     # values costs an extra write to the unit on every poll. See
     # wfrac/device.py's _maybe_request_service_data().
     service_data_enabled: bool = entry.options.get(CONF_SERVICE_DATA, False)
+    # Floored in Device itself, so an entry that predates the v4 -> v5
+    # migration can't run with less tolerance than the module needs.
+    availability_failure_limit: int = entry.options.get(
+        CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN
+    )
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
     _device = Device(hass, name, device, port, device_id, operator_id, airco_id,
                      create_swing_mode_select,
+                     availability_failure_limit=availability_failure_limit,
                      firmware_update_check_enabled=firmware_update_check_enabled,
                      service_data_enabled=service_data_enabled,
                      connection_method=connection_method)

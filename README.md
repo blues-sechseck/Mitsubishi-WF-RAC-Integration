@@ -125,6 +125,7 @@ Configurable via the integration's "Configure" (options) flow.
 | Option | Range | Description |
 |---|---|---|
 | Host (IP) address | IP or hostname | Address of the WF-RAC module. |
+| Retry limit | 3 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link; it cannot be set lower. |
 | Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. |
 | Outdoor Temp. Sensor Offset | -15..15 °C | Same, for the Outdoor Temperature sensor. |
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
@@ -156,7 +157,8 @@ The reassociation takes seconds to about a minute and cannot be turned off.
 
 This integration polls every 60 seconds, so a reassociation can cost a poll. That does not become a
 visible outage: the device is only reported unavailable after three consecutive failed polls, about
-three minutes, which rides through the reassociation. There is nothing to configure for this.
+three minutes, which rides through the reassociation. If your link is weak enough that this still
+shows up, raise **Retry limit** in the options; three is the minimum, not a target.
 
 ## Unit goes unavailable for about an hour
 

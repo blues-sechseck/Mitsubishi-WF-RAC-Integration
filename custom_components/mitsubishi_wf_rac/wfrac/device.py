@@ -38,13 +38,15 @@ FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 # regular poll cadence. See Device._maybe_request_service_data().
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
-# Consecutive failed polls before the device is reported unavailable. The
-# module reassociates to WiFi about once an hour and is unreachable while it
-# does (see the README's Troubleshooting section); reporting that as an outage
-# every time is noise. Three polls at MIN_TIME_BETWEEN_UPDATES is roughly three
-# minutes of grace, which rides through the reassociation without hiding a
-# device that is genuinely gone.
-AVAILABILITY_FAILURE_LIMIT = 3
+# Consecutive failed polls before the device is reported unavailable, and the
+# floor under the configurable value. The module reassociates to WiFi about
+# once an hour and is unreachable while it does (see the README's
+# Troubleshooting section); reporting that as an outage every time is noise.
+# Three polls at MIN_TIME_BETWEEN_UPDATES is roughly three minutes of grace,
+# which rides through the reassociation without hiding a device that is
+# genuinely gone. Raising it is a legitimate choice on a weak link; lowering it
+# only ever produced the phantom outages this floor exists to prevent.
+AVAILABILITY_FAILURE_LIMIT_MIN = 3
 
 
 class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attributes
@@ -60,6 +62,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             operator_id: str,
             airco_id: str,
             create_swing_mode_select: bool,
+            availability_failure_limit: int = AVAILABILITY_FAILURE_LIMIT_MIN,
             firmware_update_check_enabled: bool = False,
             service_data_enabled: bool = False,
             connection_method: str | None = None,
@@ -94,6 +97,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._service_data_enabled = service_data_enabled
         self._last_service_data_request: datetime | None = None
         self._consecutive_failures = 0
+        # Clamped rather than validated: an entry can carry a lower value from
+        # an older version, and refusing to set up over it would be worse than
+        # quietly giving it the tolerance it should have had.
+        self._availability_failure_limit = max(
+            AVAILABILITY_FAILURE_LIMIT_MIN, availability_failure_limit
+        )
         self._create_swing_mode_select = create_swing_mode_select
         # Serializes set_airco() calls end-to-end (snapshot build through
         # self._airco update) so a call can never build its diff from a
@@ -413,14 +422,14 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
     def _set_availability(self, available: bool):
         """Mark the device available, or unavailable once it has missed
-        AVAILABILITY_FAILURE_LIMIT polls in a row."""
+        self._availability_failure_limit polls in a row."""
         if available:
             self._consecutive_failures = 0
             self._available = True
             return
 
         self._consecutive_failures += 1
-        if self._consecutive_failures >= AVAILABILITY_FAILURE_LIMIT:
+        if self._consecutive_failures >= self._availability_failure_limit:
             self._consecutive_failures = 0
             self._available = False
 

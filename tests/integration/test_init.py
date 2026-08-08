@@ -44,14 +44,16 @@ async def test_migrate_v1_moves_host_into_options(hass: HomeAssistant):
     assert entry.options[CONF_HOST] == "192.168.1.50"
 
 
-async def test_migrate_drops_the_availability_options(hass: HomeAssistant):
-    """From any version that could carry them, including values the v3 -> v4
-    step used to correct rather than remove.
+async def test_migrate_drops_the_check_and_floors_the_retry_limit(hass: HomeAssistant):
+    """From any version that could carry them. A limit above the floor is the
+    user's choice and survives; anything below it - including the check being
+    off, which was the same thing - comes out at the floor.
     """
-    for version, options in (
-        (2, {CONF_AVAILABILITY_CHECK: True, CONF_AVAILABILITY_RETRY_LIMIT: 8}),
-        (3, {CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 0}),
-        (4, {CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 1}),
+    for version, options, expected_limit in (
+        (2, {CONF_AVAILABILITY_CHECK: True, CONF_AVAILABILITY_RETRY_LIMIT: 8}, 8),
+        (3, {CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 0}, 3),
+        (4, {CONF_AVAILABILITY_CHECK: False, CONF_AVAILABILITY_RETRY_LIMIT: 1}, 3),
+        (4, {CONF_AVAILABILITY_CHECK: True}, 3),
     ):
         entry = _entry(hass, version, _DATA, {CONF_HOST: "192.168.1.50", **options})
 
@@ -59,7 +61,7 @@ async def test_migrate_drops_the_availability_options(hass: HomeAssistant):
 
         assert entry.version == _CURRENT_VERSION
         assert CONF_AVAILABILITY_CHECK not in entry.options
-        assert CONF_AVAILABILITY_RETRY_LIMIT not in entry.options
+        assert entry.options[CONF_AVAILABILITY_RETRY_LIMIT] == expected_limit
         assert entry.options[CONF_HOST] == "192.168.1.50"
 
 
