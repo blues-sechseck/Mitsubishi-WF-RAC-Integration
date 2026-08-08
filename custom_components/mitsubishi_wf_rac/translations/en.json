@@ -246,7 +246,7 @@
         "name": "Presence"
       },
       "compressor": {
-        "name": "Compressor"
+        "name": "Compressor Demand"
       }
     },
     "switch": {},
