@@ -65,8 +65,10 @@ class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
 
 
 class CompressorBinarySensor(WfRacEntity, BinarySensorEntity):
-    """Reports whether the compressor is actually running (content[9] & 0x02),
-    as opposed to just the unit being powered on - see rac_parser.py."""
+    """Reports whether *this* indoor unit is calling for the compressor
+    (content[9] & 0x02), as opposed to just being powered on - see
+    rac_parser.py. On a multi-split the shared compressor can keep running for
+    a sibling unit while this reads off, so it is demand, not compressor state."""
 
     _attr_device_class = BinarySensorDeviceClass.RUNNING
     _attr_has_entity_name = True

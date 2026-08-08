@@ -246,7 +246,7 @@
         "name": "Anwesenheit"
       },
       "compressor": {
-        "name": "Kompressor"
+        "name": "Kompressoranforderung"
       }
     },
     "switch": {},
