@@ -7,7 +7,7 @@ than tests/unit/.
 
 import asyncio
 import base64
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,7 +17,7 @@ from custom_components.mitsubishi_wf_rac.wfrac.device import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
     Device,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
+from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import Aircon, AirconCommands
 from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import RacParser
 from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     AirconApiError,
@@ -61,6 +61,21 @@ async def _echo_send_airco_command(_airco_id, command):
     signed = [(256 - a) * -1 if a > 127 else a for a in raw]
     receive_content = signed[25:43]
     return _build_stat_response(receive_content)
+
+
+def _shorten_service_data_timing(monkeypatch, offset_ms: int = 5) -> None:
+    """Collapse the real cadence (30s offset, 5s retry delay) to something a
+    test can wait out.
+    """
+    monkeypatch.setattr(
+        device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+    )
+    monkeypatch.setattr(
+        device_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=offset_ms)
+    )
+    monkeypatch.setattr(
+        device_module, "SERVICE_DATA_RETRY_DELAY", timedelta(milliseconds=5)
+    )
 
 
 @pytest.fixture
@@ -523,7 +538,7 @@ async def test_update_does_not_request_service_data_when_disabled_by_default(dev
 
 async def test_update_requests_service_data_when_enabled(device, monkeypatch):
     device._service_data_enabled = True
-    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
 
@@ -533,9 +548,63 @@ async def test_update_requests_service_data_when_enabled(device, monkeypatch):
     device._api.send_airco_command.assert_awaited_once()
 
 
+async def test_service_data_request_is_offset_from_the_poll(device, monkeypatch):
+    """It must not ride straight off the back of the status poll - landing a
+    second write that close is what the unit refuses with HTTP 501 (#230).
+    """
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch, offset_ms=40)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    await asyncio.sleep(0.01)
+    device._api.send_airco_command.assert_not_awaited()
+
+    await asyncio.sleep(0.06)
+    device._api.send_airco_command.assert_awaited_once()
+
+
+async def test_service_data_request_is_retried_once_when_refused(device, monkeypatch):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    calls = []
+
+    async def _refuse_then_answer(airco_id, command):
+        calls.append(command)
+        if len(calls) == 1:
+            raise AirconCommandError("HTTP 501: Not supported this command")
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_refuse_then_answer)
+
+    await device.update()
+    await asyncio.sleep(0.1)
+
+    assert len(calls) == 2
+
+
+async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch, caplog):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(
+        side_effect=AirconCommandError("HTTP 501: Not supported this command")
+    )
+
+    await device.update()
+    await asyncio.sleep(0.1)
+
+    assert device._api.send_airco_command.await_count == 2
+    # One warning for the cycle, not one per attempt.
+    refusals = [r for r in caplog.records if "refused twice" in r.message]
+    assert len(refusals) == 1
+
+
 async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
     device._service_data_enabled = True
-    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
 
@@ -556,3 +625,66 @@ async def test_async_update_data_wraps_exception_in_update_failed(device):
     device.update = _boom
     with pytest.raises(UpdateFailed):
         await device._async_update_data()
+
+
+async def test_async_update_data_names_the_timeout(device, monkeypatch):
+    """str(TimeoutError()) is empty, so without a message of our own the
+    coordinator logs "Error fetching <name> data:" and nothing else.
+    """
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    monkeypatch.setattr(device_module, "POLL_TIMEOUT", timedelta(milliseconds=10))
+
+    async def _hang():
+        await asyncio.sleep(5)
+
+    device.update = _hang
+    with pytest.raises(UpdateFailed) as excinfo:
+        await device._async_update_data()
+
+    assert str(excinfo.value)
+    assert "did not answer" in str(excinfo.value)
+
+
+# --- service data is carried between polls, but not forever ---------------
+
+
+async def test_service_data_is_carried_forward_between_polls(device):
+    device._airco.CompressorFrequency = 40.0
+    device._last_service_data_response = datetime.now()
+    new_airco = Aircon()
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.CompressorFrequency == 40.0
+
+
+async def test_service_data_expires_when_nothing_fresh_arrives(device):
+    """A unit that keeps refusing the request (#230) must not leave entities
+    reporting a frozen value that looks live.
+    """
+    device._airco.CompressorFrequency = 40.0
+    device._last_service_data_response = datetime.now() - (
+        device_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    )
+    new_airco = Aircon()
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.CompressorFrequency is None
+
+
+async def test_fresh_service_data_restarts_the_clock(device):
+    device._airco.CompressorFrequency = 40.0
+    device._airco.HotGasTemp = 50.0
+    device._last_service_data_response = datetime.now() - (
+        device_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    )
+    new_airco = Aircon()
+    new_airco.CompressorFrequency = 45.0  # this poll carried the segments
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.CompressorFrequency == 45.0
+    # The rest of the block comes with it, so they are carried again.
+    assert new_airco.HotGasTemp == 50.0
