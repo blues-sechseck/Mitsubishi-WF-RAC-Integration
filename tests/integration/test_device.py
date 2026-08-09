@@ -19,7 +19,11 @@ from custom_components.mitsubishi_wf_rac.wfrac.device import (
 )
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
 from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import RacParser
-from custom_components.mitsubishi_wf_rac.wfrac.repository import AirconApiError
+from custom_components.mitsubishi_wf_rac.wfrac.repository import (
+    AirconApiError,
+    AirconCommandError,
+    AirconConnectionError,
+)
 
 from ..unit.live_captures import LIVE_CAPTURES
 
@@ -93,6 +97,34 @@ async def test_update_none_response_marks_unavailable(device):
 
 async def test_update_api_error_marks_unavailable_and_reregisters(device):
     device._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    device._api.update_account_info = AsyncMock()
+    await device.update()
+    assert device.available is False
+    device._api.update_account_info.assert_awaited_once()
+
+
+async def test_update_unreachable_does_not_reregister(device, caplog):
+    """An account can only have been evicted by a unit that answered - after a
+    bare connection failure there is nothing to re-register against, and the
+    hourly WiFi restart these modules do would make it a recurring no-op.
+    """
+    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.update_account_info = AsyncMock()
+    await device.update()
+    assert device.available is False
+    device._api.update_account_info.assert_not_awaited()
+    # One line for the user; the trace stays available on debug.
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert warnings[0].exc_info is None
+    assert any(r.exc_info for r in caplog.records if r.levelname == "DEBUG")
+
+
+async def test_update_refused_command_reregisters(device):
+    """An evicted account answers (HTTP 400 / result:2) rather than timing
+    out, so this path keeps the re-registration attempt.
+    """
+    device._api.get_aircon_stats.side_effect = AirconCommandError("refused")
     device._api.update_account_info = AsyncMock()
     await device.update()
     assert device.available is False

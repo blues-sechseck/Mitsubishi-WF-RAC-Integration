@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .firmware_check import fetch_latest_firmware
 from .rac_parser import RacParser
-from .repository import AirconApiError, Repository
+from .repository import AirconApiError, AirconConnectionError, Repository
 from .models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
 
 from ..const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
@@ -145,6 +145,16 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 return
         except (AirconApiError, KeyError) as ex:
             self._set_availability(False)
+            # These modules restart their WiFi on their own, so a poll landing
+            # in that window is routine rather than a fault. Report it as one
+            # line and keep the traceback for debug; a unit that answered and
+            # then failed is the interesting case and keeps the full trace.
+            if isinstance(ex, AirconConnectionError):
+                _LOGGER.warning(
+                    "Could not reach the airco [%s]: %s", self.device_name, ex
+                )
+                _LOGGER.debug("Update of [%s] failed", self.device_name, exc_info=ex)
+                return
             _LOGGER.warning(
                 "Error: something went wrong updating the airco [%s] values",
                 self.device_name,
@@ -155,7 +165,10 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             # silently evict Home Assistant from that table, after which polls fail
             # until the integration is reloaded. Proactively re-register our account
             # on failure so we recover automatically on the next poll if we were
-            # evicted. add_account() is self-contained and swallows its own errors.
+            # evicted. An evicted account still answers (HTTP 400 / result:2, see
+            # Repository.get_aircon_stats), so this is skipped above when the unit
+            # was simply unreachable - re-registering can't succeed over a
+            # connection that isn't there. add_account() swallows its own errors.
             await self.add_account()
             return
 
