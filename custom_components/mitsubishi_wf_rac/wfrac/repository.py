@@ -54,6 +54,26 @@ class AirconApiError(HomeAssistantError):
     """Raised when the aircon API returns an error"""
 
 
+class AirconCommandError(AirconApiError):
+    """Raised when the unit answered but refused the command itself.
+
+    Distinct from a transport failure: the module is reachable and the
+    protocol in use is the right one, it just declined this request (e.g.
+    HTTP 501 for an optional command). Callers use that difference to decide
+    whether the connection state is worth invalidating.
+    """
+
+
+class AirconConnectionError(AirconApiError):
+    """Raised when the unit could not be reached at all.
+
+    The counterpart to AirconCommandError: nothing answered, so neither the
+    request nor the account it was sent under can be judged from it. These
+    modules restart their WiFi periodically on their own, so single
+    occurrences are expected rather than a fault.
+    """
+
+
 class Repository:
     """Simple Api class to send and get Aircon information"""
 
@@ -153,12 +173,12 @@ class Repository:
                         body,
                     )
                     if resp.status >= 400:
-                        raise AirconApiError(
+                        raise AirconCommandError(
                             f"Aircon returned HTTP {resp.status} for {command!r}: {body}"
                         )
                     return json.loads(body)
             except (ClientConnectionError, asyncio.TimeoutError) as ex:
-                raise AirconApiError(f"Aircon returned error: {ex}") from ex
+                raise AirconConnectionError(f"Aircon returned error: {ex}") from ex
 
         data = {
             "apiVer": self.api_version,
@@ -181,6 +201,12 @@ class Repository:
             if self._method in ("http", "https"):
                 try:
                     json_response = await _execute_request(self._method)
+                except AirconCommandError:
+                    # The unit answered, so the stored method is still the
+                    # right one - it just refused this particular command.
+                    # Discarding the method here would cost every later
+                    # request an extra discovery round trip for nothing.
+                    raise
                 except AirconApiError:
                     # The unit may have rebooted, changed protocol, or the
                     # persisted method from a previous run may simply be stale -
@@ -198,6 +224,10 @@ class Repository:
             else:
                 _LOGGER.debug("No stored method; attempting discovery...")
                 try:
+                    # Deliberately falls back on any error, command errors
+                    # included: an HTTPS-only module can answer a plaintext
+                    # request with a status code rather than dropping the
+                    # connection, and that still means "try the other one".
                     json_response = await _execute_request("http")
                     _LOGGER.info("Discovered working communication method: HTTP")
                     # Store the required communication method
