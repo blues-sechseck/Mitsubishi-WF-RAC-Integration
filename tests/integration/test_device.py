@@ -63,6 +63,21 @@ async def _echo_send_airco_command(_airco_id, command):
     return _build_stat_response(receive_content)
 
 
+def _shorten_service_data_timing(monkeypatch, offset_ms: int = 5) -> None:
+    """Collapse the real cadence (30s offset, 5s retry delay) to something a
+    test can wait out.
+    """
+    monkeypatch.setattr(
+        device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+    )
+    monkeypatch.setattr(
+        device_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=offset_ms)
+    )
+    monkeypatch.setattr(
+        device_module, "SERVICE_DATA_RETRY_DELAY", timedelta(milliseconds=5)
+    )
+
+
 @pytest.fixture
 async def device(hass):
     dev = Device(
@@ -523,7 +538,7 @@ async def test_update_does_not_request_service_data_when_disabled_by_default(dev
 
 async def test_update_requests_service_data_when_enabled(device, monkeypatch):
     device._service_data_enabled = True
-    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
 
@@ -533,9 +548,63 @@ async def test_update_requests_service_data_when_enabled(device, monkeypatch):
     device._api.send_airco_command.assert_awaited_once()
 
 
+async def test_service_data_request_is_offset_from_the_poll(device, monkeypatch):
+    """It must not ride straight off the back of the status poll - landing a
+    second write that close is what the unit refuses with HTTP 501 (#230).
+    """
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch, offset_ms=40)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    await asyncio.sleep(0.01)
+    device._api.send_airco_command.assert_not_awaited()
+
+    await asyncio.sleep(0.06)
+    device._api.send_airco_command.assert_awaited_once()
+
+
+async def test_service_data_request_is_retried_once_when_refused(device, monkeypatch):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    calls = []
+
+    async def _refuse_then_answer(airco_id, command):
+        calls.append(command)
+        if len(calls) == 1:
+            raise AirconCommandError("HTTP 501: Not supported this command")
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_refuse_then_answer)
+
+    await device.update()
+    await asyncio.sleep(0.1)
+
+    assert len(calls) == 2
+
+
+async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch, caplog):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(
+        side_effect=AirconCommandError("HTTP 501: Not supported this command")
+    )
+
+    await device.update()
+    await asyncio.sleep(0.1)
+
+    assert device._api.send_airco_command.await_count == 2
+    # One warning for the cycle, not one per attempt.
+    refusals = [r for r in caplog.records if "refused twice" in r.message]
+    assert len(refusals) == 1
+
+
 async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
     device._service_data_enabled = True
-    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
 
