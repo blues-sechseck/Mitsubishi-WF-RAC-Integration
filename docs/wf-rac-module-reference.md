@@ -495,6 +495,15 @@ ordinary `setAirconStat` commands do not clear it.) Treat it as a counter that
 may restart at any time: accumulate its upward steps yourself if you want a
 lifetime figure, and never read a low value as a fault.
 
+On a multi-split the counter is **per indoor unit**, not a shared outdoor-unit
+total, so the values of two units may be summed. `[HW]` (Verified on a
+two-unit multi-split: one unit cleared its counter at its own power-on while
+the sibling's kept running unchanged; the two accumulated at different rates
+over the same interval; and one kept counting while the other was off for
+seven hours. Do not conclude the opposite from a single side-by-side run —
+two units cooling in parallel accumulate at nearly the same rate and look
+like one shared meter.)
+
 ### 5.3 Requesting anything else — the generic path
 
 The bridge copies the COMMAND block's variable segments **verbatim and
