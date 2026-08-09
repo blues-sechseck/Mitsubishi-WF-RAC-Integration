@@ -7,7 +7,7 @@ than tests/unit/.
 
 import asyncio
 import base64
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,7 +17,7 @@ from custom_components.mitsubishi_wf_rac.wfrac.device import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
     Device,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
+from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import Aircon, AirconCommands
 from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import RacParser
 from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     AirconApiError,
@@ -625,3 +625,66 @@ async def test_async_update_data_wraps_exception_in_update_failed(device):
     device.update = _boom
     with pytest.raises(UpdateFailed):
         await device._async_update_data()
+
+
+async def test_async_update_data_names_the_timeout(device, monkeypatch):
+    """str(TimeoutError()) is empty, so without a message of our own the
+    coordinator logs "Error fetching <name> data:" and nothing else.
+    """
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+
+    monkeypatch.setattr(device_module, "POLL_TIMEOUT", timedelta(milliseconds=10))
+
+    async def _hang():
+        await asyncio.sleep(5)
+
+    device.update = _hang
+    with pytest.raises(UpdateFailed) as excinfo:
+        await device._async_update_data()
+
+    assert str(excinfo.value)
+    assert "did not answer" in str(excinfo.value)
+
+
+# --- service data is carried between polls, but not forever ---------------
+
+
+async def test_service_data_is_carried_forward_between_polls(device):
+    device._airco.CompressorFrequency = 40.0
+    device._last_service_data_response = datetime.now()
+    new_airco = Aircon()
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.CompressorFrequency == 40.0
+
+
+async def test_service_data_expires_when_nothing_fresh_arrives(device):
+    """A unit that keeps refusing the request (#230) must not leave entities
+    reporting a frozen value that looks live.
+    """
+    device._airco.CompressorFrequency = 40.0
+    device._last_service_data_response = datetime.now() - (
+        device_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    )
+    new_airco = Aircon()
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.CompressorFrequency is None
+
+
+async def test_fresh_service_data_restarts_the_clock(device):
+    device._airco.CompressorFrequency = 40.0
+    device._airco.HotGasTemp = 50.0
+    device._last_service_data_response = datetime.now() - (
+        device_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    )
+    new_airco = Aircon()
+    new_airco.CompressorFrequency = 45.0  # this poll carried the segments
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.CompressorFrequency == 45.0
+    # The rest of the block comes with it, so they are carried again.
+    assert new_airco.HotGasTemp == 50.0

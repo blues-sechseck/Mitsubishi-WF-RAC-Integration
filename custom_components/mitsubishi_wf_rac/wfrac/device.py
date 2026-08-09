@@ -57,6 +57,27 @@ SERVICE_DATA_REQUEST_OFFSET = SERVICE_DATA_REQUEST_INTERVAL / 2
 # refusals seen in #230 are transient, so one retry is worth the extra write.
 SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
 
+# The unit answers these segments only when asked, so they are carried across
+# the polls in between (see Device._carry_forward_service_data()) - but not
+# indefinitely. A unit that keeps refusing the request (#230) would otherwise
+# leave entities reporting a frozen number indistinguishable from a live one,
+# which is worse for automations built on them than an honest gap.
+SERVICE_DATA_MAX_AGE = 3 * SERVICE_DATA_REQUEST_INTERVAL
+
+# Fields fed exclusively by those segments.
+SERVICE_DATA_FIELDS = (
+    "CompressorFrequency",
+    "OperatingCurrent",
+    "HotGasTemp",
+    "EevPulses",
+    "EevPosition",
+)
+
+# Matches the underlying HTTP request timeout. The WF-RAC adapter is slow and
+# frequently answers in 10-20s; a tighter coordinator timeout would cancel
+# slow-but-valid polls and report a device that was about to answer as failed.
+POLL_TIMEOUT = timedelta(seconds=30)
+
 # Consecutive failed polls before the device is reported unavailable, and the
 # floor under the configurable value. The module reassociates to WiFi about
 # once an hour and is unreachable while it does (see the README's
@@ -115,6 +136,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._firmware_update_check_enabled = firmware_update_check_enabled
         self._service_data_enabled = service_data_enabled
         self._last_service_data_request: datetime | None = None
+        self._last_service_data_response: datetime | None = None
         self._service_data_task: asyncio.Task | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
@@ -341,19 +363,25 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         """Same rationale as _carry_forward_home_leave_mode() above: the unit
         reports these extension segments exactly once (confirmed live
         06.08.2026, see todo.md), so without this the sensors would flash the
-        real value for one update cycle and then revert to unknown."""
+        real value for one update cycle and then revert to unknown.
+
+        Unlike home/leave mode this expires: see SERVICE_DATA_MAX_AGE.
+        """
         if self._airco is None:
             return
-        if new_airco.CompressorFrequency is None:
-            new_airco.CompressorFrequency = self._airco.CompressorFrequency
-        if new_airco.OperatingCurrent is None:
-            new_airco.OperatingCurrent = self._airco.OperatingCurrent
-        if new_airco.HotGasTemp is None:
-            new_airco.HotGasTemp = self._airco.HotGasTemp
-        if new_airco.EevPulses is None:
-            new_airco.EevPulses = self._airco.EevPulses
-        if new_airco.EevPosition is None:
-            new_airco.EevPosition = self._airco.EevPosition
+        now = datetime.now()
+        if any(getattr(new_airco, name) is not None for name in SERVICE_DATA_FIELDS):
+            self._last_service_data_response = now
+        elif (
+            self._last_service_data_response is None
+            or now - self._last_service_data_response > SERVICE_DATA_MAX_AGE
+        ):
+            # Nothing fresh for too long - leave the fields unset so entities
+            # report unknown rather than a value that stopped being true.
+            return
+        for name in SERVICE_DATA_FIELDS:
+            if getattr(new_airco, name) is None:
+                setattr(new_airco, name, getattr(self._airco, name))
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
@@ -638,11 +666,15 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     async def _async_update_data(self):
         """Update data via library."""
         try:
-            # Match the underlying HTTP request timeout (30s). The WF-RAC adapter
-            # is slow/flaky and frequently answers in 10-20s; a tighter coordinator
-            # timeout here would cancel slow-but-valid polls and mark the entity
-            # unavailable even though the unit was about to respond.
-            async with asyncio.timeout(30):
+            async with asyncio.timeout(POLL_TIMEOUT.total_seconds()):
                 await asyncio.gather(*[self.update()])
+        except asyncio.TimeoutError as error:
+            # Spelled out because str(TimeoutError()) is empty: the
+            # coordinator's own message would otherwise read "Error fetching
+            # <name> data:" and stop there, which says nothing at all.
+            raise UpdateFailed(
+                f"[{self.device_name}] did not answer within "
+                f"{POLL_TIMEOUT.total_seconds():.0f}s"
+            ) from error
         except Exception as error:
             raise UpdateFailed(error) from error
