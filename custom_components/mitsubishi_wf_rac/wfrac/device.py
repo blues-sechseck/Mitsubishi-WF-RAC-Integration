@@ -277,6 +277,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             new_airco.EevPulses = self._airco.EevPulses
         if new_airco.EevPosition is None:
             new_airco.EevPosition = self._airco.EevPosition
+        if new_airco.IndoorCoilTemp is None:
+            new_airco.IndoorCoilTemp = self._airco.IndoorCoilTemp
+        if new_airco.IndoorCoilOutletTemp is None:
+            new_airco.IndoorCoilOutletTemp = self._airco.IndoorCoilOutletTemp
+        if new_airco.OutdoorCoilRaw is None:
+            new_airco.OutdoorCoilRaw = self._airco.OutdoorCoilRaw
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""

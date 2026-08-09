@@ -236,6 +236,15 @@
       },
       "eev_position": {
         "name": "EEV Position"
+      },
+      "indoor_coil_temp": {
+        "name": "Indoor Coil Temperature"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Indoor Coil Outlet Temperature"
+      },
+      "outdoor_coil_raw": {
+        "name": "Outdoor Coil Sensor (raw)"
       }
     },
     "binary_sensor": {

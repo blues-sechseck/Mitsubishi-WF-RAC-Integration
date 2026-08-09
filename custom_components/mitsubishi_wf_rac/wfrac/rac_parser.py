@@ -44,12 +44,30 @@ SERVICE_DATA_COMPRESSOR_FREQ: Final = 0x11
 SERVICE_DATA_OPERATING_CURRENT: Final = 0x90
 SERVICE_DATA_HOT_GAS_TEMP: Final = 0x85
 SERVICE_DATA_EEV_PULSES: Final = 0x13
+# Heat-exchanger thermistors, MHI's THI-R1/THI-R3/THO-R1. The two indoor ones
+# are per indoor unit; the outdoor one reads identically on every indoor unit
+# sharing an outdoor unit.
+SERVICE_DATA_INDOOR_COIL_TEMP: Final = 0x81
+SERVICE_DATA_OUTDOOR_COIL_RAW: Final = 0x82
+SERVICE_DATA_INDOOR_COIL_OUTLET_TEMP: Final = 0x87
 SERVICE_DATA_CODES: Final = (
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_OPERATING_CURRENT,
     SERVICE_DATA_HOT_GAS_TEMP,
     SERVICE_DATA_EEV_PULSES,
+    SERVICE_DATA_INDOOR_COIL_TEMP,
+    SERVICE_DATA_OUTDOOR_COIL_RAW,
+    SERVICE_DATA_INDOOR_COIL_OUTLET_TEMP,
 )
+
+# The coil thermistors report the same ADC scale as the outdoor air sensor at
+# half the resolution, so outdoorTempList indexed at 2*op2 converts them.
+# Calibrated against two independent fixed points ~23 K apart, both matching
+# within ~1 K: the value right before every compressor cut-off lines up with
+# the manual's 1.0 C frost-protection threshold, and after a long standstill
+# both indoor coils settle on the measured room temperature. Only verified in
+# cooling - see todo.md.
+COIL_TEMP_INDEX_FACTOR: Final = 2
 
 # Bit masks
 OPERATION_MASK: Final = 3
@@ -403,6 +421,36 @@ class RacParser:
         elif code == SERVICE_DATA_EEV_PULSES:
             ac_device.EevPulses = op2
             ac_device.EevPosition = round(op2 * 100 / 255)
+        elif code == SERVICE_DATA_INDOOR_COIL_TEMP:
+            ac_device.IndoorCoilTemp = RacParser._coil_temp(op2)
+        elif code == SERVICE_DATA_INDOOR_COIL_OUTLET_TEMP:
+            ac_device.IndoorCoilOutletTemp = RacParser._coil_temp(op2)
+        elif code == SERVICE_DATA_OUTDOOR_COIL_RAW:
+            # Deliberately raw: the value is demonstrably not on the coil scale
+            # above (a resting outdoor coil reads far lower than a resting
+            # indoor one at the same temperature), and no conversion is known -
+            # MHI-AC-Ctrl has none for THO-R1 either.
+            ac_device.OutdoorCoilRaw = op2
+
+    @staticmethod
+    def _coil_temp(op2: int) -> float | None:
+        """Convert a heat-exchanger thermistor byte to deg C, or None when the
+        value falls outside the calibrated range - see COIL_TEMP_INDEX_FACTOR.
+        None rather than a clamp: the table ends at 42 C, and an indoor coil in
+        heating goes well past that, so clamping would report a plausible-
+        looking wrong temperature instead of an honest gap."""
+        index = op2 * COIL_TEMP_INDEX_FACTOR
+        if index >= len(outdoorTempList):
+            # Warning rather than debug because this is the open question, not
+            # a routine edge: if it fires in heating, the doubling is a local
+            # approximation and the conversion needs redoing before release.
+            # Device._carry_forward_service_data() would otherwise hide it by
+            # holding the last in-range value - see todo.md.
+            _LOGGER.warning(
+                "Heat-exchanger temperature %d is outside the calibrated range", op2
+            )
+            return None
+        return outdoorTempList[index]
 
     @staticmethod
     def _log_unknown_segment(vals: list[int], i: int) -> None:

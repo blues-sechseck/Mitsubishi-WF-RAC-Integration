@@ -104,6 +104,9 @@ class Aircon(AirconBase):
     HotGasTemp: float | None = None  # deg C
     EevPulses: int | None = None
     EevPosition: int | None = None  # % of raw pulse range 0-255, full-open pulse count unknown
+    IndoorCoilTemp: float | None = None  # deg C, THI-R1, per indoor unit
+    IndoorCoilOutletTemp: float | None = None  # deg C, THI-R3, per indoor unit
+    OutdoorCoilRaw: int | None = None  # THO-R1, raw byte - no known conversion
 
 
 @dataclass

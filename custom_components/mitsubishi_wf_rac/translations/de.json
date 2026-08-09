@@ -236,6 +236,15 @@
       },
       "eev_position": {
         "name": "EEV-Position"
+      },
+      "indoor_coil_temp": {
+        "name": "Innen-Wärmetauscher Temperatur"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Innen-Wärmetauscher Austritt Temperatur"
+      },
+      "outdoor_coil_raw": {
+        "name": "Außen-Wärmetauscher Fühler (roh)"
       }
     },
     "binary_sensor": {
