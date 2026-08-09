@@ -1,14 +1,17 @@
 """Device module"""
+
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import Any
-import logging
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from ..const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
 from .firmware_check import fetch_latest_firmware
+from .models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
 from .rac_parser import RacParser
 from .repository import (
     AirconApiError,
@@ -16,9 +19,6 @@ from .repository import (
     AirconConnectionError,
     Repository,
 )
-from .models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
-
-from ..const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,6 +89,35 @@ POLL_TIMEOUT = timedelta(seconds=30)
 AVAILABILITY_FAILURE_LIMIT_MIN = 3
 
 
+class _ExpectedPollError(UpdateFailed):
+    """A failed device poll already handled by the availability policy."""
+
+
+class _CoordinatorLogger(logging.LoggerAdapter):
+    """Keep expected transient poll failures out of the regular error log."""
+
+    def __init__(self, logger: logging.Logger) -> None:
+        super().__init__(logger, {})
+        self._quiet_failure_pending_recovery = False
+
+    def error(self, msg, *args, **kwargs) -> None:
+        if args and isinstance(args[-1], _ExpectedPollError):
+            self._quiet_failure_pending_recovery = True
+            self.debug(msg, *args, **kwargs)
+            return
+        super().error(msg, *args, **kwargs)
+
+    def info(self, msg, *args, **kwargs) -> None:
+        if (
+            msg == "Fetching %s data recovered"
+            and self._quiet_failure_pending_recovery
+        ):
+            self._quiet_failure_pending_recovery = False
+            self.debug(msg, *args, **kwargs)
+            return
+        super().info(msg, *args, **kwargs)
+
+
 class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attributes
     """Device Class"""
 
@@ -156,12 +185,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
         super().__init__(
             hass,
-            _LOGGER,
+            _CoordinatorLogger(_LOGGER),
             name=name,
             update_interval=MIN_TIME_BETWEEN_UPDATES,
         )
 
-    async def update(self):
+    async def update(self) -> bool:
         """Update the device information from API.
 
         Called both directly (initial fetch in __init__.py before entities
@@ -184,10 +213,10 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             if response is None:
                 self._set_availability(False)
                 _LOGGER.warning("Received no data for device %s", self._airco_id)
-                return
+                return False
         except AirconConnectionError as ex:
             self._record_connection_failure(ex)
-            return
+            return False
         except (AirconApiError, KeyError) as ex:
             self._set_availability(False)
             _LOGGER.warning(
@@ -205,7 +234,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             # was simply unreachable - re-registering can't succeed over a
             # connection that isn't there. add_account() swallows its own errors.
             await self.add_account()
-            return
+            return False
 
         try:
             self._connected_accounts = int(response["numOfAccount"])
@@ -226,7 +255,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         except (KeyError, TypeError, ValueError) as ex:
             _LOGGER.warning("Could not parse airco data", exc_info=ex)
             self._set_availability(False)
-            return
+            return False
 
         # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
         # "mcu"/"wireless" sub-keys entirely (see #189), so their versions are
@@ -240,6 +269,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._wireless_firmware_ver = (response.get("wireless") or {}).get("firmVer")
         self._maybe_check_firmware_update()
         self._maybe_request_service_data()
+        return True
 
     def _maybe_check_firmware_update(self) -> None:
         """Kick off a background cloud firmware check if one is due (see
@@ -566,6 +596,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 self._availability_failure_limit,
             )
             _LOGGER.debug("Update of [%s] failed", self.device_name, exc_info=error)
+            # The coordinator only notifies listeners when its own success
+            # state changes. It already changed on the first missed poll, so
+            # reaching our later device-availability threshold would otherwise
+            # leave entities displaying their restored/last-known state.
+            self.async_update_listeners()
         else:
             _LOGGER.debug(
                 "Could not reach the airco [%s]: %s", self.device_name, error
@@ -692,16 +727,19 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         """Update data via library."""
         try:
             async with asyncio.timeout(POLL_TIMEOUT.total_seconds()):
-                await asyncio.gather(*[self.update()])
-        except asyncio.TimeoutError:
+                update_succeeded = await self.update()
+        except asyncio.TimeoutError as error:
             # The outer deadline can expire before the repository's individual
             # connection attempts do. Treat that exactly like any other missed
             # poll so transient outages stay quiet and the entity only becomes
             # unavailable at the configured threshold.
-            self._record_connection_failure(
-                AirconConnectionError(
-                    f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
-                )
+            connection_error = AirconConnectionError(
+                f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
             )
+            self._record_connection_failure(connection_error)
+            raise _ExpectedPollError(str(connection_error)) from error
         except Exception as error:
             raise UpdateFailed(error) from error
+
+        if not update_succeeded:
+            raise _ExpectedPollError(f"Poll of [{self.device_name}] failed")

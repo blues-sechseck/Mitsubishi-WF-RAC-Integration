@@ -113,13 +113,8 @@ async def test_refused_command_keeps_the_discovered_method(repository):
     ]
 
 
-async def test_unreachable_unit_keeps_the_discovered_method(repository):
-    """An outage must not discard the last protocol that actually worked.
-
-    Otherwise an HTTPS unit can get stuck on the HTTP leg of rediscovery after
-    it comes back, with every attempt cancelled by the coordinator timeout
-    before HTTPS is tried.
-    """
+async def test_rediscovery_tries_the_last_working_method_first(repository):
+    """Recovery must not put an HTTPS unit behind an HTTP-first timeout."""
     repo, session = repository(
         [ClientConnectionError("boom"), _FakeResponse(200, _OK_BODY)],
         method="https",
@@ -128,12 +123,43 @@ async def test_unreachable_unit_keeps_the_discovered_method(repository):
 
     with pytest.raises(AirconConnectionError):
         await repo.get_aircon_stats("airco-id")
-    assert repo.method == "https"
+    assert repo.method is None
 
     await repo.get_aircon_stats("airco-id")
+    assert repo.method == "https"
     assert session.urls == [
         "https://127.0.0.1:51443/beaver/command/getAirconStat",
         "https://127.0.0.1:51443/beaver/command/getAirconStat",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("old_method", "new_method"), (("http", "https"), ("https", "http"))
+)
+async def test_rediscovery_recovers_after_a_protocol_change(
+    repository, old_method, new_method
+):
+    """The alternative remains reachable if a firmware line changes protocol."""
+    repo, session = repository(
+        [
+            ClientConnectionError("unit offline"),
+            ClientConnectionError("old protocol refused"),
+            _FakeResponse(200, _OK_BODY),
+        ],
+        method=old_method,
+    )
+    repo._ssl_context = ssl.create_default_context()
+
+    with pytest.raises(AirconConnectionError):
+        await repo.get_aircon_stats("airco-id")
+
+    await repo.get_aircon_stats("airco-id")
+
+    assert repo.method == new_method
+    assert session.urls == [
+        f"{old_method}://127.0.0.1:51443/beaver/command/getAirconStat",
+        f"{old_method}://127.0.0.1:51443/beaver/command/getAirconStat",
+        f"{new_method}://127.0.0.1:51443/beaver/command/getAirconStat",
     ]
 
 
