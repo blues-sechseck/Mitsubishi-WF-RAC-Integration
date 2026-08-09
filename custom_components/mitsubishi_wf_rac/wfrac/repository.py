@@ -25,9 +25,16 @@ _HTTP_LOG = _LOGGER.getChild("http")
 
 # ensure that we don't overwhelm the aircon unit by waiting at least
 # this long between successive requests
-_MIN_TIME_BETWEEN_REQUESTS = timedelta(seconds=1)
+MIN_TIME_BETWEEN_REQUESTS = timedelta(seconds=1)
 
-_REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+# Ceiling for a single request. The adapter is slow and frequently answers in
+# 10-20s, so this cannot be tightened much - but it must leave room for a
+# second attempt inside the same coordinator poll, because discovery tries one
+# protocol and then the other. Device.POLL_TIMEOUT is derived from it; see the
+# note there for what happens when the two are equal.
+REQUEST_TIMEOUT = timedelta(seconds=25)
+
+_REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT.total_seconds())
 
 
 def _create_permissive_ssl_context() -> ssl.SSLContext:
@@ -239,7 +246,7 @@ class Repository:
                     # Store the required communication method
                     self._method = "https"
 
-            self._next_request_after = datetime.now() + _MIN_TIME_BETWEEN_REQUESTS
+            self._next_request_after = datetime.now() + MIN_TIME_BETWEEN_REQUESTS
 
         _HTTP_LOG.debug(
             "Got response from %r: %r",

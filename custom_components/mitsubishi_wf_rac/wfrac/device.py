@@ -11,6 +11,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .firmware_check import fetch_latest_firmware
 from .rac_parser import RacParser
 from .repository import (
+    MIN_TIME_BETWEEN_REQUESTS,
+    REQUEST_TIMEOUT,
     AirconApiError,
     AirconCommandError,
     AirconConnectionError,
@@ -73,10 +75,19 @@ SERVICE_DATA_FIELDS = (
     "EevPosition",
 )
 
-# Matches the underlying HTTP request timeout. The WF-RAC adapter is slow and
-# frequently answers in 10-20s; a tighter coordinator timeout would cancel
-# slow-but-valid polls and report a device that was about to answer as failed.
-POLL_TIMEOUT = timedelta(seconds=30)
+# Room for both legs of protocol discovery plus the minimum spacing between
+# requests, so a poll that has to fall back to the other protocol is not
+# cancelled halfway through.
+#
+# It used to equal the per-request timeout, and that combination has a trap
+# (#236): a unit that accepts a plaintext connection without answering it
+# consumes the whole window on the first leg, so the second protocol is never
+# reached. If that unit only speaks the second protocol, every poll fails the
+# same way and the device never recovers on its own.
+#
+# Stays under MIN_TIME_BETWEEN_UPDATES so a slow poll cannot still be running
+# when the next one is due.
+POLL_TIMEOUT = 2 * REQUEST_TIMEOUT + MIN_TIME_BETWEEN_REQUESTS + timedelta(seconds=4)
 
 # Consecutive failed polls before the device is reported unavailable, and the
 # floor under the configurable value. The module reassociates to WiFi about
