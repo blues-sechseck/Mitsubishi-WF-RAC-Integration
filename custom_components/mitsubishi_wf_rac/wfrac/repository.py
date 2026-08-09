@@ -207,17 +207,15 @@ class Repository:
                     # Discarding the method here would cost every later
                     # request an extra discovery round trip for nothing.
                     raise
-                except AirconApiError:
-                    # The unit may have rebooted, changed protocol, or the
-                    # persisted method from a previous run may simply be stale -
-                    # reset so the next request rediscovers instead of wedging
-                    # itself permanently against a method that no longer works.
-                    _LOGGER.info(
-                        "Request with stored method %r failed; "
-                        "resetting so the next request rediscovers",
-                        self._method,
-                    )
-                    self._method = None
+                except AirconConnectionError:
+                    # A transport outage says nothing about the protocol. In
+                    # particular, dropping a known HTTPS method while the unit
+                    # is powered off makes the next poll try HTTP discovery
+                    # first. Some HTTPS units accept that connection without
+                    # answering, so the coordinator's overall timeout expires
+                    # before HTTPS is reached and recovery wedges indefinitely.
+                    # Keep the last method that actually worked and retry it on
+                    # the next poll.
                     raise
 
             # If we haven't yet determined if https is required, find out

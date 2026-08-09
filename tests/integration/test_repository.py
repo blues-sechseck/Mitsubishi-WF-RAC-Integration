@@ -5,7 +5,9 @@ fixture (Repository takes the HA client session from it), hence
 tests/integration/ rather than tests/unit/.
 """
 
+import asyncio
 import json
+import ssl
 from unittest.mock import patch
 
 import pytest
@@ -77,9 +79,19 @@ async def test_http_error_status_raises_command_error(repository):
 
 
 async def test_connection_failure_raises_connection_error(repository):
-    repo, _ = repository([ClientConnectionError("boom")])
-    with pytest.raises(AirconConnectionError):
+    cause = ClientConnectionError("connection refused")
+    repo, _ = repository([cause])
+    with pytest.raises(AirconConnectionError) as error:
         await repo.get_aircon_stats("airco-id")
+    assert error.value.__cause__ is cause
+
+
+async def test_timeout_raises_connection_error(repository):
+    cause = asyncio.TimeoutError()
+    repo, _ = repository([cause])
+    with pytest.raises(AirconConnectionError) as error:
+        await repo.get_aircon_stats("airco-id")
+    assert error.value.__cause__ is cause
 
 
 async def test_refused_command_keeps_the_discovered_method(repository):
@@ -101,15 +113,28 @@ async def test_refused_command_keeps_the_discovered_method(repository):
     ]
 
 
-async def test_unreachable_unit_resets_the_discovered_method(repository):
-    """A dead transport says nothing about which protocol is right, so the
-    stored one is dropped and the next request rediscovers.
+async def test_unreachable_unit_keeps_the_discovered_method(repository):
+    """An outage must not discard the last protocol that actually worked.
+
+    Otherwise an HTTPS unit can get stuck on the HTTP leg of rediscovery after
+    it comes back, with every attempt cancelled by the coordinator timeout
+    before HTTPS is tried.
     """
-    repo, _ = repository([ClientConnectionError("boom")])
+    repo, session = repository(
+        [ClientConnectionError("boom"), _FakeResponse(200, _OK_BODY)],
+        method="https",
+    )
+    repo._ssl_context = ssl.create_default_context()
 
     with pytest.raises(AirconConnectionError):
         await repo.get_aircon_stats("airco-id")
-    assert repo.method is None
+    assert repo.method == "https"
+
+    await repo.get_aircon_stats("airco-id")
+    assert session.urls == [
+        "https://127.0.0.1:51443/beaver/command/getAirconStat",
+        "https://127.0.0.1:51443/beaver/command/getAirconStat",
+    ]
 
 
 async def test_discovery_falls_back_to_https_on_a_command_error(repository):
