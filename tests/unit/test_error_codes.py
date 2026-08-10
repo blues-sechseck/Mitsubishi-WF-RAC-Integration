@@ -18,9 +18,20 @@ def test_describe_error_code_no_error_returns_none():
     assert describe_error_code("00") is None
 
 
-def test_describe_error_code_maintenance_code_returns_none():
-    # M<n> codes have no documented table at all (see fehlercodes-selfdiagnose.md).
-    assert describe_error_code("M01") is None
+def test_describe_maintenance_code_uses_the_shared_number_space():
+    # Errors and protective stops are numbered out of one table, so M35 is the
+    # same condition as E35 at an earlier escalation stage.
+    assert describe_error_code("M35") == "Schutzabschaltung: Kühl-Hochdruckschutz"
+
+
+def test_describe_maintenance_code_normalises_the_zero_padding():
+    # rac_parser spells M codes "M01" but E codes "E1", and both mean code 1.
+    assert describe_error_code("M01") == "Schutzabschaltung: Fehler Kabel-Fernbedienung"
+
+
+def test_describe_error_code_indoor_side_codes_from_the_databooks():
+    assert describe_error_code("E85") == "Frostschutz aktiv"
+    assert describe_error_code("E86") == "Heiz-Hochdruckschutz aktiv"
 
 
 def test_describe_error_code_undocumented_e_number_returns_none():
