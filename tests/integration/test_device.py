@@ -616,6 +616,27 @@ async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
     device._api.send_airco_command.assert_awaited_once()
 
 
+async def test_service_data_survives_a_poll_that_answered_early(device, monkeypatch):
+    """Polls arrive one interval apart, but the stamp is taken when each one
+    finishes: a poll answering marginally faster than the previous one leaves
+    slightly less than the interval between the two stamps. Measuring the rate
+    limit against the full interval dropped those cycles (#230, 6 of 36 on the
+    reporting unit).
+    """
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+    device._last_service_data_request = datetime.now() - (
+        device_module.SERVICE_DATA_REQUEST_INTERVAL - timedelta(milliseconds=100)
+    )
+
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_awaited_once()
+
+
 async def test_async_update_data_wraps_exception_in_update_failed(device):
     from homeassistant.helpers.update_coordinator import UpdateFailed
 

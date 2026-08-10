@@ -43,6 +43,17 @@ FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 # regular poll cadence. See Device._maybe_request_service_data().
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
+# The rate limit is a guard against a second request inside the same cycle, not
+# a cadence of its own: the request is scheduled once per poll anyway. It has to
+# stay clear of the poll interval it is measured against, because the stamp is
+# taken when a poll finishes, not when it was due. Polls arrive exactly
+# MIN_TIME_BETWEEN_UPDATES apart, so a poll answering a few milliseconds faster
+# than the one before it leaves marginally less than that between the two
+# stamps - and with the full interval as the limit, that dropped the cycle. On
+# the unit in #230 it cost 6 of 36 cycles of operation data, every one of them
+# short by under 100ms.
+SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
+
 # ...but it does matter *where* in the cycle it lands. Issued straight off the
 # back of a poll it reached the module about a second after the getAirconStat
 # (consolidation delay plus the minimum spacing between requests), and modules
@@ -297,7 +308,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
     def _maybe_request_service_data(self) -> None:
         """Kick off a background service-data request if due and enabled (see
-        SERVICE_DATA_REQUEST_INTERVAL). Opt-in like the firmware check above,
+        SERVICE_DATA_MIN_SPACING). Opt-in like the firmware check above,
         but for a different reason: this stays on the local network, but it's
         an extra setAirconStat write (see rac_parser.SERVICE_DATA_CODES) on
         top of the regular read-only poll, not just a cheap read.
@@ -311,7 +322,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         now = datetime.now()
         if (
             self._last_service_data_request is not None
-            and now - self._last_service_data_request < SERVICE_DATA_REQUEST_INTERVAL
+            and now - self._last_service_data_request < SERVICE_DATA_MIN_SPACING
         ):
             return
         # Stamped now, not when the request actually goes out, so the offset
