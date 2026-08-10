@@ -39,6 +39,13 @@ from .const import (
     ATTR_HOT_GAS_TEMP,
     ATTR_EEV_PULSES,
     ATTR_EEV_POSITION,
+    ATTR_INDOOR_COIL_TEMP,
+    ATTR_INDOOR_COIL_OUTLET_TEMP,
+    ATTR_INDOOR_COIL_RAW,
+    ATTR_INDOOR_COIL_OUTLET_RAW,
+    ATTR_OUTDOOR_COIL_RAW,
+    ATTR_DISCHARGE_SUPERHEAT_RAW,
+    ATTR_PROTECTION_RAW,
     DOMAIN,
     ATTR_INSIDE_TEMPERATURE,
     ATTR_OUTSIDE_TEMPERATURE,
@@ -110,6 +117,13 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
             ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
             ServiceDataSensor(device, ATTR_EEV_PULSES),
             ServiceDataSensor(device, ATTR_EEV_POSITION),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_TEMP),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_RAW),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_RAW),
+            ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
+            ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
+            ServiceDataSensor(device, ATTR_PROTECTION_RAW),
         ]
     else:
         _async_remove_service_data_sensors(hass, device)
@@ -152,6 +166,13 @@ def _async_remove_service_data_sensors(hass, device: Device) -> None:
         ATTR_HOT_GAS_TEMP,
         ATTR_EEV_PULSES,
         ATTR_EEV_POSITION,
+        ATTR_INDOOR_COIL_TEMP,
+        ATTR_INDOOR_COIL_OUTLET_TEMP,
+        ATTR_INDOOR_COIL_RAW,
+        ATTR_INDOOR_COIL_OUTLET_RAW,
+        ATTR_OUTDOOR_COIL_RAW,
+        ATTR_DISCHARGE_SUPERHEAT_RAW,
+        ATTR_PROTECTION_RAW,
     ):
         entity_id = registry.async_get_entity_id(
             "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-{custom_type}-sensor"
@@ -417,14 +438,16 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
 
 class ServiceDataSensor(WfRacEntity, SensorEntity):
     """Operation-data sensors (compressor frequency, current, hot gas temp,
-    EEV pulses/position) - see rac_parser.SERVICE_DATA_CODES. Only created
-    while CONF_SERVICE_DATA is on, which is what makes Device request these
-    values in the first place - see Device._maybe_request_service_data().
+    EEV pulses/position, coil temperatures) - see rac_parser.SERVICE_DATA_CODES.
+    Only created while CONF_SERVICE_DATA is on, which is what makes Device
+    request these values in the first place - see
+    Device._maybe_request_service_data().
 
-    Enabled once they exist: switching the option on is already the opt-in,
-    so making the user enable five entities on top would be a second hurdle
-    for nothing. Diagnostic because they describe how the machine is running
-    rather than what it is set to.
+    Enabled once they exist: switching the option on is already the opt-in, so
+    making the user enable each one on top would be a second hurdle for
+    nothing. The raw-byte ones are the exception, see _RAW_TYPES below.
+    Diagnostic because they describe how the machine is running rather than
+    what it is set to.
     """
 
     _attr_has_entity_name = True
@@ -437,7 +460,27 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         ATTR_HOT_GAS_TEMP: "HotGasTemp",
         ATTR_EEV_PULSES: "EevPulses",
         ATTR_EEV_POSITION: "EevPosition",
+        ATTR_INDOOR_COIL_TEMP: "IndoorCoilTemp",
+        ATTR_INDOOR_COIL_OUTLET_TEMP: "IndoorCoilOutletTemp",
+        ATTR_INDOOR_COIL_RAW: "IndoorCoilRaw",
+        ATTR_INDOOR_COIL_OUTLET_RAW: "IndoorCoilOutletRaw",
+        ATTR_OUTDOOR_COIL_RAW: "OutdoorCoilRaw",
+        ATTR_DISCHARGE_SUPERHEAT_RAW: "DischargeSuperheatRaw",
+        ATTR_PROTECTION_RAW: "ProtectionRaw",
     }
+
+    # Thermistor and status bytes with no established conversion. No unit and
+    # no device class on purpose: these are real measurements, but labelling a
+    # byte "degrees" would be a guess. Off by default, because a unitless raw
+    # value is only useful to someone decoding it - which is exactly what the
+    # people asking for them are doing.
+    _RAW_TYPES = (
+        ATTR_INDOOR_COIL_RAW,
+        ATTR_INDOOR_COIL_OUTLET_RAW,
+        ATTR_OUTDOOR_COIL_RAW,
+        ATTR_DISCHARGE_SUPERHEAT_RAW,
+        ATTR_PROTECTION_RAW,
+    )
 
     def __init__(self, device: Device, custom_type: str) -> None:
         """Initialize the sensor."""
@@ -460,6 +503,18 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         elif custom_type == ATTR_EEV_POSITION:
             self._attr_native_unit_of_measurement = PERCENTAGE
             self._attr_icon = "mdi:valve"
+        elif custom_type in (ATTR_INDOOR_COIL_TEMP, ATTR_INDOOR_COIL_OUTLET_TEMP):
+            # Converted only inside the calibrated band, unknown above it - the
+            # matching raw sensor covers the rest, see RacParser._coil_temp().
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+            self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        elif custom_type in self._RAW_TYPES:
+            self._attr_entity_registry_enabled_default = False
+            self._attr_icon = (
+                "mdi:shield-alert-outline"
+                if custom_type == ATTR_PROTECTION_RAW
+                else "mdi:snowflake-thermometer"
+            )
         self._update_state()
 
     def _update_state(self) -> None:

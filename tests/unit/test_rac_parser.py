@@ -281,9 +281,11 @@ def test_home_leave_mode_encode_decode_round_trip(parser):
 def test_service_data_trailer_status_request(parser):
     stat = _base_stat(ServiceDataStatusRequest=True)
     trailer = parser._variable_trailer(stat)
-    assert trailer[0] == 4  # four 4-byte segments
-    groups = [trailer[1 + i * 4:5 + i * 4] for i in range(4)]
-    for group, code in zip(groups, (0x11, 0x90, 0x85, 0x13)):
+    assert trailer[0] == 9  # nine 4-byte segments
+    groups = [trailer[1 + i * 4:5 + i * 4] for i in range(9)]
+    for group, code in zip(
+        groups, (0x11, 0x90, 0x85, 0x13, 0x81, 0x82, 0x87, 0xB1, 0x7C)
+    ):
         # OP1=OP2=OP3=255 -> "report current value", never 0 (a write to the
         # climate MCU) - see CLAUDE.md's telemetry-segment guardrail.
         assert list(group) == [code, 255, 255, 255]
@@ -301,6 +303,11 @@ def test_parse_temperatures_service_data_segments(parser):
         (0x90, 0x10, 0x04),
         (0x85, 0x10, 0x15),
         (0x13, 0x10, 0x6A),
+        (0x81, 0x20, 0x2F),
+        (0x82, 0x10, 0x43),
+        (0x87, 0x10, 0x5D),
+        (0xB1, 0x10, 0x0C),
+        (0x7C, 0x10, 0x03),
     ):
         vals += [signed(code), op1, op2, 0]
 
@@ -312,11 +319,23 @@ def test_parse_temperatures_service_data_segments(parser):
     assert ac.HotGasTemp == pytest.approx(42.5)
     assert ac.EevPulses == 106
     assert ac.EevPosition == 42
+    # 0x2F = 47 -> outdoorTempList[94], the frost-protection cut-off the
+    # calibration is anchored on; 0x5D = 93 -> outdoorTempList[186].
+    assert ac.IndoorCoilTemp == pytest.approx(1.0)
+    assert ac.IndoorCoilOutletTemp == pytest.approx(23.7)
+    # Both coils also publish the byte they were converted from: that is what
+    # the missing part of the curve has to be measured against.
+    assert ac.IndoorCoilRaw == 0x2F
+    assert ac.IndoorCoilOutletRaw == 0x5D
+    # No conversion is known for these three, so they stay raw bytes.
+    assert ac.OutdoorCoilRaw == 0x43
+    assert ac.DischargeSuperheatRaw == 0x0C
+    assert ac.ProtectionRaw == 0x03
 
 
 def test_parse_temperatures_service_data_absent_by_default(parser):
-    # A plain poll without a prior ServiceDataStatusRequest must leave all
-    # five fields at their None default (see AirconCommands), not e.g. 0.
+    # A plain poll without a prior ServiceDataStatusRequest must leave every
+    # field at its None default (see AirconCommands), not e.g. 0.
     ac = Aircon()
     parser._parse_temperatures(ac, [])
     assert ac.CompressorFrequency is None
@@ -324,6 +343,24 @@ def test_parse_temperatures_service_data_absent_by_default(parser):
     assert ac.HotGasTemp is None
     assert ac.EevPulses is None
     assert ac.EevPosition is None
+    assert ac.IndoorCoilTemp is None
+    assert ac.IndoorCoilOutletTemp is None
+    assert ac.IndoorCoilRaw is None
+    assert ac.IndoorCoilOutletRaw is None
+    assert ac.OutdoorCoilRaw is None
+    assert ac.DischargeSuperheatRaw is None
+    assert ac.ProtectionRaw is None
+
+
+def test_coil_temp_outside_calibrated_range_keeps_only_the_raw_byte(parser):
+    # The table ends at 42 C (index 255), so any byte above 127 has no
+    # conversion - which is where a heating coil spends its whole season.
+    # Reporting None beats clamping to a wrong-looking 42, and the raw byte
+    # still gets through, see todo.md.
+    ac = Aircon()
+    parser._parse_temperatures(ac, [0x81 - 256, 0x20, 0x80, 0])
+    assert ac.IndoorCoilTemp is None
+    assert ac.IndoorCoilRaw == 0x80
 
 
 def test_to_base64_default_length_unchanged_by_home_leave_mode(parser):

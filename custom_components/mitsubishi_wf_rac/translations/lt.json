@@ -236,6 +236,27 @@
       },
       "eev_position": {
         "name": "EEV padėtis"
+      },
+      "indoor_coil_temp": {
+        "name": "Vidaus šilumokaičio temperatūra"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Vidaus šilumokaičio išėjimo temperatūra"
+      },
+      "indoor_coil_raw": {
+        "name": "Vidaus šilumokaičio jutiklis (neapdorotas)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Vidaus šilumokaičio išėjimo jutiklis (neapdorotas)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Lauko šilumokaičio jutiklis (neapdorotas)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Išmetamų dujų perkaitimas (neapdorotas)"
+      },
+      "protection_raw": {
+        "name": "Apsaugos numeris (neapdorotas)"
       }
     },
     "binary_sensor": {

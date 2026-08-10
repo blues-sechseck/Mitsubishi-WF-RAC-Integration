@@ -236,6 +236,27 @@
       },
       "eev_position": {
         "name": "EEV-Position"
+      },
+      "indoor_coil_temp": {
+        "name": "Innen-Wärmetauscher Temperatur"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Innen-Wärmetauscher Austritt Temperatur"
+      },
+      "indoor_coil_raw": {
+        "name": "Innen-Wärmetauscher Fühler (roh)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Innen-Wärmetauscher Austritt Fühler (roh)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Außen-Wärmetauscher Fühler (roh)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Druckgas-Überhitzung (roh)"
+      },
+      "protection_raw": {
+        "name": "Schutzcode (roh)"
       }
     },
     "binary_sensor": {

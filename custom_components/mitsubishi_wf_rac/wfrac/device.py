@@ -84,7 +84,27 @@ SERVICE_DATA_FIELDS = (
     "HotGasTemp",
     "EevPulses",
     "EevPosition",
+    "IndoorCoilTemp",
+    "IndoorCoilOutletTemp",
+    "IndoorCoilRaw",
+    "IndoorCoilOutletRaw",
+    "OutdoorCoilRaw",
+    "DischargeSuperheatRaw",
+    "ProtectionRaw",
 )
+
+# Converted fields, and the raw field each is derived from. A conversion can
+# fail while its segment arrives perfectly well - the coil temperatures are
+# only calibrated over part of the byte range (see RacParser._coil_temp) - and
+# carrying the last convertible value forward would then freeze a stale
+# temperature on screen for as long as the unit stays out of range. Which is a
+# whole heating season, and it is exactly what a frozen reading must never look
+# like. So when the raw field arrived, its temperature is not carried: no value
+# is the honest answer.
+SERVICE_DATA_DERIVED_FROM = {
+    "IndoorCoilTemp": "IndoorCoilRaw",
+    "IndoorCoilOutletTemp": "IndoorCoilOutletRaw",
+}
 
 # Room for both legs of protocol discovery plus the minimum spacing between
 # requests, so a poll that has to fall back to the other protocol is not
@@ -411,8 +431,13 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             self._note_service_data_expired(now)
             return
         for name in SERVICE_DATA_FIELDS:
-            if getattr(new_airco, name) is None:
-                setattr(new_airco, name, getattr(self._airco, name))
+            if getattr(new_airco, name) is not None:
+                continue
+            source = SERVICE_DATA_DERIVED_FROM.get(name)
+            if source is not None and getattr(new_airco, source) is not None:
+                # Segment arrived, value unusable - see SERVICE_DATA_DERIVED_FROM.
+                continue
+            setattr(new_airco, name, getattr(self._airco, name))
 
     def _note_service_data_expired(self, now: datetime) -> None:
         """Warn once, when the operation-data sensors actually go unknown.

@@ -567,9 +567,9 @@ operating points are not a calibration, so the formulas stay `[INF]`.
 | `0xB1` | TDSH [°C] | `OP2 / 2` | `00` in both — never moved |
 | `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32` | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
 | `0x13` | Outdoor EEV [pulses] | `OP2` | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
-| `0x82` | THO-R1 [°C] | outdoor heat exchanger | idle `3f` ⇒ 63 · load `49` ⇒ 73; encoding unclear, but it tracks load |
-| `0x81` | THI-R2 [°C] | indoor heat exchanger | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
-| `0x87` | THI-R3 [°C] | indoor heat exchanger | `10 5a ff` ⇒ raw 90 |
+| `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
+| `0x81` | THI-R1 [°C] | `outdoorTempList[2 × OP2]` | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
+| `0x87` | THI-R3 [°C] | `outdoorTempList[2 × OP2]` | `10 5a ff` ⇒ raw 90 |
 | `0x1E` | Total run hours [h] | `OP2 × 100` | `ff ff ff` ⇒ **no value** |
 | `0x1F` | Fan speed | `OP2` | `ff ff ff` ⇒ **no value** |
 | `0x0D` | *unknown* | — | `00 ff ff`, `sel` = `0x00` |
@@ -606,6 +606,36 @@ Notes on the shape of the answers `[HW]`:
   it as a calibrated valve opening.
 - `0x13` reads 0 on an indoor unit whose compressor is not running, and a
   normal value on an active one at the same moment. `[HW]`
+- **The two indoor coil sensors are per indoor unit; `0x82` is shared.** Over a
+  night with one indoor unit cycling and the other cooling continuously, both
+  units' `0x81` collapsed when their *own* compressor demand was on, while
+  `0x82` read the same on both (paired correlation 0.89). `0x87` follows `0x81`
+  per unit: identical while the compressor is off, higher while it runs — the
+  difference is evaporator superheat. `[HW]`
+- **Conversion for `0x81`/`0x87`:** `outdoorTempList[2 × OP2]` — the same
+  thermistor table §5.2 uses for outdoor air, indexed at half resolution.
+  Anchored on two independent fixed points ~23 K apart, both matching within
+  ~1 K `[HW]`: the last reading before every compressor cut-off in cooling
+  lands on the service manual's 1.0 °C frost-protection threshold, and after a
+  long standstill both indoor coils settle on the separately measured room
+  temperature. **Only valid in cooling, and the heating end is now known to be
+  wrong.** In a heating run `OP2` climbs to at least 252, far past the table's
+  last index, and neither candidate survives: extended linearly the byte would
+  mean 103 °C, while the discharge pipe read 57 °C at the same moment — a
+  condenser cannot be hotter than the gas feeding it. MHI-AC-Ctrl's
+  `value × 0.327 − 11.4` for THI-R1/THI-R3 (its own comment calls it "only a
+  rough approximation") fits the top plausibly but misses the bottom by 5 K.
+  Taken together the sensor is a real thermistor curve, roughly 0.5 K per count
+  low and 0.33 K per count high, and the table is a local approximation of its
+  lower half. `[HW]` `[INF]`
+- **Because of that, both bytes are published raw as well.** Converting only
+  inside the anchored band and reporting nothing above it keeps the reading
+  honest, and the raw byte is what the rest of the curve has to be calibrated
+  against — a thermometer on the coil during a heating run. Anyone decoding
+  this should work from the byte, not from the converted value. `[INF]`
+- `0x82` is *not* on that scale — a resting outdoor coil reads far lower than a
+  resting indoor coil at the same temperature. MHI-AC-Ctrl documents no formula
+  for THO-R1 either. `[EXT]` Treat it as a raw byte.
 - **Not every firmware branch answers usefully.** On `mcu131`/`wireless010`,
   `0x11` and `0x90` (compressor frequency, operating current) have been
   reported to return a constant 0 even with the compressor confirmed running,
@@ -616,7 +646,10 @@ Notes on the shape of the answers `[HW]`:
 
 Codes that MHI-AC-Ctrl uses but that are **absent** from the bridge's list, and
 therefore doubtful over this path: `0x7C` (protection number), `0x0C` (defrost).
-`[FW]` Not probed.
+`[FW]` `0x7C` is now requested alongside the rest — it sits in the same
+operation-data address space, and a code the module does not serve simply
+leaves its value empty, which costs nothing. Whether any unit answers it is
+still open. `0x0C` is not requested.
 
 ### 5.5 Code `248` — the one the app does use
 

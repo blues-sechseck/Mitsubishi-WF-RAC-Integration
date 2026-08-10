@@ -236,6 +236,27 @@
       },
       "eev_position": {
         "name": "EEV-positie"
+      },
+      "indoor_coil_temp": {
+        "name": "Binnenunit warmtewisselaar temperatuur"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Binnenunit warmtewisselaar uitlaattemperatuur"
+      },
+      "indoor_coil_raw": {
+        "name": "Binnenunit warmtewisselaar sensor (ruw)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Binnenunit warmtewisselaar uitlaatsensor (ruw)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Buitenunit warmtewisselaar sensor (ruw)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Persgasoververhitting (ruw)"
+      },
+      "protection_raw": {
+        "name": "Beveiligingscode (ruw)"
       }
     },
     "binary_sensor": {
