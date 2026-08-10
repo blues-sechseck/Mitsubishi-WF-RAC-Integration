@@ -39,6 +39,8 @@
         "data": {
           "host": "Host (IP) address",
           "availability_retry_limit": "Herhaal limiet (minimaal 3)",
+          "firmware_update_check": "Firmware-updatecontrole (online)",
+          "service_data": "Servicegegevens",
           "create_swing_mode_select": "Of er extra zwaaimodus-selectors moeten worden aangemaakt.",
           "indoor_offset": "Binnen offset",
           "outdoor_offset": "Buiten offset",
@@ -124,6 +126,48 @@
           "medium": "Gemiddeld",
           "high": "Hoog"
         }
+      },
+      "home_leave_mode": {
+        "name": "Afwezigheidsmodus",
+        "state": {
+          "off": "Uit",
+          "away_cool": "Afwezig koelen",
+          "away_heat": "Afwezig verwarmen"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Afwezig koelen ventilatorstand",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Afwezig verwarmen ventilatorstand",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Afwezig koelen buitentemperatuurdrempel"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Afwezig koelen doelkamertemperatuur"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Afwezig verwarmen buitentemperatuurdrempel"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Afwezig verwarmen doelkamertemperatuur"
       }
     },
     "sensor": {
@@ -173,7 +217,25 @@
         "name": "Cool Hot Judge"
       },
       "energy_usage": {
-        "name": "Energieverbruik"
+        "name": "Energieverbruik (huidige cyclus)"
+      },
+      "energy_usage_total": {
+        "name": "Energieverbruik totaal"
+      },
+      "compressor_frequency": {
+        "name": "Compressorfrequentie"
+      },
+      "operating_current": {
+        "name": "Bedrijfsstroom"
+      },
+      "hot_gas_temp": {
+        "name": "Heetgastemperatuur"
+      },
+      "eev_pulses": {
+        "name": "EEV-pulsen"
+      },
+      "eev_position": {
+        "name": "EEV-positie"
       }
     },
     "binary_sensor": {
@@ -182,11 +244,19 @@
       },
       "occupancy": {
         "name": "Bezetting"
+      },
+      "compressor": {
+        "name": "Compressorvraag"
       }
     },
-    "switch": {
-      "home_leave_mode": {
-        "name": "Afwezigheidsmodus"
+    "update": {
+      "firmware_update": {
+        "name": "Firmware-update"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Energieverbruik totaal resetten"
       }
     }
   }

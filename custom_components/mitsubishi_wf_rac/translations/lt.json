@@ -39,6 +39,8 @@
         "data": {
           "host": "Host (IP) adresas",
           "availability_retry_limit": "Pakartotinio bandymo limitas (min. 3)",
+          "firmware_update_check": "Programinės įrangos atnaujinimų tikrinimas (internetu)",
+          "service_data": "Serviso duomenys",
           "create_swing_mode_select": "Ar kurti papildomus svyravimo režimo pasirinkiklius.",
           "indoor_offset": "Vidaus poslinkis",
           "outdoor_offset": "Lauko poslinkis",
@@ -124,6 +126,48 @@
           "medium": "Vidutinis",
           "high": "Aukštas"
         }
+      },
+      "home_leave_mode": {
+        "name": "Išvykimo režimas",
+        "state": {
+          "off": "Išjungta",
+          "away_cool": "Išvykus vėsinimas",
+          "away_heat": "Išvykus šildymas"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Išvykus vėsinimo oro srautas",
+        "state": {
+          "auto": "Automatinis",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Išvykus šildymo oro srautas",
+        "state": {
+          "auto": "Automatinis",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Išvykus vėsinimo lauko temp. riba"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Išvykus vėsinimo tikslinė kambario temp."
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Išvykus šildymo lauko temp. riba"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Išvykus šildymo tikslinė kambario temp."
       }
     },
     "sensor": {
@@ -173,7 +217,25 @@
         "name": "Cool Hot Judge"
       },
       "energy_usage": {
-        "name": "Energijos suvartojimas"
+        "name": "Energijos suvartojimas (dabartinis ciklas)"
+      },
+      "energy_usage_total": {
+        "name": "Bendras energijos suvartojimas"
+      },
+      "compressor_frequency": {
+        "name": "Kompresoriaus dažnis"
+      },
+      "operating_current": {
+        "name": "Darbinė srovė"
+      },
+      "hot_gas_temp": {
+        "name": "Karštų dujų temperatūra"
+      },
+      "eev_pulses": {
+        "name": "EEV impulsai"
+      },
+      "eev_position": {
+        "name": "EEV padėtis"
       }
     },
     "binary_sensor": {
@@ -182,11 +244,19 @@
       },
       "occupancy": {
         "name": "Užimtumas"
+      },
+      "compressor": {
+        "name": "Kompresoriaus poreikis"
       }
     },
-    "switch": {
-      "home_leave_mode": {
-        "name": "Išvykimo režimas"
+    "update": {
+      "firmware_update": {
+        "name": "Programinės įrangos atnaujinimas"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Atstatyti bendrą energijos suvartojimą"
       }
     }
   }
