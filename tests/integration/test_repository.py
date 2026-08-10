@@ -201,3 +201,44 @@ def test_a_poll_has_room_for_both_discovery_legs():
 def test_a_poll_cannot_outlive_its_own_interval():
     """Otherwise a slow poll is still running when the next one is due."""
     assert POLL_TIMEOUT < MIN_TIME_BETWEEN_UPDATES
+
+
+async def test_refusal_in_the_result_field_is_reported_once(repository, caplog):
+    """HTTP 200 with a non-zero result is a request the unit accepted and did
+    not carry out - invisible until now (#212). Reported, but not acted on:
+    which firmware reports what on success is not established.
+    """
+    caplog.set_level("DEBUG", logger="custom_components.mitsubishi_wf_rac.wfrac.repository")
+    refused = json.dumps({"result": 12, "contents": {"airconStat": "AAA="}})
+    repo, _ = repository(
+        [
+            _FakeResponse(200, refused),
+            _FakeResponse(200, refused),
+            _FakeResponse(200, _OK_BODY),
+            _FakeResponse(200, refused),
+        ]
+    )
+
+    # The caller still gets the response: nothing about the control flow moves.
+    assert await repo.get_aircon_stats("airco-id") == {"airconStat": "AAA="}
+    await repo.get_aircon_stats("airco-id")
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "result 12 (operation prohibited)" in warnings[0].message
+
+    # A success clears it, so a later refusal is worth saying again.
+    await repo.get_aircon_stats("airco-id")
+    await repo.get_aircon_stats("airco-id")
+
+    assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 2
+
+
+async def test_unknown_result_code_is_still_reported(repository, caplog):
+    repo, _ = repository([_FakeResponse(200, json.dumps({"result": 77, "contents": {}}))])
+
+    await repo.get_aircon_stats("airco-id")
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "result 77 (meaning unknown)" in warnings[0].message
