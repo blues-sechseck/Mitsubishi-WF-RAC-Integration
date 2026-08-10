@@ -11,7 +11,11 @@ from unittest.mock import patch
 import pytest
 from aiohttp import ClientConnectionError
 
+from custom_components.mitsubishi_wf_rac.const import MIN_TIME_BETWEEN_UPDATES
+from custom_components.mitsubishi_wf_rac.wfrac.device import POLL_TIMEOUT
 from custom_components.mitsubishi_wf_rac.wfrac.repository import (
+    MIN_TIME_BETWEEN_REQUESTS,
+    REQUEST_TIMEOUT,
     AirconCommandError,
     AirconConnectionError,
     Repository,
@@ -127,3 +131,22 @@ async def test_discovery_falls_back_to_https_on_a_command_error(repository):
         "http://127.0.0.1:51443/beaver/command/getAirconStat",
         "https://127.0.0.1:51443/beaver/command/getAirconStat",
     ]
+
+
+# --- the two timeouts have to relate to each other -----------------------
+
+
+def test_a_poll_has_room_for_both_discovery_legs():
+    """Discovery tries one protocol and then the other inside a single poll.
+
+    When the per-request and per-poll timeouts were equal, a unit that accepts
+    a connection without answering it consumed the whole window on the first
+    leg, so the second protocol was never reached - and a unit that only
+    speaks the second one could never recover (#236).
+    """
+    assert POLL_TIMEOUT >= 2 * REQUEST_TIMEOUT + MIN_TIME_BETWEEN_REQUESTS
+
+
+def test_a_poll_cannot_outlive_its_own_interval():
+    """Otherwise a slow poll is still running when the next one is due."""
+    assert POLL_TIMEOUT < MIN_TIME_BETWEEN_UPDATES
