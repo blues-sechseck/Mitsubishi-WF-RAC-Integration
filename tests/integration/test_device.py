@@ -651,6 +651,56 @@ async def test_service_data_request_is_offset_from_the_poll(device, monkeypatch)
     device._api.send_airco_command.assert_awaited_once()
 
 
+async def test_service_data_request_writes_the_state_the_unit_has_now(
+    device, monkeypatch
+):
+    """The request rides on a full-state write, so a stale snapshot undoes
+    whatever was changed at the unit since the poll it came from (#241).
+    """
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch, offset_ms=40)
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    assert device.airco.Operation is False
+
+    # Someone switches the unit on at the remote, in the gap between the poll
+    # and the request.
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await asyncio.sleep(0.08)
+
+    # Two reads: the poll, and the refresh right before the write. The echoing
+    # fake reports back whatever was sent, so a stale snapshot would show up
+    # here as the unit having been switched off again.
+    assert device._api.get_aircon_stats.await_count == 2
+    device._api.send_airco_command.assert_awaited_once()
+    assert device.airco.Operation is True
+
+
+async def test_service_data_request_skips_one_cycle_after_a_change_at_the_unit(
+    device, monkeypatch
+):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    changed_at_the_unit = _stats_response(ON_COOL_PAYLOAD) | {"updatedBy": "aircon"}
+    device._api.get_aircon_stats.return_value = changed_at_the_unit
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_not_awaited()
+
+    # ...but only the one cycle. Nothing except a local write clears updatedBy,
+    # so skipping while it merely still says "aircon" would skip for ever.
+    device._last_service_data_request = None
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_awaited_once()
+
+
 async def test_service_data_request_is_retried_once_when_refused(device, monkeypatch):
     device._service_data_enabled = True
     _shorten_service_data_timing(monkeypatch)
