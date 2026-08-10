@@ -160,6 +160,10 @@ visible outage: the device is only reported unavailable after three consecutive 
 three minutes, which rides through the reassociation. If your link is weak enough that this still
 shows up, raise **Retry limit** in the options; three is the minimum, not a target.
 
+A missed poll is not logged as a warning either — it is a debug line, and the log only speaks up
+when the device actually crosses the threshold and again when it comes back. Turn on debug logging
+for `custom_components.mitsubishi_wf_rac` if you want to watch the individual polls.
+
 ## Unit goes unavailable for about an hour
 
 This is the same hourly reassociation as above, but the module fails to re-bind port `51443`
