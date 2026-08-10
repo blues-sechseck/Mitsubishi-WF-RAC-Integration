@@ -36,6 +36,20 @@ REQUEST_TIMEOUT = timedelta(seconds=25)
 
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT.total_seconds())
 
+# The `result` field every response carries, as the official app reads it.
+# Anything not listed is reported by number alone.
+RESULT_CODES: dict[int, str] = {
+    0: "ok",
+    1: "operator id not registered with the unit",
+    2: "the unit's account table is full",
+    10: "internal error in the air conditioner",
+    11: "internal error in the air conditioner",
+    12: "operation prohibited",
+    20: "firmware update required",
+    99: "the unit did not confirm the command within 30s",
+    429: "too many requests",
+}
+
 
 def _create_permissive_ssl_context() -> ssl.SSLContext:
     """Build a permissive SSL context for units without a known certificate.
@@ -102,6 +116,8 @@ class Repository:
         self._device_id = device_id
         self._session = async_get_clientsession(hass)
         self._next_request_after = datetime.now()
+        # Last refusal reported per command, see _report_result_code().
+        self._refused_commands: dict[str, int] = {}
         # Previously-discovered communication method (http/https), if the caller
         # persisted one from a prior run - skips rediscovery below. Keep it as
         # the preferred method as well: if a transport outage invalidates the
@@ -271,7 +287,42 @@ class Repository:
             self._hostname,
             json_response,
         )
+        self._report_result_code(command, json_response)
         return json_response
+
+    def _report_result_code(self, command: str, response: dict[str, Any]) -> None:
+        """Say so when the unit answers HTTP 200 and still refuses the command.
+
+        Nothing here changes what the caller does with the response. Which
+        firmware reports which code on success over the local API is not
+        established, and a command wrongly treated as failed would be worse
+        than the silent failure this makes visible - reports of "nothing
+        happens, and nothing in the log" (#212) currently have nothing to go
+        on at all.
+
+        One line per command entering a failing state, like everywhere else in
+        this integration: a unit that answers the same refusal every minute
+        would otherwise fill the log with a message the user has already read.
+        """
+        raw = response.get("result")
+        try:
+            code = int(raw)
+        except (TypeError, ValueError):
+            return
+        if code == 0:
+            self._refused_commands.pop(command, None)
+            return
+        if self._refused_commands.get(command) == code:
+            _LOGGER.debug("Aircon still answers %r with result %s", command, code)
+            return
+        self._refused_commands[command] = code
+        _LOGGER.warning(
+            "Aircon answered %r with result %s (%s) - the request was accepted "
+            "but not carried out",
+            command,
+            code,
+            RESULT_CODES.get(code, "meaning unknown"),
+        )
 
     async def get_info(self) -> dict:
         """Simple command to get aircon details"""
