@@ -683,9 +683,12 @@ async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch
     await asyncio.sleep(0.1)
 
     assert device._api.send_airco_command.await_count == 2
-    # One warning for the cycle, not one per attempt.
+    # One line for the cycle, not one per attempt - and on debug, because a
+    # skipped cycle costs the user nothing (see _note_service_data_expired).
     refusals = [r for r in caplog.records if "refused twice" in r.message]
     assert len(refusals) == 1
+    assert refusals[0].levelname == "DEBUG"
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
 
 async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
@@ -745,7 +748,10 @@ async def test_coordinator_tracks_transient_failure_without_regular_log_noise(
     device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
     await device.async_refresh()
 
-    assert device.last_update_success is False
+    # An expected miss deliberately leaves the coordinator successful: it is
+    # what keeps HA's own "Error fetching ... data" out of the log, and
+    # entity availability comes from Device.available instead.
+    assert device.last_update_success is True
     assert device.available is True
     assert not [
         record for record in caplog.records if record.levelno >= logging.INFO
@@ -777,6 +783,8 @@ async def test_coordinator_notifies_when_device_reaches_unavailable_threshold(de
         await device.async_refresh()
 
         assert device.available is False
+        # The poll that crosses the threshold has to reach entities, or they
+        # keep showing their last state while the device is marked unavailable.
         listener.assert_called_once()
     finally:
         unsubscribe()
@@ -813,7 +821,9 @@ async def test_async_update_data_counts_timeouts_as_connection_failures(
         await device.async_refresh()
 
     assert device.available is False
-    assert device.last_update_success is False
+    # A timeout is an expected miss like any other, so the coordinator stays
+    # successful and only the availability threshold speaks up.
+    assert device.last_update_success is True
     assert device._consecutive_failures == device._availability_failure_limit
     warnings = [
         record
@@ -889,3 +899,43 @@ async def test_fresh_service_data_restarts_the_clock(device):
     assert new_airco.CompressorFrequency == 45.0
     # The rest of the block comes with it, so they are carried again.
     assert new_airco.HotGasTemp == 50.0
+
+
+async def test_expiring_service_data_warns_once_and_reports_the_recovery(
+    device, caplog
+):
+    """The refusals themselves are routine; running out of values is not."""
+    caplog.set_level("DEBUG", logger=device_module.__name__)
+    device._airco.CompressorFrequency = 40.0
+    device._last_service_data_response = datetime.now() - (
+        device_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    )
+
+    for _ in range(3):
+        device._carry_forward_service_data(Aircon())
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "now report unknown" in warnings[0].message
+
+    caplog.clear()
+    recovered = Aircon()
+    recovered.CompressorFrequency = 45.0
+    device._carry_forward_service_data(recovered)
+
+    assert [r.levelname for r in caplog.records if r.levelno >= logging.INFO] == [
+        "INFO"
+    ]
+    assert "being reported again" in caplog.records[-1].message
+
+
+async def test_service_data_that_never_arrived_stays_quiet_until_it_is_due(
+    device, caplog
+):
+    """A unit asked for the first time has nothing to lose yet."""
+    caplog.set_level("DEBUG", logger=device_module.__name__)
+    device._last_service_data_request = datetime.now()
+
+    device._carry_forward_service_data(Aircon())
+
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]

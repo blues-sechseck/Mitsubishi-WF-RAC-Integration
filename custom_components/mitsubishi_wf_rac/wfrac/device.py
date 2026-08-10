@@ -111,35 +111,6 @@ POLL_TIMEOUT = 2 * REQUEST_TIMEOUT + MIN_TIME_BETWEEN_REQUESTS + timedelta(secon
 AVAILABILITY_FAILURE_LIMIT_MIN = 3
 
 
-class _ExpectedPollError(UpdateFailed):
-    """A failed device poll already handled by the availability policy."""
-
-
-class _CoordinatorLogger(logging.LoggerAdapter):
-    """Keep expected transient poll failures out of the regular error log."""
-
-    def __init__(self, logger: logging.Logger) -> None:
-        super().__init__(logger, {})
-        self._quiet_failure_pending_recovery = False
-
-    def error(self, msg, *args, **kwargs) -> None:
-        if args and isinstance(args[-1], _ExpectedPollError):
-            self._quiet_failure_pending_recovery = True
-            self.debug(msg, *args, **kwargs)
-            return
-        super().error(msg, *args, **kwargs)
-
-    def info(self, msg, *args, **kwargs) -> None:
-        if (
-            msg == "Fetching %s data recovered"
-            and self._quiet_failure_pending_recovery
-        ):
-            self._quiet_failure_pending_recovery = False
-            self.debug(msg, *args, **kwargs)
-            return
-        super().info(msg, *args, **kwargs)
-
-
 class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attributes
     """Device Class"""
 
@@ -188,6 +159,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._service_data_enabled = service_data_enabled
         self._last_service_data_request: datetime | None = None
         self._last_service_data_response: datetime | None = None
+        self._service_data_expired = False
         self._service_data_task: asyncio.Task | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
@@ -207,7 +179,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
         super().__init__(
             hass,
-            _CoordinatorLogger(_LOGGER),
+            _LOGGER,
             name=name,
             update_interval=MIN_TIME_BETWEEN_UPDATES,
         )
@@ -393,7 +365,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                     _LOGGER.debug("Service data request refused (%s); retrying", ex)
                     await asyncio.sleep(SERVICE_DATA_RETRY_DELAY.total_seconds())
                     continue
-                _LOGGER.warning(
+                # Debug, not a warning: the module refuses these requests
+                # transiently and a single skipped cycle changes nothing the
+                # user can see - the values survive SERVICE_DATA_MAX_AGE. The
+                # warning belongs where they actually expire, see
+                # _note_service_data_expired().
+                _LOGGER.debug(
                     "Service data request refused twice, skipping this cycle "
                     "for [%s]: %s",
                     self.device_name,
@@ -419,16 +396,48 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         now = datetime.now()
         if any(getattr(new_airco, name) is not None for name in SERVICE_DATA_FIELDS):
             self._last_service_data_response = now
+            if self._service_data_expired:
+                self._service_data_expired = False
+                _LOGGER.info(
+                    "Operation data from [%s] is being reported again",
+                    self.device_name,
+                )
         elif (
             self._last_service_data_response is None
             or now - self._last_service_data_response > SERVICE_DATA_MAX_AGE
         ):
             # Nothing fresh for too long - leave the fields unset so entities
             # report unknown rather than a value that stopped being true.
+            self._note_service_data_expired(now)
             return
         for name in SERVICE_DATA_FIELDS:
             if getattr(new_airco, name) is None:
                 setattr(new_airco, name, getattr(self._airco, name))
+
+    def _note_service_data_expired(self, now: datetime) -> None:
+        """Warn once, when the operation-data sensors actually go unknown.
+
+        A refused request costs a cycle and nothing else, so it stays on debug:
+        at roughly one an hour per unit it would otherwise be a permanent
+        warning about a module behaviour no one can act on. Running out of
+        values is the part a user can see, and it is worth exactly one line -
+        with a matching one when they come back.
+        """
+        if self._service_data_expired:
+            return
+        # Before the first response there is nothing to lose yet; anchor on the
+        # first request instead so a module that never answers is still
+        # reported, once, rather than silently leaving the sensors unknown.
+        anchor = self._last_service_data_response or self._last_service_data_request
+        if anchor is None or now - anchor <= SERVICE_DATA_MAX_AGE:
+            return
+        self._service_data_expired = True
+        _LOGGER.warning(
+            "No operation data from [%s] for over %.0fs; its compressor, "
+            "current, temperature and EEV sensors now report unknown",
+            self.device_name,
+            SERVICE_DATA_MAX_AGE.total_seconds(),
+        )
 
     async def delete_account(self):
         """Delete account (operator id) from the airco"""
@@ -609,7 +618,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         )
 
     def _record_connection_failure(self, error: BaseException) -> None:
-        """Count and log one failed poll without flooding the regular log."""
+        """Count one failed poll, and log it at the level it deserves.
+
+        Every poll still reaches entities (_async_update_data returns the last
+        data on an expected failure), so crossing the threshold needs no
+        notification of its own - only the line that says it happened.
+        """
         became_unavailable = self._set_availability(False)
         if became_unavailable:
             _LOGGER.warning(
@@ -618,11 +632,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 self._availability_failure_limit,
             )
             _LOGGER.debug("Update of [%s] failed", self.device_name, exc_info=error)
-            # The coordinator only notifies listeners when its own success
-            # state changes. It already changed on the first missed poll, so
-            # reaching our later device-availability threshold would otherwise
-            # leave entities displaying their restored/last-known state.
-            self.async_update_listeners()
         else:
             _LOGGER.debug(
                 "Could not reach the airco [%s]: %s", self.device_name, error
@@ -746,22 +755,32 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         return self._api.method
 
     async def _async_update_data(self):
-        """Update data via library."""
+        """Update data via library.
+
+        A missed poll is not an update failure. These modules restart their
+        WiFi about once an hour on their own, so single failures are routine
+        and carry no consequence: _set_availability() rides them out, and
+        entities follow Device.available rather than the coordinator's own
+        success flag. Raising UpdateFailed for one would put an error in every
+        user's log once an hour for a condition nobody can act on - and the
+        entities would flick to unavailable a poll before our own threshold
+        says they should. So an expected failure returns the last data instead,
+        and only the availability transition is worth a line.
+        """
         try:
             async with asyncio.timeout(POLL_TIMEOUT.total_seconds()):
-                update_succeeded = await self.update()
+                await self.update()
         except asyncio.TimeoutError as error:
             # The outer deadline can expire before the repository's individual
             # connection attempts do. Treat that exactly like any other missed
             # poll so transient outages stay quiet and the entity only becomes
             # unavailable at the configured threshold.
-            connection_error = AirconConnectionError(
-                f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
+            self._record_connection_failure(
+                AirconConnectionError(
+                    f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
+                )
             )
-            self._record_connection_failure(connection_error)
-            raise _ExpectedPollError(str(connection_error)) from error
         except Exception as error:
             raise UpdateFailed(error) from error
 
-        if not update_succeeded:
-            raise _ExpectedPollError(f"Poll of [{self.device_name}] failed")
+        return self._airco

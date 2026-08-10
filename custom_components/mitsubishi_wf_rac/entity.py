@@ -30,9 +30,10 @@ class WfRacEntity(CoordinatorEntity[Device]):
     @property
     def available(self) -> bool:
         # Device tracks its own retry-tolerant availability (see
-        # Device._set_availability()). The coordinator reports every failed
-        # poll through last_update_success, while entities deliberately remain
-        # available until the device's failure threshold is reached.
+        # Device._set_availability()), and entities follow that rather than the
+        # coordinator's last_update_success: an expected missed poll leaves the
+        # coordinator successful on purpose, so this is the only thing that
+        # decides whether entities go unavailable.
         return self._device.available
 
     @callback
