@@ -104,6 +104,19 @@ class Aircon(AirconBase):
     HotGasTemp: float | None = None  # deg C
     EevPulses: int | None = None
     EevPosition: int | None = None  # % of raw pulse range 0-255, full-open pulse count unknown
+    # deg C, THI-R1/THI-R3, per indoor unit. None outside the calibrated band,
+    # which the raw bytes below still cover - see RacParser._coil_temp().
+    IndoorCoilTemp: float | None = None
+    IndoorCoilOutletTemp: float | None = None
+    # The bytes behind the thermistor and status codes, unconverted. Kept
+    # alongside the temperatures because the conversion is only established
+    # over part of the range, and calibrating the rest needs the raw reading -
+    # see docs/wf-rac-module-reference.md section 5.4.
+    IndoorCoilRaw: int | None = None  # THI-R1, per indoor unit
+    IndoorCoilOutletRaw: int | None = None  # THI-R3, per indoor unit
+    OutdoorCoilRaw: int | None = None  # THO-R1, shared by one outdoor unit
+    DischargeSuperheatRaw: int | None = None  # TDSH
+    ProtectionRaw: int | None = None  # protection number, answer untested
 
 
 @dataclass

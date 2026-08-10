@@ -870,6 +870,41 @@ async def test_service_data_is_carried_forward_between_polls(device):
     assert new_airco.CompressorFrequency == 40.0
 
 
+async def test_unconvertible_coil_reading_is_not_carried_forward(device):
+    """"Segment absent" and "segment arrived, value unusable" must not look
+    the same. The coil conversion stops above its calibrated band, which is
+    where a heating unit sits for a whole season - carrying the last
+    convertible reading forward would freeze a summer temperature on screen
+    until spring.
+    """
+    device._airco.IndoorCoilTemp = 37.5
+    device._airco.IndoorCoilRaw = 119
+    device._last_service_data_response = datetime.now()
+    new_airco = Aircon()
+    new_airco.IndoorCoilRaw = 252  # arrived, but off the end of the table
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.IndoorCoilRaw == 252
+    assert new_airco.IndoorCoilTemp is None
+
+
+async def test_missing_coil_segment_is_still_carried_forward(device):
+    """The other half of the pair: nothing arrived, so the last reading holds
+    exactly like every other operation-data field.
+    """
+    device._airco.IndoorCoilTemp = 21.5
+    device._airco.IndoorCoilRaw = 88
+    device._last_service_data_response = datetime.now()
+    new_airco = Aircon()
+    new_airco.CompressorFrequency = 40.0  # some other segment did arrive
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.IndoorCoilTemp == 21.5
+    assert new_airco.IndoorCoilRaw == 88
+
+
 async def test_service_data_expires_when_nothing_fresh_arrives(device):
     """A unit that keeps refusing the request (#230) must not leave entities
     reporting a frozen value that looks live.

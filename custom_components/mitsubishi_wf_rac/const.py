@@ -55,6 +55,13 @@ ATTR_OPERATING_CURRENT = "operating_current"
 ATTR_HOT_GAS_TEMP = "hot_gas_temp"
 ATTR_EEV_PULSES = "eev_pulses"
 ATTR_EEV_POSITION = "eev_position"
+ATTR_INDOOR_COIL_TEMP = "indoor_coil_temp"
+ATTR_INDOOR_COIL_OUTLET_TEMP = "indoor_coil_outlet_temp"
+ATTR_INDOOR_COIL_RAW = "indoor_coil_raw"
+ATTR_INDOOR_COIL_OUTLET_RAW = "indoor_coil_outlet_raw"
+ATTR_OUTDOOR_COIL_RAW = "outdoor_coil_raw"
+ATTR_DISCHARGE_SUPERHEAT_RAW = "discharge_superheat_raw"
+ATTR_PROTECTION_RAW = "protection_raw"
 
 # New offset constants
 CONF_INDOOR_OFFSET = "indoor_offset"
