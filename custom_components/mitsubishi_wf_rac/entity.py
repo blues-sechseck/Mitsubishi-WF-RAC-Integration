@@ -1,6 +1,7 @@
 """Shared base entity for all WF-RAC platform entities."""
 
 from __future__ import annotations
+
 import logging
 
 from homeassistant.core import callback
@@ -29,9 +30,9 @@ class WfRacEntity(CoordinatorEntity[Device]):
     @property
     def available(self) -> bool:
         # Device tracks its own retry-tolerant availability (see
-        # Device._set_availability()); update() never raises, so
-        # CoordinatorEntity's default (coordinator.last_update_success) would
-        # otherwise stay True even while the device is actually unreachable.
+        # Device._set_availability()). The coordinator reports every failed
+        # poll through last_update_success, while entities deliberately remain
+        # available until the device's failure threshold is reached.
         return self._device.available
 
     @callback

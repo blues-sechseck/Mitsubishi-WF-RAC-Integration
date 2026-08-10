@@ -103,8 +103,11 @@ class Repository:
         self._session = async_get_clientsession(hass)
         self._next_request_after = datetime.now()
         # Previously-discovered communication method (http/https), if the caller
-        # persisted one from a prior run - skips rediscovery below.
+        # persisted one from a prior run - skips rediscovery below. Keep it as
+        # the preferred method as well: if a transport outage invalidates the
+        # active method, rediscovery must try the last successful one first.
         self._method: str | None = method if method in ("http", "https") else None
+        self._preferred_method = self._method
         self._ssl_context: ssl.SSLContext | None = None
         # Serializes _post() calls so the min-time-between-requests throttle and
         # the method-discovery/reset logic below can't interleave across
@@ -214,37 +217,52 @@ class Repository:
                     # Discarding the method here would cost every later
                     # request an extra discovery round trip for nothing.
                     raise
-                except AirconApiError:
-                    # The unit may have rebooted, changed protocol, or the
-                    # persisted method from a previous run may simply be stale -
-                    # reset so the next request rediscovers instead of wedging
-                    # itself permanently against a method that no longer works.
-                    _LOGGER.info(
-                        "Request with stored method %r failed; "
-                        "resetting so the next request rediscovers",
-                        self._method,
-                    )
+                except AirconConnectionError:
+                    # A transport outage may mean either that the unit is down
+                    # or that its firmware now uses the other protocol. Clear
+                    # the active method so rediscovery remains possible, while
+                    # retaining it as the preferred first attempt below. This
+                    # lets an unchanged HTTPS unit recover without getting
+                    # stuck on an HTTP-first discovery attempt.
+                    self._preferred_method = self._method
                     self._method = None
                     raise
 
             # If we haven't yet determined if https is required, find out
             else:
                 _LOGGER.debug("No stored method; attempting discovery...")
-                try:
-                    # Deliberately falls back on any error, command errors
-                    # included: an HTTPS-only module can answer a plaintext
-                    # request with a status code rather than dropping the
-                    # connection, and that still means "try the other one".
-                    json_response = await _execute_request("http")
-                    _LOGGER.info("Discovered working communication method: HTTP")
-                    # Store the required communication method
-                    self._method = "http"
-                except AirconApiError:
-                    _LOGGER.debug("HTTP failed, trying HTTPS")
-                    json_response = await _execute_request("https")
-                    _LOGGER.info("Discovered working communication method: HTTPS")
-                    # Store the required communication method
-                    self._method = "https"
+                methods = (
+                    (self._preferred_method,)
+                    if self._preferred_method in ("http", "https")
+                    else ()
+                )
+                methods += tuple(
+                    method for method in ("http", "https") if method not in methods
+                )
+
+                # Fall back on any API error, command errors included: a unit
+                # can answer the wrong protocol with a status code rather than
+                # dropping the connection, which still means "try the other
+                # one".
+                for index, method in enumerate(methods):
+                    try:
+                        json_response = await _execute_request(method)
+                    except AirconApiError:
+                        if index == len(methods) - 1:
+                            raise
+                        _LOGGER.debug(
+                            "%s failed, trying %s",
+                            method.upper(),
+                            methods[index + 1].upper(),
+                        )
+                        continue
+
+                    _LOGGER.info(
+                        "Discovered working communication method: %s", method.upper()
+                    )
+                    self._method = method
+                    self._preferred_method = method
+                    break
 
             self._next_request_after = datetime.now() + MIN_TIME_BETWEEN_REQUESTS
 

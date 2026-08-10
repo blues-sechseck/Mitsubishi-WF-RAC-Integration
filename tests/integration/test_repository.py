@@ -5,7 +5,9 @@ fixture (Repository takes the HA client session from it), hence
 tests/integration/ rather than tests/unit/.
 """
 
+import asyncio
 import json
+import ssl
 from unittest.mock import patch
 
 import pytest
@@ -81,9 +83,19 @@ async def test_http_error_status_raises_command_error(repository):
 
 
 async def test_connection_failure_raises_connection_error(repository):
-    repo, _ = repository([ClientConnectionError("boom")])
-    with pytest.raises(AirconConnectionError):
+    cause = ClientConnectionError("connection refused")
+    repo, _ = repository([cause])
+    with pytest.raises(AirconConnectionError) as error:
         await repo.get_aircon_stats("airco-id")
+    assert error.value.__cause__ is cause
+
+
+async def test_timeout_raises_connection_error(repository):
+    cause = asyncio.TimeoutError()
+    repo, _ = repository([cause])
+    with pytest.raises(AirconConnectionError) as error:
+        await repo.get_aircon_stats("airco-id")
+    assert error.value.__cause__ is cause
 
 
 async def test_refused_command_keeps_the_discovered_method(repository):
@@ -105,15 +117,54 @@ async def test_refused_command_keeps_the_discovered_method(repository):
     ]
 
 
-async def test_unreachable_unit_resets_the_discovered_method(repository):
-    """A dead transport says nothing about which protocol is right, so the
-    stored one is dropped and the next request rediscovers.
-    """
-    repo, _ = repository([ClientConnectionError("boom")])
+async def test_rediscovery_tries_the_last_working_method_first(repository):
+    """Recovery must not put an HTTPS unit behind an HTTP-first timeout."""
+    repo, session = repository(
+        [ClientConnectionError("boom"), _FakeResponse(200, _OK_BODY)],
+        method="https",
+    )
+    repo._ssl_context = ssl.create_default_context()
 
     with pytest.raises(AirconConnectionError):
         await repo.get_aircon_stats("airco-id")
     assert repo.method is None
+
+    await repo.get_aircon_stats("airco-id")
+    assert repo.method == "https"
+    assert session.urls == [
+        "https://127.0.0.1:51443/beaver/command/getAirconStat",
+        "https://127.0.0.1:51443/beaver/command/getAirconStat",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("old_method", "new_method"), (("http", "https"), ("https", "http"))
+)
+async def test_rediscovery_recovers_after_a_protocol_change(
+    repository, old_method, new_method
+):
+    """The alternative remains reachable if a firmware line changes protocol."""
+    repo, session = repository(
+        [
+            ClientConnectionError("unit offline"),
+            ClientConnectionError("old protocol refused"),
+            _FakeResponse(200, _OK_BODY),
+        ],
+        method=old_method,
+    )
+    repo._ssl_context = ssl.create_default_context()
+
+    with pytest.raises(AirconConnectionError):
+        await repo.get_aircon_stats("airco-id")
+
+    await repo.get_aircon_stats("airco-id")
+
+    assert repo.method == new_method
+    assert session.urls == [
+        f"{old_method}://127.0.0.1:51443/beaver/command/getAirconStat",
+        f"{old_method}://127.0.0.1:51443/beaver/command/getAirconStat",
+        f"{new_method}://127.0.0.1:51443/beaver/command/getAirconStat",
+    ]
 
 
 async def test_discovery_falls_back_to_https_on_a_command_error(repository):

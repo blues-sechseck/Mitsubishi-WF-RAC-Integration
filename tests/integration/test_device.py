@@ -7,6 +7,7 @@ than tests/unit/.
 
 import asyncio
 import base64
+import logging
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,7 +18,10 @@ from custom_components.mitsubishi_wf_rac.wfrac.device import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
     Device,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import Aircon, AirconCommands
+from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
+    Aircon,
+    AirconCommands,
+)
 from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import RacParser
 from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     AirconApiError,
@@ -99,40 +103,120 @@ async def device(hass):
 
 async def test_update_success_marks_available_and_parses_state(device):
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    await device.update()
+    assert await device.update() is True
     assert device.available is True
     assert device.airco.Operation is True
 
 
 async def test_update_none_response_marks_unavailable(device):
     device._api.get_aircon_stats.return_value = None
-    await device.update()
+    assert await device.update() is False
     assert device.available is False
 
 
 async def test_update_api_error_marks_unavailable_and_reregisters(device):
     device._api.get_aircon_stats.side_effect = AirconApiError("boom")
     device._api.update_account_info = AsyncMock()
-    await device.update()
+    assert await device.update() is False
     assert device.available is False
     device._api.update_account_info.assert_awaited_once()
 
 
-async def test_update_unreachable_does_not_reregister(device, caplog):
+async def test_update_transient_unreachable_is_debug_only(device, caplog):
     """An account can only have been evicted by a unit that answered - after a
     bare connection failure there is nothing to re-register against, and the
     hourly WiFi restart these modules do would make it a recurring no-op.
     """
+    caplog.set_level("DEBUG", logger=device_module.__name__)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    caplog.clear()
+
     device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
     device._api.update_account_info = AsyncMock()
     await device.update()
-    assert device.available is False
+
+    assert device.available is True
     device._api.update_account_info.assert_not_awaited()
-    # One line for the user; the trace stays available on debug.
-    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    records = [r for r in caplog.records if r.name == device_module.__name__]
+    assert not [r for r in records if r.levelname == "WARNING"]
+    assert len(records) == 1
+    assert records[0].levelname == "DEBUG"
+    assert records[0].exc_info is None
+
+    caplog.clear()
+    device._api.get_aircon_stats.side_effect = None
+    await device.update()
+    assert not [r for r in caplog.records if "is available again" in r.message]
+
+
+async def test_update_sustained_unreachable_logs_one_transition(device, caplog):
+    caplog.set_level("DEBUG", logger=device_module.__name__)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    caplog.clear()
+
+    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.update_account_info = AsyncMock()
+    for _ in range(10):
+        await device.update()
+
+    assert device.available is False
+    assert device._consecutive_failures == device._availability_failure_limit
+    device._api.update_account_info.assert_not_awaited()
+    warnings = [
+        r
+        for r in caplog.records
+        if r.name == device_module.__name__ and r.levelname == "WARNING"
+    ]
     assert len(warnings) == 1
+    assert "is unavailable after 3 failed polls" in warnings[0].message
     assert warnings[0].exc_info is None
-    assert any(r.exc_info for r in caplog.records if r.levelname == "DEBUG")
+    assert sum(
+        r.exc_info is not None
+        for r in caplog.records
+        if r.name == device_module.__name__ and r.levelname == "DEBUG"
+    ) == 1
+
+
+async def test_update_initially_unreachable_logs_threshold_once(device, caplog):
+    """An unavailable device at startup still has a distinct threshold event,
+    even though its public availability flag starts out false.
+    """
+    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.update_account_info = AsyncMock()
+    for _ in range(5):
+        await device.update()
+
+    warnings = [
+        r
+        for r in caplog.records
+        if r.name == device_module.__name__ and r.levelname == "WARNING"
+    ]
+    assert len(warnings) == 1
+    assert "is unavailable after 3 failed polls" in warnings[0].message
+
+
+async def test_update_recovery_is_logged_once(device, caplog):
+    caplog.set_level("INFO", logger=device_module.__name__)
+    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    for _ in range(3):
+        await device.update()
+
+    device._api.get_aircon_stats.side_effect = None
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    await device.update()
+
+    assert device.available is True
+    recoveries = [
+        r
+        for r in caplog.records
+        if r.name == device_module.__name__
+        and r.levelname == "INFO"
+        and "is available again" in r.message
+    ]
+    assert len(recoveries) == 1
 
 
 async def test_update_refused_command_reregisters(device):
@@ -305,7 +389,9 @@ async def test_async_queue_command_notifies_listeners_even_on_failure(device, mo
     monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
-    device._api.send_airco_command = AsyncMock(side_effect=AirconApiError("boom"))
+    device._api.send_airco_command = AsyncMock(
+        side_effect=AirconConnectionError("offline")
+    )
 
     listener = MagicMock()
     unsubscribe = device.async_add_listener(listener)
@@ -648,23 +734,117 @@ async def test_async_update_data_wraps_exception_in_update_failed(device):
         await device._async_update_data()
 
 
-async def test_async_update_data_names_the_timeout(device, monkeypatch):
-    """str(TimeoutError()) is empty, so without a message of our own the
-    coordinator logs "Error fetching <name> data:" and nothing else.
-    """
-    from homeassistant.helpers.update_coordinator import UpdateFailed
+async def test_coordinator_tracks_transient_failure_without_regular_log_noise(
+    device, caplog
+):
+    caplog.set_level("DEBUG", logger=device_module.__name__)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.async_refresh()
+    caplog.clear()
 
+    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    await device.async_refresh()
+
+    assert device.last_update_success is False
+    assert device.available is True
+    assert not [
+        record for record in caplog.records if record.levelno >= logging.INFO
+    ]
+
+    caplog.clear()
+    device._api.get_aircon_stats.side_effect = None
+    await device.async_refresh()
+
+    assert device.last_update_success is True
+    assert device.available is True
+    assert not [
+        record for record in caplog.records if record.levelno >= logging.INFO
+    ]
+
+
+async def test_coordinator_notifies_when_device_reaches_unavailable_threshold(device):
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.async_refresh()
+    listener = MagicMock()
+    unsubscribe = device.async_add_listener(listener)
+
+    try:
+        device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+        await device.async_refresh()
+        await device.async_refresh()
+        listener.reset_mock()
+
+        await device.async_refresh()
+
+        assert device.available is False
+        listener.assert_called_once()
+    finally:
+        unsubscribe()
+
+
+async def test_coordinator_still_logs_unexpected_failures(device, caplog):
+    caplog.set_level("DEBUG", logger=device_module.__name__)
+
+    async def _boom():
+        raise RuntimeError("unexpected")
+
+    device.update = _boom
+    await device.async_refresh()
+
+    assert device.last_update_success is False
+    assert len([record for record in caplog.records if record.levelname == "ERROR"]) == 1
+
+
+async def test_async_update_data_counts_timeouts_as_connection_failures(
+    device, monkeypatch, caplog
+):
     monkeypatch.setattr(device_module, "POLL_TIMEOUT", timedelta(milliseconds=10))
+    caplog.set_level("DEBUG", logger=device_module.__name__)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.async_refresh()
+    original_update = device.update
+    caplog.clear()
 
     async def _hang():
         await asyncio.sleep(5)
 
     device.update = _hang
-    with pytest.raises(UpdateFailed) as excinfo:
-        await device._async_update_data()
+    for _ in range(5):
+        await device.async_refresh()
 
-    assert str(excinfo.value)
-    assert "did not answer" in str(excinfo.value)
+    assert device.available is False
+    assert device.last_update_success is False
+    assert device._consecutive_failures == device._availability_failure_limit
+    warnings = [
+        record
+        for record in caplog.records
+        if record.name == device_module.__name__ and record.levelname == "WARNING"
+    ]
+    assert len(warnings) == 1
+    assert "is unavailable after 3 failed polls" in warnings[0].message
+    assert not [record for record in caplog.records if record.levelname == "ERROR"]
+    assert sum(
+        record.message.startswith("Could not reach") for record in caplog.records
+    ) == 4
+
+    caplog.clear()
+    device.update = original_update
+    await device.async_refresh()
+    await device.async_refresh()
+
+    assert device.available is True
+    assert device.last_update_success is True
+    recovery_records = [
+        record
+        for record in caplog.records
+        if record.levelname == "INFO" and "available again" in record.message
+    ]
+    assert len(recovery_records) == 1
+    assert not [
+        record
+        for record in caplog.records
+        if record.levelno >= logging.INFO and "data recovered" in record.message
+    ]
 
 
 # --- service data is carried between polls, but not forever ---------------
