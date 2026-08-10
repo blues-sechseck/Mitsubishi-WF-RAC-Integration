@@ -39,6 +39,8 @@
         "data": {
           "host": "ホスト（IP）アドレス",
           "availability_retry_limit": "リトライ回数の上限（最小 3）",
+          "firmware_update_check": "ファームウェア更新の確認 (オンライン)",
+          "service_data": "サービスデータ",
           "create_swing_mode_select": "追加のスイングモードセレクターを作成するかどうか。",
           "indoor_offset": "室内オフセット",
           "outdoor_offset": "室外オフセット",
@@ -124,6 +126,48 @@
           "medium": "中",
           "high": "高"
         }
+      },
+      "home_leave_mode": {
+        "name": "留守モード",
+        "state": {
+          "off": "オフ",
+          "away_cool": "留守冷房",
+          "away_heat": "留守暖房"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "留守冷房 風量",
+        "state": {
+          "auto": "自動",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "留守暖房 風量",
+        "state": {
+          "auto": "自動",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "留守冷房 外気温しきい値"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "留守冷房 目標室温"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "留守暖房 外気温しきい値"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "留守暖房 目標室温"
       }
     },
     "sensor": {
@@ -173,7 +217,25 @@
         "name": "Cool Hot Judge"
       },
       "energy_usage": {
-        "name": "エネルギー使用量"
+        "name": "エネルギー使用量 (今回の運転)"
+      },
+      "energy_usage_total": {
+        "name": "エネルギー使用量 合計"
+      },
+      "compressor_frequency": {
+        "name": "圧縮機周波数"
+      },
+      "operating_current": {
+        "name": "運転電流"
+      },
+      "hot_gas_temp": {
+        "name": "吐出ガス温度"
+      },
+      "eev_pulses": {
+        "name": "電子膨張弁パルス"
+      },
+      "eev_position": {
+        "name": "電子膨張弁開度"
       }
     },
     "binary_sensor": {
@@ -182,11 +244,19 @@
       },
       "occupancy": {
         "name": "在室"
+      },
+      "compressor": {
+        "name": "圧縮機要求"
       }
     },
-    "switch": {
-      "home_leave_mode": {
-        "name": "留守モード"
+    "update": {
+      "firmware_update": {
+        "name": "ファームウェア更新"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "エネルギー使用量 合計をリセット"
       }
     }
   }

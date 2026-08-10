@@ -39,6 +39,8 @@
         "data": {
           "host": "主机（IP）地址",
           "availability_retry_limit": "重试次数上限（最少 3）",
+          "firmware_update_check": "固件更新检查（在线）",
+          "service_data": "服务数据",
           "create_swing_mode_select": "是否创建额外的摆风模式选择器。",
           "indoor_offset": "室内偏移",
           "outdoor_offset": "室外偏移",
@@ -124,6 +126,48 @@
           "medium": "中速",
           "high": "高速"
         }
+      },
+      "home_leave_mode": {
+        "name": "离家模式",
+        "state": {
+          "off": "关闭",
+          "away_cool": "离家制冷",
+          "away_heat": "离家制热"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "离家制冷风量",
+        "state": {
+          "auto": "自动",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "离家制热风量",
+        "state": {
+          "auto": "自动",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "离家制冷室外温度阈值"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "离家制冷目标室温"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "离家制热室外温度阈值"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "离家制热目标室温"
       }
     },
     "sensor": {
@@ -173,7 +217,25 @@
         "name": "冷热判断"
       },
       "energy_usage": {
-        "name": "能耗"
+        "name": "能耗（当前运行）"
+      },
+      "energy_usage_total": {
+        "name": "能耗总计"
+      },
+      "compressor_frequency": {
+        "name": "压缩机频率"
+      },
+      "operating_current": {
+        "name": "运行电流"
+      },
+      "hot_gas_temp": {
+        "name": "排气温度"
+      },
+      "eev_pulses": {
+        "name": "电子膨胀阀脉冲"
+      },
+      "eev_position": {
+        "name": "电子膨胀阀开度"
       }
     },
     "binary_sensor": {
@@ -182,11 +244,19 @@
       },
       "occupancy": {
         "name": "占用"
+      },
+      "compressor": {
+        "name": "压缩机需求"
       }
     },
-    "switch": {
-      "home_leave_mode": {
-        "name": "离家模式"
+    "update": {
+      "firmware_update": {
+        "name": "固件更新"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "重置能耗总计"
       }
     }
   }
