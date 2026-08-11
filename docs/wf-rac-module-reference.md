@@ -313,7 +313,7 @@ Since the MHI frame is `SB0 SB1 SB2 DB0 DB1 …`, that gives:
 | `4` | `DB2` | setpoint | `[HW]` |
 | `5` | `DB3` | room temperature in use, `(raw−61)/4` °C | `[EXT]` `[HW]` |
 | `6` | `DB4` | error code | `[HW]` |
-| `7` | `DB5` | **undocumented.** Bit `0x10` active, but constant across every state measured so far | `[HW]` |
+| `7` | `DB5` | bit `0x10` echoes `command[8]` from the last command frame — not a device state (§5.3) | `[HW]` |
 | `8` | `DB6` | operation-data type/echo; bit `0x08` = "cool/hot judge" off | `[HW]` |
 | `9` | `DB7` | bit `0x02` = **compressor running** (see §4.6) | `[HW]` |
 | `10` | raw 20 | `bit0` occupancy/`Vacant`, `bit2` self-clean reset | `[HW]` |
@@ -518,12 +518,27 @@ code alone would not identify which of six answers came back.
 **Recipe** — verified end to end on real hardware `[HW]`:
 
 ```
-1. build a COMMAND block for the *current* state (change nothing)
+1. build a COMMAND block with NO set-bits: all zeros, command[5] = 0xFF,
+   command[8] as usual (see below - do not send the current state)
 2. trailer = [1] + [code, 0xFF, 0xFF, 0xFF]        # one request
 3. CRC, base64, POST setAirconStat
 4. the answer is ALREADY in that POST's own response:
    receive trailer -> [code, sel, value, value2]
 ```
+
+**Send an empty command block, not the current state.** The obvious approach —
+fill the block from the last status you read — makes the request a full write
+of that status, and any change made at the unit since you read it is undone.
+It is unnecessary: a value applies only together with its set-bit (§4.3), so a
+block with none of them set changes nothing while still carrying the trailer.
+Measured on two indoor units `[HW]`: `result: 0`, the complete operation-data
+trailer in the response, and power, mode, fan speed, setpoint and both vane
+axes unchanged — with the unit running and with it switched off.
+
+Carry `command[8]` as you would in a real command, though. It is the one field
+with no set-bit of its own, and dropping it clears the unit's echo of it in
+`DB5` bit `0x10` — harmless in itself, but it makes that bit look like a state
+change when it is only an echo of your own last frame. `[HW]`
 
 **Read the answer out of the `setAirconStat` response.** The round trip over the
 CNS bus finishes inside the HTTP request, so the reply block you get back

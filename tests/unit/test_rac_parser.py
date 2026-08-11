@@ -13,6 +13,8 @@ Two kinds of ground truth are used here:
    so encoding then decoding should reproduce the original values.
 """
 
+from base64 import b64decode
+
 import pytest
 
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
@@ -544,3 +546,46 @@ def test_to_base64_wraps_failures_in_value_error(parser):
 def test_translate_bytes_wraps_failures_in_value_error(parser):
     with pytest.raises(ValueError):
         parser.translate_bytes("not valid base64!!!")
+
+
+def test_status_request_block_leaves_every_set_bit_clear(parser):
+    stat = _base_stat(ServiceDataStatusRequest=True)
+    block = parser.status_request_to_byte(stat)
+    # Power DB0[1], mode DB0[5], vane DB0[7]/DB1[7], fan DB1[3], setpoint
+    # DB2[7], plus the extended bytes command_to_byte() fills in.
+    assert list(block) == [0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+
+def test_status_request_block_still_carries_cool_hot_judge(parser):
+    # Byte 8 has no set-bit of its own and is carried by every frame; dropping
+    # it clears the unit's echo of it in DB5 bit 4 (see status_request_to_byte).
+    assert parser.status_request_to_byte(_base_stat(CoolHotJudge=False))[8] & 8 == 8
+    assert parser.status_request_to_byte(_base_stat(CoolHotJudge=True))[8] & 8 == 0
+
+
+@pytest.mark.parametrize(
+    "request_kwargs",
+    [{"ServiceDataStatusRequest": True}, {"HomeLeaveModeStatusRequest": True}],
+)
+def test_to_base64_sends_no_set_bits_for_a_status_request(parser, request_kwargs):
+    stat = _base_stat(Operation=True, PresetTemp=22.0, **request_kwargs)
+    block = b64decode(parser.to_base64(stat))[:18]
+    assert block == parser.status_request_to_byte(stat)
+
+
+def test_to_base64_still_writes_the_full_state_for_a_command(parser):
+    stat = _base_stat(Operation=True, PresetTemp=22.0)
+    block = b64decode(parser.to_base64(stat))[:18]
+    assert block == parser.command_to_byte(stat)
+    assert block[2] & 2  # the power set-bit really is in there
+
+
+def test_to_base64_writes_the_state_alongside_a_home_leave_mode_set(parser):
+    # Setting Home Leave values is a real write, not a status request: its
+    # command block stays the full one.
+    setting = HomeLeaveModeSetting(TempRule=10.0, TempSetting=10.0, AirFlow=0)
+    stat = _base_stat(
+        HomeLeaveModeForCooling=setting, HomeLeaveModeForHeating=setting
+    )
+    block = b64decode(parser.to_base64(stat))[:18]
+    assert block == parser.command_to_byte(stat)

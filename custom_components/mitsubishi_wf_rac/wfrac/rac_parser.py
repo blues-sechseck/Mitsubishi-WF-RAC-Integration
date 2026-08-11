@@ -130,8 +130,13 @@ class RacParser:
     def to_base64(self, aircon_stat: AirconStat) -> str:
         """Convert AirconStat to Base64 string."""
         try:
+            build_command = (
+                self.status_request_to_byte
+                if self._is_status_request(aircon_stat)
+                else self.command_to_byte
+            )
             command = self.add_crc16(
-                self.command_to_byte(aircon_stat) + self._variable_trailer(aircon_stat)
+                build_command(aircon_stat) + self._variable_trailer(aircon_stat)
             )
             receive = self.add_crc16(self.add_variable(self.receive_to_bytes(aircon_stat)))
             return b64encode(bytes(command + receive)).decode("ascii")
@@ -141,6 +146,19 @@ class RacParser:
     def add_variable(self, byte_buffer: bytearray) -> bytearray:
         """Concat byte_buffer with variable suffix."""
         return byte_buffer + VARIABLE_SUFFIX
+
+    @staticmethod
+    def _is_status_request(aircon_stat: AirconStat) -> bool:
+        """Whether this frame exists only to ask the unit something.
+
+        Both of these are answered in the trailer of the response and change
+        nothing on the unit; the HomeLeaveMode *set* path below is a real
+        write and is not one of them.
+        """
+        return bool(
+            aircon_stat.ServiceDataStatusRequest
+            or aircon_stat.HomeLeaveModeStatusRequest
+        )
 
     @staticmethod
     def _build_trailer(segments: list[tuple[int, int, int, int]]) -> bytearray:
@@ -200,6 +218,28 @@ class RacParser:
             return cls._build_trailer(segments)
 
         return VARIABLE_SUFFIX
+
+    def status_request_to_byte(self, aircon_stat: AirconStat) -> bytearray:
+        """Command block for a request that only reads.
+
+        On the MHI bus a value takes effect only when its accompanying set-bit
+        travels with it: power DB0[1], mode DB0[5], vane DB0[7]/DB1[7], fan
+        DB1[3], setpoint DB2[7]. command_to_byte() sets all of them, because
+        every command it builds means to change something. A status request
+        does not - it only needs a frame to carry its trailer - so it leaves
+        them clear and the unit applies nothing.
+
+        Byte 8 is the exception and is carried as usual: it has no set-bit of
+        its own, and dropping it clears the unit's echo of it in DB5 bit 4.
+        Confirmed on hardware (11.08.2026, both indoor units): such a frame is
+        answered with the full operation-data trailer and result 0, while
+        power, mode, fan speed, setpoint and both vane axes stay untouched -
+        with the unit running and with it switched off.
+        """
+        stat_byte = _empty_stat_bytes()
+        if not aircon_stat.CoolHotJudge:
+            stat_byte[8] |= 8
+        return stat_byte
 
     def command_to_byte(self, aircon_stat: AirconStat) -> bytearray:
         """Command to bytes"""
