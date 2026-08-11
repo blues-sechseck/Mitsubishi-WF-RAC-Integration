@@ -119,8 +119,6 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
             ServiceDataSensor(device, ATTR_EEV_POSITION),
             ServiceDataSensor(device, ATTR_INDOOR_COIL_TEMP),
             ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
-            ServiceDataSensor(device, ATTR_INDOOR_COIL_RAW),
-            ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_RAW),
             ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
             ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
             ServiceDataSensor(device, ATTR_PROTECTION_RAW),
@@ -128,6 +126,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     else:
         _async_remove_service_data_sensors(hass, device)
 
+    _async_remove_indoor_coil_raw_sensors(hass, device)
     _async_remove_home_leave_mode_sensors(hass, device)
 
     async_add_entities(entities)
@@ -168,8 +167,6 @@ def _async_remove_service_data_sensors(hass, device: Device) -> None:
         ATTR_EEV_POSITION,
         ATTR_INDOOR_COIL_TEMP,
         ATTR_INDOOR_COIL_OUTLET_TEMP,
-        ATTR_INDOOR_COIL_RAW,
-        ATTR_INDOOR_COIL_OUTLET_RAW,
         ATTR_OUTDOOR_COIL_RAW,
         ATTR_DISCHARGE_SUPERHEAT_RAW,
         ATTR_PROTECTION_RAW,
@@ -179,6 +176,28 @@ def _async_remove_service_data_sensors(hass, device: Device) -> None:
         )
         if entity_id:
             _LOGGER.debug("Removing service data sensor %s", entity_id)
+            registry.async_remove(entity_id)
+
+
+def _async_remove_indoor_coil_raw_sensors(hass, device: Device) -> None:
+    """Drop the two indoor-coil raw byte sensors from the entity registry.
+
+    They existed to calibrate the coil conversion against a thermometer, which
+    is done - the conversion now covers the whole byte range, heating included
+    (see RacParser._coil_temp). Runs unconditionally, unlike the service-data
+    cleanup: whoever enabled them would otherwise keep two entities that
+    nothing feeds any more.
+
+    The outdoor coil, discharge superheat and protection bytes stay: no
+    conversion is established for those, so the byte is all there is.
+    """
+    registry = er.async_get(hass)
+    for custom_type in (ATTR_INDOOR_COIL_RAW, ATTR_INDOOR_COIL_OUTLET_RAW):
+        entity_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-{custom_type}-sensor"
+        )
+        if entity_id:
+            _LOGGER.debug("Removing calibration sensor %s", entity_id)
             registry.async_remove(entity_id)
 
 
@@ -462,8 +481,6 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         ATTR_EEV_POSITION: "EevPosition",
         ATTR_INDOOR_COIL_TEMP: "IndoorCoilTemp",
         ATTR_INDOOR_COIL_OUTLET_TEMP: "IndoorCoilOutletTemp",
-        ATTR_INDOOR_COIL_RAW: "IndoorCoilRaw",
-        ATTR_INDOOR_COIL_OUTLET_RAW: "IndoorCoilOutletRaw",
         ATTR_OUTDOOR_COIL_RAW: "OutdoorCoilRaw",
         ATTR_DISCHARGE_SUPERHEAT_RAW: "DischargeSuperheatRaw",
         ATTR_PROTECTION_RAW: "ProtectionRaw",
@@ -475,8 +492,6 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
     # value is only useful to someone decoding it - which is exactly what the
     # people asking for them are doing.
     _RAW_TYPES = (
-        ATTR_INDOOR_COIL_RAW,
-        ATTR_INDOOR_COIL_OUTLET_RAW,
         ATTR_OUTDOOR_COIL_RAW,
         ATTR_DISCHARGE_SUPERHEAT_RAW,
         ATTR_PROTECTION_RAW,

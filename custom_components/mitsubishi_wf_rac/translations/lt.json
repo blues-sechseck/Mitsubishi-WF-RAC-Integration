@@ -243,12 +243,6 @@
       "indoor_coil_outlet_temp": {
         "name": "Vidaus šilumokaičio išėjimo temperatūra"
       },
-      "indoor_coil_raw": {
-        "name": "Vidaus šilumokaičio jutiklis (neapdorotas)"
-      },
-      "indoor_coil_outlet_raw": {
-        "name": "Vidaus šilumokaičio išėjimo jutiklis (neapdorotas)"
-      },
       "outdoor_coil_raw": {
         "name": "Lauko šilumokaičio jutiklis (neapdorotas)"
       },

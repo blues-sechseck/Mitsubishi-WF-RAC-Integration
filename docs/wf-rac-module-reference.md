@@ -658,8 +658,15 @@ Notes on the shape of the answers `[HW]`:
   adjustable on the unit and what gets sampled is the value *before* the stop,
   so a direct reading at byte 75 (16.8 °C measured, 17.0 °C from the curve) was
   taken as the better evidence. `[HW]` `[INF]`
-- **Both bytes are published raw as well**, so anyone decoding this can work
-  from the byte and apply their own curve. `[INF]`
+- **`0x82` is the same sensor behind a different resistor.** MHI's diagram
+  covers the outdoor coil too, and a five-hour standstill puts it on
+  `Rs ≈ 1230 Ω` against a reference thermometer — the same channel type as the
+  indoor coil (both far below the air channels' 4.0/5.6 kΩ, as a sensor that
+  has to span frost to condensing temperature needs), but not the same value:
+  at byte 80 the two curves are 4.5 K apart. `[HW]` `[INF]` Readings taken in
+  afternoon sun run high on a west-facing unit, and no calibrated point exists
+  yet, so it stays a raw byte. A defrost cycle would anchor it exactly: the
+  outdoor coil sits at 0 °C while ice melts off it.
 - `0x82` is *not* on that scale — a resting outdoor coil reads far lower than a
   resting indoor coil at the same temperature. MHI-AC-Ctrl documents no formula
   for THO-R1 either. `[EXT]` Treat it as a raw byte.
