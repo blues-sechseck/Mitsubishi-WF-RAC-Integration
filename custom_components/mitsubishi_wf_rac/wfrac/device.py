@@ -38,10 +38,10 @@ UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 # interval instead.
 FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
-# Service data (operation-data codes) is opt-in and costs an extra
-# setAirconStat write on top of the regular read-only poll, but it stays on
-# the local network and a batched request answers all four codes in one
-# round trip (see todo.md), so there's no reason to throttle it below the
+# Service data (operation-data codes) is opt-in and costs a second request per
+# poll, but it stays on the local network, changes nothing on the unit (see
+# RacParser.status_request_to_byte) and a batched request answers every code in
+# one round trip (see todo.md), so there's no reason to throttle it below the
 # regular poll cadence. See Device._maybe_request_service_data().
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
@@ -67,7 +67,7 @@ SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
 SERVICE_DATA_REQUEST_OFFSET = SERVICE_DATA_REQUEST_INTERVAL / 2
 
 # A refused request costs a full cycle of every operation-data sensor, and the
-# refusals seen in #230 are transient, so one retry is worth the extra write.
+# refusals seen in #230 are transient, so one retry is worth the extra request.
 SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
 
 # The unit answers these segments only when asked, so they are carried across
@@ -180,7 +180,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._last_service_data_request: datetime | None = None
         self._last_service_data_response: datetime | None = None
         self._service_data_expired = False
-        self._last_foreign_update: str | None = None
         self._service_data_task: asyncio.Task | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
@@ -337,10 +336,10 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
     def _maybe_request_service_data(self) -> None:
         """Kick off a background service-data request if due and enabled (see
-        SERVICE_DATA_MIN_SPACING). Opt-in like the firmware check above,
-        but for a different reason: this stays on the local network, but it's
-        an extra setAirconStat write (see rac_parser.SERVICE_DATA_CODES) on
-        top of the regular read-only poll, not just a cheap read.
+        SERVICE_DATA_MIN_SPACING). Opt-in like the firmware check above, but
+        for a different reason: this stays on the local network, yet it rides
+        on a setAirconStat (see rac_parser.SERVICE_DATA_CODES) and so doubles
+        the traffic the unit has to answer.
         """
         if not self._service_data_enabled:
             return
@@ -374,21 +373,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         task that deliberately swallows its errors.
         """
         await asyncio.sleep(SERVICE_DATA_REQUEST_OFFSET.total_seconds())
-        # Read first. The request rides on a setAirconStat, and that command
-        # block always carries the complete state - power, mode, fan, louvres,
-        # setpoint - because the protocol has no partial write. Whatever
-        # snapshot it is built from is therefore written back to the unit, and
-        # the snapshot from the last poll is up to a poll interval old: a
-        # change made at the unit itself in the meantime got undone about a
-        # minute later (#241). This costs one read-only request per cycle and
-        # leaves a window of about a second instead of thirty.
-        #
-        # Distance from the poll is not what keeps the module from refusing the
-        # write: the refusal rate measured the same at one second and at thirty
-        # (#230), and what recovered the lost cycles was the retry below.
-        await self.update()
-        if self._skip_service_data_after_foreign_change():
-            return
+        # The state this is built from no longer matters: a status request
+        # carries no set-bits, so the unit applies none of it (see
+        # RacParser.status_request_to_byte). The offset stays because it is
+        # about spacing requests, not about what they contain - a second
+        # request too soon after the poll is what the module refuses (#230).
         params = {AirconCommands.ServiceDataStatusRequest: True}
         for attempt in (1, 2):
             try:
@@ -418,33 +407,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 return
         # Entities keep their previous operation-data values on a skipped cycle
         # (see _carry_forward_service_data), so there is nothing to push here.
-
-    def _skip_service_data_after_foreign_change(self) -> bool:
-        """Skip one cycle when the unit reports a change from somewhere else.
-
-        updatedBy names the source of the last change: "local" for anything
-        that arrived over the local API, including our own writes, "aircon" for
-        the unit's own controls and the IR remote, "aws" for the app by way of
-        the cloud. The read above is what actually fixes the write-back; this
-        only covers the second between that read and the write, when someone is
-        evidently still working the remote.
-
-        Only the first cycle after a change is skipped, never every cycle while
-        the field still names a foreign source: nothing but a local write
-        clears it, so skipping on the value alone would skip for ever.
-        """
-        source = self._updated_by
-        foreign = source is not None and source != "local"
-        newly_foreign = foreign and source != self._last_foreign_update
-        self._last_foreign_update = source if foreign else None
-        if newly_foreign:
-            _LOGGER.debug(
-                "Skipping the service data request for [%s]: last change came "
-                "from '%s'",
-                self.device_name,
-                source,
-            )
-        return newly_foreign
 
     def _carry_forward_service_data(self, new_airco: Aircon) -> None:
         """Same rationale as _carry_forward_home_leave_mode() above: the unit
