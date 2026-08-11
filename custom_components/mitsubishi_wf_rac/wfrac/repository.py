@@ -38,10 +38,16 @@ _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT.total_seconds())
 
 # The `result` field every response carries, as the official app reads it.
 # Anything not listed is reported by number alone.
+#
+# The app reads these on updateAccountInfo, and that is where their wording
+# comes from; the meanings need not be as narrow elsewhere. Code 2 is the one
+# seen so far on setAirconStat, three seconds before the account's own
+# `expires` ran out - the same refusal, but an expired registration rather
+# than a full table, so the message names both.
 RESULT_CODES: dict[int, str] = {
     0: "ok",
     1: "operator id not registered with the unit",
-    2: "the unit's account table is full",
+    2: "the unit refused the account - its table is full, or the registration expired",
     10: "internal error in the air conditioner",
     11: "internal error in the air conditioner",
     12: "operation prohibited",
