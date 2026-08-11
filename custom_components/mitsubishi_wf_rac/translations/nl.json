@@ -37,7 +37,7 @@
       "init": {
         "description": "Hieronder zijn instellingen die je kan aanpassen voor deze airco.",
         "data": {
-          "host": "Host (IP) address",
+          "host": "Host (IP) adres",
           "availability_retry_limit": "Herhaal limiet (minimaal 3)",
           "firmware_update_check": "Firmware-updatecontrole (online)",
           "service_data": "Servicegegevens",
@@ -214,7 +214,7 @@
         "name": "Modelnummer"
       },
       "cool_hot_judge": {
-        "name": "Cool Hot Judge"
+        "name": "Koel-/verwarmingsstatus"
       },
       "energy_usage": {
         "name": "Energieverbruik (huidige cyclus)"
