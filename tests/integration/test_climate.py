@@ -239,3 +239,12 @@ async def test_target_sensor_matches_climate_entity(device, hvac_mode, override_
 
     assert sensor._attr_native_value == 22 + offset
     assert sensor._attr_native_value == climate._attr_target_temperature
+
+
+async def test_set_external_temperature_forwards_to_device(device):
+    device.async_set_external_temperature = AsyncMock()
+    entity = AircoClimate(device)
+
+    await entity.async_set_external_temperature(temperature=18.7)
+
+    device.async_set_external_temperature.assert_awaited_once_with(18.7)
