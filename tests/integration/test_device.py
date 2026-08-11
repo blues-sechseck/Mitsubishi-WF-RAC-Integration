@@ -275,6 +275,61 @@ async def test_set_airco_merges_params_with_current_state(device):
     assert device.airco.Operation is True
 
 
+async def test_set_airco_includes_stored_external_temperature_override(device):
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._external_temperature_override = 18.7
+
+    captured = {}
+
+    async def _capture_and_echo(airco_id, command):
+        captured["command"] = command
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    await device.set_airco({AirconCommands.Operation: True})
+
+    raw = base64.b64decode(captured["command"])
+
+    assert raw[5] == int(round(18.7 * 4)) + 61
+
+
+async def test_set_airco_explicitly_clears_external_temperature_override(device):
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._external_temperature_override = 18.7
+
+    captured = {}
+
+    async def _capture_and_echo(airco_id, command):
+        captured["command"] = command
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    await device.set_airco({AirconCommands.ExternalTemperature: None})
+
+    assert device._external_temperature_override is None
+
+    raw = base64.b64decode(captured["command"])
+
+    assert raw[5] == 0xFF
+
+
+async def test_set_airco_preserves_explicitly_sent_fields_when_response_lacks_them(device):
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    # Simulate a write response that does not reflect the requested fan speed.
+    device._api.send_airco_command = AsyncMock(
+        return_value=_stats_response(ON_COOL_PAYLOAD)["airconStat"]
+    )
+
+    await device.set_airco({AirconCommands.AirFlow: 4})
+
+    assert device.airco.AirFlow == 4
+
+
 async def test_set_airco_raises_and_logs_on_send_failure(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()

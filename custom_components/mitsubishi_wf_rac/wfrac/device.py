@@ -181,6 +181,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._last_service_data_response: datetime | None = None
         self._service_data_expired = False
         self._service_data_task: asyncio.Task | None = None
+        self._external_temperature_override: float | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
         # an older version, and refusing to set up over it would be worse than
@@ -516,6 +517,15 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
             airco_stat = AirconStat.from_aircon(self._airco)
 
+            if AirconCommands.ExternalTemperature in params:
+                self._external_temperature_override = params[AirconCommands.ExternalTemperature]
+
+            if (
+                self._external_temperature_override is not None
+                and AirconCommands.ExternalTemperature not in params
+            ):
+                airco_stat.ExternalTemperature = self._external_temperature_override
+
             for key, value in params.items():
                 setattr(airco_stat, key, value)
 
@@ -594,6 +604,19 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             {
                 AirconCommands.HomeLeaveModeForCooling: cooling,
                 AirconCommands.HomeLeaveModeForHeating: heating,
+            }
+        )
+
+    async def async_set_external_temperature(self, temperature: float | None = None) -> None:
+        """Send an external temperature override to the air conditioner.
+
+        The WF-RAC firmware passes this straight through to the aircon unit
+        at the same protocol position used by MHI-AC-Ctrl. Omit the value to
+        revert to the internal room temperature sensor.
+        """
+        await self.async_queue_command(
+            {
+                AirconCommands.ExternalTemperature: temperature,
             }
         )
 

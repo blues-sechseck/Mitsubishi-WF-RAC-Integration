@@ -22,6 +22,7 @@ from .const import (
     HVAC_TRANSLATION,
     SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS,
     SERVICE_SET_HOME_LEAVE_MODE,
+    SERVICE_SET_EXTERNAL_TEMPERATURE,
     SERVICE_SET_HORIZONTAL_SWING_MODE,
     SERVICE_SET_VERTICAL_SWING_MODE,
     SUPPORT_FLAGS,
@@ -90,6 +91,17 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
             vol.Required("air_flow_heating"): vol.All(vol.Coerce(int), vol.In([0, 1, 2, 3, 4])),
         },
         "async_set_home_leave_mode",
+    )
+
+    platform.async_register_entity_service(
+        SERVICE_SET_EXTERNAL_TEMPERATURE,
+        {
+            vol.Optional("temperature"): vol.Any(
+                vol.Range(min=-15.25, max=48.25),
+                None,
+            ),
+        },
+        "async_set_external_temperature",
     )
 
 
@@ -275,6 +287,14 @@ class AircoClimate(WfRacEntity, ClimateEntity):
                 }
             )
 
+    async def async_set_external_temperature(self, temperature: float | None = None) -> None:
+        """Set the external room temperature override or revert to the internal sensor."""
+        if temperature is not None and not (-15.25 <= temperature <= 48.25):
+            raise ServiceValidationError(
+                "External temperature must be between -15.25 and 48.25 °C"
+            )
+        await self._device.async_set_external_temperature(temperature)
+
     async def async_turn_off(self) -> None:
         """Turn the entity off."""
         await self._device.async_queue_command({AirconCommands.Operation: False})
@@ -333,7 +353,10 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         target_offset = self._resolve_target_offset(mode_from_operation)
 
         self._attr_target_temperature = airco.PresetTemp + target_offset
-        self._attr_current_temperature = airco.IndoorTemp + indoor_offset
+        if airco.ExternalTemperatureOverride is not None:
+            self._attr_current_temperature = airco.ExternalTemperatureOverride
+        else:
+            self._attr_current_temperature = airco.IndoorTemp + indoor_offset
         self._attr_fan_mode = list(FAN_MODE_TRANSLATION.keys())[airco.AirFlow]
         self._attr_swing_mode = (
             SWING_3D_AUTO
