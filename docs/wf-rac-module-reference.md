@@ -583,8 +583,8 @@ operating points are not a calibration, so the formulas stay `[INF]`.
 | `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32` | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
 | `0x13` | Outdoor EEV [pulses] | `OP2` | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
 | `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
-| `0x81` | THI-R1 [°C] | `outdoorTempList[2 × OP2]` | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
-| `0x87` | THI-R3 [°C] | `outdoorTempList[2 × OP2]` | `10 5a ff` ⇒ raw 90 |
+| `0x81` | THI-R1 [°C] | thermistor curve, see §5.4 | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
+| `0x87` | THI-R3 [°C] | thermistor curve, see §5.4 | `10 5a ff` ⇒ raw 90 |
 | `0x1E` | Total run hours [h] | `OP2 × 100` | `ff ff ff` ⇒ **no value** |
 | `0x1F` | Fan speed | `OP2` | `ff ff ff` ⇒ **no value** |
 | `0x0D` | *unknown* | — | `00 ff ff`, `sel` = `0x00` |
@@ -627,27 +627,39 @@ Notes on the shape of the answers `[HW]`:
   `0x82` read the same on both (paired correlation 0.89). `0x87` follows `0x81`
   per unit: identical while the compressor is off, higher while it runs — the
   difference is evaporator superheat. `[HW]`
-- **Conversion for `0x81`/`0x87`:** `outdoorTempList[2 × OP2]` — the same
-  thermistor table §5.2 uses for outdoor air, indexed at half resolution.
-  Anchored on two independent fixed points ~23 K apart, both matching within
-  ~1 K `[HW]`: the last reading before every compressor cut-off in cooling
-  lands on the service manual's 1.0 °C frost-protection threshold, and after a
-  long standstill both indoor coils settle on the separately measured room
-  temperature. **Only valid in cooling, and the heating end is now known to be
-  wrong.** In a heating run `OP2` climbs to at least 252, far past the table's
-  last index, and neither candidate survives: extended linearly the byte would
-  mean 103 °C, while the discharge pipe read 57 °C at the same moment — a
-  condenser cannot be hotter than the gas feeding it. MHI-AC-Ctrl's
-  `value × 0.327 − 11.4` for THI-R1/THI-R3 (its own comment calls it "only a
-  rough approximation") fits the top plausibly but misses the bottom by 5 K.
-  Taken together the sensor is a real thermistor curve, roughly 0.5 K per count
-  low and 0.33 K per count high, and the table is a local approximation of its
-  lower half. `[HW]` `[INF]`
-- **Because of that, both bytes are published raw as well.** Converting only
-  inside the anchored band and reporting nothing above it keeps the reading
-  honest, and the raw byte is what the rest of the curve has to be calibrated
-  against — a thermometer on the coil during a heating run. Anyone decoding
-  this should work from the byte, not from the converted value. `[INF]`
+- **Conversion for `0x81`/`0x87` — invert the divider, do not index a table:**
+
+      byte = G · Rs / (Rs + R(T)),   R(T) = R25 · exp(B · (1/T − 1/298.15))
+      R25 = 5200 Ω,  B = 3900 K,  G = 367,  Rs = 1912 Ω
+
+  MHI's service manuals print **one** characteristic for room air, indoor coil,
+  outdoor coil and outdoor air, and the sensor is a ~5 kΩ NTC with B ≈ 3950
+  `[EXT]`. The channels differ only in their series resistor, which is why the
+  app's two air tables (§5.2) map onto each other by a fractional-linear
+  relation rather than an offset — and why no indexing of either table ever fit
+  the coil. With the outdoor and indoor channels' own resistors (≈5.6 kΩ and
+  ≈4.0 kΩ) the same formula reproduces both published tables to ~0.3 K, so only
+  `Rs` is specific to the coil. `[INF]`
+- **`Rs` measured, not assumed.** Four infrared readings during one heating run
+  plus a standstill reading against a room thermometer, RMS 0.25 K over
+  23–46 °C. `[HW]` The infrared thermometer sees a mix of fin and intake air,
+  so the fin's share is a free parameter of the fit — and it is what settles
+  the question: one constant share explains all four readings on this curve,
+  while `outdoorTempList[2 × OP2]` extended upward would need that share to
+  halve between cooling and heating. Sample values: byte 47 → 5.5 °C,
+  75 → 17.0, 129 → 34.1, 170 → 45.8, 186 → 50.4, 252 → 72.1. `[HW]`
+  Measure on **matt tape stuck to the fins**: bare aluminium has an emissivity
+  near 0.35 and reads several kelvin too high in cooling, low in heating.
+- **Two caveats.** Above byte 170 the curve is extrapolation — physically
+  motivated, but no thermometer has been held against it, and byte 252 (seen on
+  a 36 °C day) would put the coil at 72 °C, past the 63 °C heating overload
+  cut-out that did not trigger. And at the cold end the curve reads ~5.5 °C
+  where the manual's frost protection cuts out at 1.0 °C; that threshold is
+  adjustable on the unit and what gets sampled is the value *before* the stop,
+  so a direct reading at byte 75 (16.8 °C measured, 17.0 °C from the curve) was
+  taken as the better evidence. `[HW]` `[INF]`
+- **Both bytes are published raw as well**, so anyone decoding this can work
+  from the byte and apply their own curve. `[INF]`
 - `0x82` is *not* on that scale — a resting outdoor coil reads far lower than a
   resting indoor coil at the same temperature. MHI-AC-Ctrl documents no formula
   for THO-R1 either. `[EXT]` Treat it as a raw byte.

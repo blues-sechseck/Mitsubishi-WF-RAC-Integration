@@ -321,10 +321,11 @@ def test_parse_temperatures_service_data_segments(parser):
     assert ac.HotGasTemp == pytest.approx(42.5)
     assert ac.EevPulses == 106
     assert ac.EevPosition == 42
-    # 0x2F = 47 -> outdoorTempList[94], the frost-protection cut-off the
-    # calibration is anchored on; 0x5D = 93 -> outdoorTempList[186].
-    assert ac.IndoorCoilTemp == pytest.approx(1.0)
-    assert ac.IndoorCoilOutletTemp == pytest.approx(23.7)
+    # 0x2F = 47 and 0x5D = 93 through the thermistor curve, see
+    # COIL_SERIES_RESISTOR. 93 lands on room temperature, which is where a
+    # coil settles after a long standstill.
+    assert ac.IndoorCoilTemp == pytest.approx(5.5)
+    assert ac.IndoorCoilOutletTemp == pytest.approx(23.2)
     # Both coils also publish the byte they were converted from: that is what
     # the missing part of the curve has to be measured against.
     assert ac.IndoorCoilRaw == 0x2F
@@ -354,15 +355,35 @@ def test_parse_temperatures_service_data_absent_by_default(parser):
     assert ac.ProtectionRaw is None
 
 
-def test_coil_temp_outside_calibrated_range_keeps_only_the_raw_byte(parser):
-    # The table ends at 42 C (index 255), so any byte above 127 has no
-    # conversion - which is where a heating coil spends its whole season.
-    # Reporting None beats clamping to a wrong-looking 42, and the raw byte
-    # still gets through, see todo.md.
+def test_coil_temp_converts_the_heating_range(parser):
+    # Where the old table stopped: a heating coil spends its whole season above
+    # byte 127, and every one of those polls used to report no temperature.
     ac = Aircon()
     parser._parse_temperatures(ac, [0x81 - 256, 0x20, 0x80, 0])
-    assert ac.IndoorCoilTemp is None
+    assert ac.IndoorCoilTemp == pytest.approx(33.8)
     assert ac.IndoorCoilRaw == 0x80
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [(129, 34.1), (152, 40.7), (170, 45.8)],
+)
+def test_coil_temp_matches_the_infrared_measurements(parser, raw, expected):
+    # The three heating-run points measured against a thermometer on the fins
+    # (11.08.2026), which is what COIL_SERIES_RESISTOR was fitted to. A change
+    # to the constants that moves these has to be re-measured, not re-guessed.
+    ac = Aircon()
+    parser._parse_temperatures(ac, [0x81 - 256, 0x20, raw, 0])
+    assert ac.IndoorCoilTemp == pytest.approx(expected)
+
+
+def test_coil_temp_rejects_a_zero_byte(parser):
+    # 0 is the divider's endpoint, not a temperature - the curve would run off
+    # to nonsense there rather than report a cold coil.
+    ac = Aircon()
+    parser._parse_temperatures(ac, [0x81 - 256, 0x20, 0, 0])
+    assert ac.IndoorCoilTemp is None
+    assert ac.IndoorCoilRaw == 0
 
 
 def test_to_base64_default_length_unchanged_by_home_leave_mode(parser):

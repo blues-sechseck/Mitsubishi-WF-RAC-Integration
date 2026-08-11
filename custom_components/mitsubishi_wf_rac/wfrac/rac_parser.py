@@ -1,6 +1,7 @@
 """WF-RAC parser to decode and encode wf-rac strings"""
 
 import logging
+import math
 from base64 import b64decode, b64encode
 from typing import Final
 
@@ -76,14 +77,32 @@ SERVICE_DATA_CODES: Final = (
     SERVICE_DATA_PROTECTION_RAW,
 )
 
-# The coil thermistors report the same ADC scale as the outdoor air sensor at
-# half the resolution, so outdoorTempList indexed at 2*op2 converts them.
-# Calibrated against two independent fixed points ~23 K apart, both matching
-# within ~1 K: the value right before every compressor cut-off lines up with
-# the manual's 1.0 C frost-protection threshold, and after a long standstill
-# both indoor coils settle on the measured room temperature. Only verified in
-# cooling - see todo.md.
-COIL_TEMP_INDEX_FACTOR: Final = 2
+# The coil thermistor is the same part as the two air sensors - MHI's manuals
+# print one characteristic for room air, indoor coil, outdoor coil and outdoor
+# air - sitting behind a different series resistor. That is why no indexing of
+# the app's air tables ever fit: the two are related by a fractional-linear
+# map, not an offset. Converting from the part instead of from a table also
+# removes the ceiling those tables had (43 C), which an indoor coil in heating
+# leaves within seconds.
+#
+# byte = GAIN * Rs / (Rs + R(T)),  R(T) = R25 * exp(B * (1/T - 1/298.15))
+#
+# R25/B are the sensor alexnikgr identified (~5 kOhm, B~3950, see issue #223);
+# with GAIN and the two air channels' own series resistors this reproduces
+# both app tables to ~0.3 K, so only Rs is specific to the coil channel.
+COIL_THERMISTOR_R25: Final = 5200.0
+COIL_THERMISTOR_B: Final = 3900.0
+COIL_ADC_GAIN: Final = 367.0
+# Fitted to four infrared readings taken on the coil during one heating run
+# plus a standstill reading against a room thermometer, RMS 0.25 K over
+# 23-46 C. Readings were taken on matt tape stuck to the fins: bare aluminium
+# has an emissivity around 0.35 and reads far too low.
+COIL_SERIES_RESISTOR: Final = 1912.0
+# Highest byte an actual thermometer was held against. Above this the curve is
+# extrapolation - physically motivated, but unverified, and byte 252 (seen on
+# a 36 C day) would put the coil at 72 C, past the 63 C overload cut-out that
+# did not trigger. Kept as a documented limit rather than a silent one.
+COIL_TEMP_VERIFIED_MAX: Final = 170
 
 # Bit masks
 OPERATION_MASK: Final = 3
@@ -492,27 +511,31 @@ class RacParser:
 
     @staticmethod
     def _coil_temp(op2: int, code: int) -> float | None:
-        """Convert a heat-exchanger thermistor byte to deg C, or None above the
-        calibrated band - see COIL_TEMP_INDEX_FACTOR.
+        """Convert a heat-exchanger thermistor byte to deg C.
 
-        None rather than a clamp or an extrapolation: the table ends at 42 C
-        and an indoor coil in heating goes well past that, so either would
-        report a plausible-looking wrong temperature instead of an honest gap.
-        The raw byte remains available on its own sensor throughout, which is
-        what the missing part of the curve has to be measured against.
+        Inverts the divider the sensor sits in - see COIL_THERMISTOR_R25 - so
+        the whole byte range converts, heating included. A byte of 0 is the
+        divider's own limit and carries no temperature, so it yields None.
+
+        The one point this disagrees with is the manual's 1.0 C frost cut-off,
+        where the curve reads ~5.5 C. That anchor is indirect: the threshold is
+        adjustable on the unit, and what gets sampled is the value before the
+        stop rather than the threshold. A reading taken against a thermometer
+        at byte 75 backs the curve (16.8 C measured, 17.0 C here), so the
+        measurement wins over the inference.
         """
-        index = op2 * COIL_TEMP_INDEX_FACTOR
-        if index >= len(outdoorTempList):
-            # Debug, not a warning: this is the known edge of the calibration,
-            # not a fault, and it holds for a whole heating season at a time.
-            # The gap is visible on the entity itself.
+        if not 0 < op2 < COIL_ADC_GAIN:
             _LOGGER.debug(
-                "Heat-exchanger byte %d (code 0x%02x) is above the calibrated range",
+                "Heat-exchanger byte %d (code 0x%02x) is outside the sensor's range",
                 op2,
                 code,
             )
             return None
-        return outdoorTempList[index]
+        resistance = COIL_SERIES_RESISTOR * (COIL_ADC_GAIN / op2 - 1.0)
+        inverse_kelvin = (
+            math.log(resistance / COIL_THERMISTOR_R25) / COIL_THERMISTOR_B + 1 / 298.15
+        )
+        return round(1 / inverse_kelvin - 273.15, 1)
 
     @staticmethod
     def _log_unknown_segment(vals: list[int], i: int) -> None:
