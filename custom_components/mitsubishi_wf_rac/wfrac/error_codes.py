@@ -1,8 +1,8 @@
 """Klartext descriptions for the self-diagnosis ErrorCode (rac_parser.py).
 
 Source and confidence notes: ../../../../fehlercodes-selfdiagnose.md
-(transcribed from the official MHI service/user manuals and, since 09.08.2026,
-the SRK databooks). Not hardware-verified against a real occurrence - only
+(transcribed from the official MHI service/user manuals and the SRK
+databooks). Not hardware-verified against a real occurrence - only
 cross-checked between documents.
 
 The unit numbers errors and protective stops out of one shared space (the

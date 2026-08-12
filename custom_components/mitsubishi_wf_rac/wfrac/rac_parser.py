@@ -249,10 +249,10 @@ class RacParser:
 
         Byte 8 is the exception and is carried as usual: it has no set-bit of
         its own, and dropping it clears the unit's echo of it in DB5 bit 4.
-        Confirmed on hardware (11.08.2026, both indoor units): such a frame is
-        answered with the full operation-data trailer and result 0, while
-        power, mode, fan speed, setpoint and both vane axes stay untouched -
-        with the unit running and with it switched off.
+        Confirmed on hardware, on both indoor units: such a frame is answered
+        with the full operation-data trailer and result 0, while power, mode,
+        fan speed, setpoint and both vane axes stay untouched - with the unit
+        running and with it switched off.
         """
         stat_byte = _empty_stat_bytes()
         if not aircon_stat.CoolHotJudge:

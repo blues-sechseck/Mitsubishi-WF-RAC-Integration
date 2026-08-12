@@ -303,8 +303,8 @@ class Repository:
         firmware reports which code on success over the local API is not
         established, and a command wrongly treated as failed would be worse
         than the silent failure this makes visible - reports of "nothing
-        happens, and nothing in the log" (#212) currently have nothing to go
-        on at all.
+        happens, and nothing in the log" currently have nothing to go on at
+        all.
 
         One line per command entering a failing state, like everywhere else in
         this integration: a unit that answers the same refusal every minute

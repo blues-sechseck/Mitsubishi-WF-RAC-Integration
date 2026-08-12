@@ -410,9 +410,9 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
     def _carry_forward_service_data(self, new_airco: Aircon) -> None:
         """Same rationale as _carry_forward_home_leave_mode() above: the unit
-        reports these extension segments exactly once (confirmed live
-        06.08.2026, see todo.md), so without this the sensors would flash the
-        real value for one update cycle and then revert to unknown.
+        reports these extension segments exactly once, so without this the
+        sensors would flash the real value for one update cycle and then
+        revert to unknown.
 
         Unlike home/leave mode this expires: see SERVICE_DATA_MAX_AGE.
         """
@@ -549,13 +549,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         once per HomeLeaveModeStatusRequest, then stops: the bridge MCU clears
         its response cache after handing it to the WiFi side, so the segment is
         present in a short window's worth of status blocks and absent from every
-        later poll (firmware-confirmed 06.08.2026, see the workspace's
-        firmware-kompatibilitaet.md). Observed effect (05.08.2026 live test):
-        translate_bytes() builds a fresh Aircon() with both fields back at their
-        None default, which made the diagnostic sensors flash the real value for
-        one update cycle and then revert to unknown. Carry the last known
-        reading forward instead so it survives until the next explicit request
-        or a fresh None response (e.g. reconnect).
+        later poll. Observed effect: translate_bytes() builds a fresh Aircon()
+        with both fields back at their None default, which made the diagnostic
+        sensors flash the real value for one update cycle and then revert to
+        unknown. Carry the last known reading forward instead so it survives
+        until the next explicit request or a fresh None response (e.g.
+        reconnect).
         """
         if self._airco is None:
             return
@@ -565,21 +564,20 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             new_airco.HomeLeaveModeForHeating = self._airco.HomeLeaveModeForHeating
 
     async def async_request_home_leave_mode_status(self) -> None:
-        """Ask the unit to report its current HomeLeaveMode (Tag 248, #187
+        """Ask the unit to report its current HomeLeaveMode (Tag 248,
         capability index 7) thresholds/airflow. Does not change any AC
         setting by itself - but the unit only reports this extension segment
-        in response to this request, never on an unprompted poll (confirmed
-        empirically, 05.08.2026 live test, matched byte-for-byte against the
-        official app's own display).
+        in response to this request, never on an unprompted poll, and matches
+        byte-for-byte against the official app's own display.
 
-        Timing, measured: the value showed up only on a later scheduled poll -
+        Timing, measured: the value shows up only on a later scheduled poll -
         up to MIN_TIME_BETWEEN_UPDATES (60s) later - not in the response to
-        this call's own setAirconStat POST. Note that a *single* extension
-        request does come back inside that same POST response (verified
-        06.08.2026 with operation-data codes), so the delay here is most
-        likely because this request sends six segments and the unit answers
-        them one bus frame at a time. Unconfirmed - if it matters, measure it
-        rather than trusting this paragraph.
+        this call's own setAirconStat POST. A *single* extension request does
+        come back inside that same POST response (see the service-data
+        path), so the delay here is most likely because this request sends
+        six segments and the unit answers them one bus frame at a time.
+        Unconfirmed - if it matters, measure it rather than trusting this
+        paragraph.
 
         _carry_forward_home_leave_mode() keeps the reading available on every
         following poll instead of it reverting to unknown.
@@ -590,8 +588,8 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self, cooling: HomeLeaveModeSetting, heating: HomeLeaveModeSetting
     ) -> None:
         """Write new HomeLeaveMode thresholds/airflow (Tag 248, sub-codes
-        27-32). Verified live (05.08.2026) - written values round-tripped
-        exactly through a subsequent read, see todo.md."""
+        27-32). Written values round-trip exactly through a subsequent
+        read."""
         await self.async_queue_command(
             {
                 AirconCommands.HomeLeaveModeForCooling: cooling,

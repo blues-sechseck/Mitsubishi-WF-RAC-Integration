@@ -1,6 +1,6 @@
 """Per-model feature capability table, ported from the official app.
 
-Ground truth for #187: `res/values/arrays.xml` (`model_no_type_function_*`,
+Ground truth: `res/values/arrays.xml` (`model_no_type_function_*`,
 5 tables x 17 flags) and `model/ModelNoType.java` (flag order, table
 selection) in `smartMAir_apk/jadx-out/`. See `../../../../smartMAir_apk/FUNDE.md`
 ("Capabilities") for the reverse-engineering notes.

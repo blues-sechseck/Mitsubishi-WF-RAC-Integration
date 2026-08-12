@@ -67,9 +67,9 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         "async_set_swing_mode",
     )
 
-    # HomeLeaveMode (Tag 248, #187 capability index 7) - deliberately services,
-    # not switch/number entities, until confirmed on real hardware (see
-    # todo.md): no dashboard tile to accidentally trigger before that.
+    # HomeLeaveMode (Tag 248, capability index 7) - deliberately services, not
+    # switch/number entities, until confirmed on real hardware: no dashboard
+    # tile to accidentally trigger before that.
     platform.async_register_entity_service(
         SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS,
         {},
@@ -117,19 +117,19 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         self._update_state()
 
     def _min_temp_for_mode(self, hvac_mode: HVACMode) -> float:
-        """Minimum setpoint depends on hvac_mode - see #113.
+        """Minimum setpoint depends on hvac_mode.
 
         Per Mitsubishi Heavy Industries' official operable table ('21
         SRK-T-324, models SRK60ZSX-W/A and SRK100ZR-W): indoor unit only
         accepts 18-30C. Cooling reliably goes lower than that in practice
-        (see #113) regardless of model, so that override applies unconditionally.
+        regardless of model, so that override applies unconditionally.
         Models with the app's PresetTempRange2 capability (`ModelNoType`/
         `TempItemType` in the app, see wfrac/capabilities.py) go further,
         per the app's own table (Constants.java TempItemType.getMin/getMax):
         Auto/Cool/Dry down to 16, Heat down to 10. That 10C heating floor is
-        unconfirmed on real hardware (see #187) - the plain-setpoint reset to
-        18C after a power cycle that's documented for the default range was
-        only ever observed on hardware without this capability.
+        unconfirmed on real hardware - the plain-setpoint reset to 18C after a
+        power cycle that's documented for the default range was only ever
+        observed on hardware without this capability.
         """
         if self._device.airco.Capabilities.preset_temp_range_2:
             if hvac_mode == HVACMode.HEAT:
@@ -282,12 +282,12 @@ class AircoClimate(WfRacEntity, ClimateEntity):
     def _require_home_leave_mode_capability(self) -> None:
         if not self._device.airco.Capabilities.home_leave_mode:
             raise ServiceValidationError(
-                "This model does not report the HomeLeaveMode capability (#187)"
+                "This model does not report the HomeLeaveMode capability"
             )
 
     async def async_request_home_leave_mode_status(self) -> None:
         """See Device.async_request_home_leave_mode_status - verified live
-        (05.08.2026) against the official app's own display, see todo.md."""
+        against the official app's own display."""
         self._require_home_leave_mode_capability()
         await self._device.async_request_home_leave_mode_status()
 
@@ -300,8 +300,7 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         temp_setting_heating: float,
         air_flow_heating: int,
     ) -> None:
-        """See Device.async_set_home_leave_mode - verified live
-        (05.08.2026), see todo.md."""
+        """See Device.async_set_home_leave_mode - verified live."""
         self._require_home_leave_mode_capability()
         await self._device.async_set_home_leave_mode(
             HomeLeaveModeSetting(
