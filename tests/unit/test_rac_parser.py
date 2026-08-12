@@ -289,15 +289,15 @@ def test_service_data_trailer_status_request(parser):
         groups, (0x11, 0x90, 0x85, 0x13, 0x81, 0x82, 0x87, 0xB1, 0x7C)
     ):
         # OP1=OP2=OP3=255 -> "report current value", never 0 (a write to the
-        # climate MCU) - see CLAUDE.md's telemetry-segment guardrail.
+        # climate MCU).
         assert list(group) == [code, 255, 255, 255]
 
 
 def test_parse_temperatures_service_data_segments(parser):
-    # Real values from a live batched request (06.08.2026, Klima
-    # Schlafzimmer) - see wf-rac-module-reference.md §5.4/todo.md. Unlike
-    # HomeLeaveMode's Tag 248, op1 carries data (part of the frequency
-    # formula) rather than a fixed status marker.
+    # Real values from a live batched request (Klima Schlafzimmer) - see
+    # wf-rac-module-reference.md §5.4. Unlike HomeLeaveMode's Tag 248, op1
+    # carries data (part of the frequency formula) rather than a fixed
+    # status marker.
     signed = lambda b: b - 256 if b > 127 else b
     vals = []
     for code, op1, op2 in (

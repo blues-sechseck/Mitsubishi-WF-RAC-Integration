@@ -27,9 +27,8 @@ class AirconCommands(StrEnum):
     # fixed-byte field like the ones above, encoded/decoded as a variable
     # trailer in rac_parser.py. HomeLeaveModeStatusRequest asks the unit to
     # report its current values (it omits this segment from a plain
-    # getAirconStat otherwise - confirmed empirically, see FUNDE.md); the
-    # ForCooling/ForHeating pair writes new ones. Both directions verified
-    # live.
+    # getAirconStat otherwise, confirmed empirically); the ForCooling/
+    # ForHeating pair writes new ones. Both directions verified live.
     HomeLeaveModeStatusRequest = "HomeLeaveModeStatusRequest"
     HomeLeaveModeForCooling = "HomeLeaveModeForCooling"
     HomeLeaveModeForHeating = "HomeLeaveModeForHeating"

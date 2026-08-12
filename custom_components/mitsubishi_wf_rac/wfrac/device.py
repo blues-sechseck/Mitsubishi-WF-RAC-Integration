@@ -319,8 +319,8 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         try:
             # Strictly-greater-than only: the module treats a requested
             # firmVer <= its current one as "nothing to do" and returns 200 OK
-            # without flashing (see FUNDE.md, updateFirmware) - a `!=` check
-            # would misreport that harmless case as an available downgrade.
+            # without flashing - a `!=` check would misreport that harmless
+            # case as an available downgrade.
             update_available = int(latest["wireless"]) > int(self._wireless_firmware_ver)
         except (TypeError, ValueError):
             _LOGGER.debug(

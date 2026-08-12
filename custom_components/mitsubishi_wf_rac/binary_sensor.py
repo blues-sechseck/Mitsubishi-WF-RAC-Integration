@@ -56,7 +56,7 @@ class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
         self._attr_is_on = code != "00"
         attrs: dict[str, str] = {"error_code": code}
         # Deliberately no key at all (rather than a guessed/empty value) for
-        # codes outside fehlercodes-selfdiagnose.md's tables.
+        # codes describe_error_code() doesn't recognize.
         # NB this still reports is_on for an M<n> code, which is a protective
         # stop the unit recovered from rather than a fault it is displaying -
         # arguably not a "problem". Left as it was for now; changing it would

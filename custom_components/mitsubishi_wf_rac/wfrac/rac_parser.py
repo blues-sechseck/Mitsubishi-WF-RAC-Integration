@@ -18,7 +18,7 @@ CRC_INITIAL: Final = 65535
 
 # --- HomeLeaveMode extension segment (Tag 248, capability index 7) ---
 # Ground truth: AirconStatCoder.java (byteToStat/addCommandVariableData) in
-# the official app, see FUNDE.md. Same 4-byte tag/sub/value scheme as
+# the official app. Same 4-byte tag/sub/value scheme as
 # OutdoorTemp/IndoorTemp (tag -128) and Electric (tag -108) below, decoded by
 # the same _parse_temperatures() loop - 248 as a signed byte is -8.
 HOME_LEAVE_MODE_TAG_SIGNED: Final = -8

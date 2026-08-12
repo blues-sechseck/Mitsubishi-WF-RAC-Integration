@@ -2,9 +2,8 @@
 
 Queries the manufacturer's `server/getFirmware` endpoint - unauthenticated,
 no account/Cognito token involved, same call the official app makes before
-showing "update available". See `../../../../firmware-kompatibilitaet.md`
-and `smartMAir_apk/FUNDE.md` ("OTA-Ablauf") for the reverse-engineering notes
-and field names (`ResponseGetFirmwareMapper.java`).
+showing "update available". Field names come from the app's own
+`ResponseGetFirmwareMapper.java`.
 """
 
 from __future__ import annotations
