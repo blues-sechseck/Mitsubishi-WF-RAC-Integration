@@ -29,8 +29,8 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         CompressorBinarySensor(device),
     ]
     # Occupancy ("vacant") detection is only reported by units whose capability
-    # table (#187) has VacantProperty=true - includes ZT-2025 (raw=3), which
-    # the wire-protocol ModelNr grouping alone would miss (see capabilities.py).
+    # table has VacantProperty=true - includes ZT-2025 (raw=3), which the
+    # wire-protocol ModelNr grouping alone would miss (see capabilities.py).
     if device.airco.Capabilities.vacant_property:
         entities.append(OccupancyBinarySensor(device))
 

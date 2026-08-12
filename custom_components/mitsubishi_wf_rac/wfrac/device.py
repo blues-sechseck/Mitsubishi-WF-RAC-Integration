@@ -41,8 +41,8 @@ FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 # Service data (operation-data codes) is opt-in and costs a second request per
 # poll, but it stays on the local network, changes nothing on the unit (see
 # RacParser.status_request_to_byte) and a batched request answers every code in
-# one round trip (see todo.md), so there's no reason to throttle it below the
-# regular poll cadence. See Device._maybe_request_service_data().
+# one round trip, so there's no reason to throttle it below the regular poll
+# cadence. See Device._maybe_request_service_data().
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
 # The rate limit is a guard against a second request inside the same cycle, not
@@ -51,9 +51,9 @@ SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 # taken when a poll finishes, not when it was due. Polls arrive exactly
 # MIN_TIME_BETWEEN_UPDATES apart, so a poll answering a few milliseconds faster
 # than the one before it leaves marginally less than that between the two
-# stamps - and with the full interval as the limit, that dropped the cycle. On
-# the unit in #230 it cost 6 of 36 cycles of operation data, every one of them
-# short by under 100ms.
+# stamps - and with the full interval as the limit, that dropped the cycle: one
+# affected unit lost 6 of 36 operation-data cycles this way, each short by
+# under 100ms.
 SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
 
 # ...but it does matter *where* in the cycle it lands. Issued straight off the
@@ -61,20 +61,20 @@ SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
 # (consolidation delay plus the minimum spacing between requests), and modules
 # answer a second request that soon with HTTP 501 "Not supported this command"
 # often enough to lose whole cycles of operation data - roughly one poll in
-# seven on the unit reported in #230, sometimes several minutes in a row.
-# Offsetting it into the quiet middle of the cycle keeps the cadence but stops
-# it from crowding the poll.
+# seven on an affected unit, sometimes several minutes in a row. Offsetting it
+# into the quiet middle of the cycle keeps the cadence but stops it from
+# crowding the poll.
 SERVICE_DATA_REQUEST_OFFSET = SERVICE_DATA_REQUEST_INTERVAL / 2
 
-# A refused request costs a full cycle of every operation-data sensor, and the
-# refusals seen in #230 are transient, so one retry is worth the extra request.
+# A refused request costs a full cycle of every operation-data sensor, and
+# these refusals are transient, so one retry is worth the extra request.
 SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
 
 # The unit answers these segments only when asked, so they are carried across
 # the polls in between (see Device._carry_forward_service_data()) - but not
-# indefinitely. A unit that keeps refusing the request (#230) would otherwise
-# leave entities reporting a frozen number indistinguishable from a live one,
-# which is worse for automations built on them than an honest gap.
+# indefinitely. A unit that keeps refusing the request would otherwise leave
+# entities reporting a frozen number indistinguishable from a live one, which
+# is worse for automations built on them than an honest gap.
 SERVICE_DATA_MAX_AGE = 3 * SERVICE_DATA_REQUEST_INTERVAL
 
 # Fields fed exclusively by those segments.
@@ -110,11 +110,11 @@ SERVICE_DATA_DERIVED_FROM = {
 # requests, so a poll that has to fall back to the other protocol is not
 # cancelled halfway through.
 #
-# It used to equal the per-request timeout, and that combination has a trap
-# (#236): a unit that accepts a plaintext connection without answering it
-# consumes the whole window on the first leg, so the second protocol is never
-# reached. If that unit only speaks the second protocol, every poll fails the
-# same way and the device never recovers on its own.
+# Sized as more than a single per-request timeout: a unit that accepts a
+# plaintext connection without answering it consumes the whole window on the
+# first leg, so an equal-sized budget would never reach the second leg. A
+# unit that only speaks the second protocol would then fail every poll the
+# same way and never recover on its own.
 #
 # Stays under MIN_TIME_BETWEEN_UPDATES so a slow poll cannot still be running
 # when the next one is due.
@@ -272,8 +272,8 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             return False
 
         # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
-        # "mcu"/"wireless" sub-keys entirely (see #189), so their versions are
-        # optional and fall back to "unknown" instead of failing the update.
+        # "mcu"/"wireless" sub-keys entirely, so their versions are optional
+        # and fall back to "unknown" instead of failing the update.
         firm_type = response.get("firmType", "unknown")
         mcu_ver = (response.get("mcu") or {}).get("firmVer", "unknown")
         wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
@@ -367,9 +367,9 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
     async def _async_request_service_data(self) -> None:
         """Ask the unit for the operation-data block, offset from the poll and
-        retried once if the unit refuses it (see SERVICE_DATA_REQUEST_OFFSET
-        and #230). Sends directly rather than through async_queue_command() so
-        the refusal is visible here: a queued command is flushed by a detached
+        retried once if the unit refuses it (see SERVICE_DATA_REQUEST_OFFSET).
+        Sends directly rather than through async_queue_command() so the
+        refusal is visible here: a queued command is flushed by a detached
         task that deliberately swallows its errors.
         """
         await asyncio.sleep(SERVICE_DATA_REQUEST_OFFSET.total_seconds())
@@ -377,7 +377,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         # carries no set-bits, so the unit applies none of it (see
         # RacParser.status_request_to_byte). The offset stays because it is
         # about spacing requests, not about what they contain - a second
-        # request too soon after the poll is what the module refuses (#230).
+        # request too soon after the poll is what the module refuses.
         params = {AirconCommands.ServiceDataStatusRequest: True}
         for attempt in (1, 2):
             try:
