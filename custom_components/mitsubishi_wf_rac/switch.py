@@ -49,9 +49,9 @@ def _async_remove_self_clean_switch(hass, device: Device) -> None:
     """Drop the former Self Clean switch from the entity registry.
 
     The unit's real self-clean cycle can only be started locally via the IR
-    remote - the WiFi module offers no way to trigger it (see #209), so the
-    switch never did anything. Removing it here keeps it from lingering as an
-    unavailable leftover in dashboards and automations.
+    remote - the WiFi module offers no way to trigger it, so the switch never
+    did anything. Removing it here keeps it from lingering as an unavailable
+    leftover in dashboards and automations.
     """
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(

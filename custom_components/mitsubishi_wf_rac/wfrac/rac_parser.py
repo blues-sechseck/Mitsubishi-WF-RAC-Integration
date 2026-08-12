@@ -18,7 +18,7 @@ CRC_INITIAL: Final = 65535
 
 # --- HomeLeaveMode extension segment (Tag 248, capability index 7) ---
 # Ground truth: AirconStatCoder.java (byteToStat/addCommandVariableData) in
-# the official app, see FUNDE.md. Same 4-byte tag/sub/value scheme as
+# the official app. Same 4-byte tag/sub/value scheme as
 # OutdoorTemp/IndoorTemp (tag -128) and Electric (tag -108) below, decoded by
 # the same _parse_temperatures() loop - 248 as a signed byte is -8.
 HOME_LEAVE_MODE_TAG_SIGNED: Final = -8
@@ -37,9 +37,9 @@ HOME_LEAVE_MODE_AIRFLOW_BYTES: Final = (0, 3, 5, 7, 14)
 # Ground truth: live-measured against the official app's own service-data
 # screen equivalent (there isn't one - MHI-AC-Ctrl's code/formula naming),
 # cross-checked in a load test and a batched request, see
-# wf-rac-module-reference.md §5.4 and todo.md. Unlike HomeLeaveMode's Tag 248,
-# the second byte carries data (part of the value, see the frequency formula
-# below) rather than a fixed status marker - do not gate on it like
+# wf-rac-module-reference.md §5.4. Unlike HomeLeaveMode's Tag 248, the second
+# byte carries data (part of the value, see the frequency formula below)
+# rather than a fixed status marker - do not gate on it like
 # HOME_LEAVE_MODE_READ_MARKER.
 SERVICE_DATA_COMPRESSOR_FREQ: Final = 0x11
 SERVICE_DATA_OPERATING_CURRENT: Final = 0x90
@@ -87,9 +87,9 @@ SERVICE_DATA_CODES: Final = (
 #
 # byte = GAIN * Rs / (Rs + R(T)),  R(T) = R25 * exp(B * (1/T - 1/298.15))
 #
-# R25/B are the sensor alexnikgr identified (~5 kOhm, B~3950, see issue #223);
-# with GAIN and the two air channels' own series resistors this reproduces
-# both app tables to ~0.3 K, so only Rs is specific to the coil channel.
+# R25/B are the thermistor's own datasheet values (~5 kOhm, B~3950); with
+# GAIN and the two air channels' own series resistors this reproduces both
+# app tables to ~0.3 K, so only Rs is specific to the coil channel.
 COIL_THERMISTOR_R25: Final = 5200.0
 COIL_THERMISTOR_B: Final = 3900.0
 COIL_ADC_GAIN: Final = 367.0
@@ -199,7 +199,7 @@ class RacParser:
         command that doesn't touch either, including every command this
         integration sent before these features existed). Mirrors
         AirconStatCoder.addCommandVariableData(); unverified on real hardware
-        except where noted - see todo.md.
+        except where noted in the branches below.
         """
         if aircon_stat.HomeLeaveModeStatusRequest:
             segments = [
@@ -229,10 +229,9 @@ class RacParser:
             return cls._build_trailer(segments)
 
         if aircon_stat.ServiceDataStatusRequest:
-            # OP1=255 -> "report current value" (see rac_parser docstring/
-            # CLAUDE.md guardrail: never 0, that would be a write to the
-            # climate MCU). Confirmed live (06.08.2026) to answer all four in
-            # the direct setAirconStat response - see todo.md.
+            # OP1=255 means "report the current value" - never 0, which in
+            # this trailer would be a write to the climate MCU. All four
+            # segments answer in the same setAirconStat response.
             segments = [(code, 255, 255, 255) for code in SERVICE_DATA_CODES]
             return cls._build_trailer(segments)
 
@@ -250,10 +249,10 @@ class RacParser:
 
         Byte 8 is the exception and is carried as usual: it has no set-bit of
         its own, and dropping it clears the unit's echo of it in DB5 bit 4.
-        Confirmed on hardware (11.08.2026, both indoor units): such a frame is
-        answered with the full operation-data trailer and result 0, while
-        power, mode, fan speed, setpoint and both vane axes stay untouched -
-        with the unit running and with it switched off.
+        Confirmed on hardware, on both indoor units: such a frame is answered
+        with the full operation-data trailer and result 0, while power, mode,
+        fan speed, setpoint and both vane axes stay untouched - with the unit
+        running and with it switched off.
         """
         stat_byte = _empty_stat_bytes()
         if not aircon_stat.CoolHotJudge:
@@ -299,9 +298,8 @@ class RacParser:
             return stat_byte
 
         stat_byte[10] |= 4 if aircon_stat.IsSelfCleanReset else 0
-        # Byte 12, not 10 - confirmed against the decompiled official app
-        # (fremde-projekte/WF-RAC's COMMAND_OPERATION_MODE2_ON/OFF). Byte 10
-        # here only carries Vacant/SelfCleanReset.
+        # Self-clean operation lives in byte 12, not byte 10 - byte 10 here
+        # only carries Vacant/SelfCleanReset.
         stat_byte[12] |= 144 if aircon_stat.IsSelfCleanOperation else 128
 
         return stat_byte
@@ -395,13 +393,13 @@ class RacParser:
         ac_device.ModelNrRaw = content[0] & 127
         ac_device.Capabilities = get_capabilities(ac_device.ModelNrRaw)
         if ac_device.ModelNrRaw == 3:
-            # ZT series (new 2026 model line) - confirmed via #189 to use the
-            # same wire-protocol byte layout as ModelNr 2 (self-clean bits
-            # etc.). This grouping is protocol-only, not a feature-capability
-            # claim: per #187's capability table (see Capabilities above),
-            # ZT-2025 *does* have VacantProperty - unlike real ModelNr 2 units
-            # - so occupancy/Home Leave gating must use Capabilities, not
-            # this ModelNr value.
+            # ZT series (new 2026 model line) uses the same wire-protocol byte
+            # layout as ModelNr 2 (self-clean bits etc.), so it is grouped
+            # with it here. This grouping is protocol-only, not a feature-
+            # capability claim: ZT-2025 *does* have VacantProperty, unlike
+            # real ModelNr 2 units - see the capability table above - so
+            # occupancy/Home Leave gating must use Capabilities, not this
+            # ModelNr value.
             ac_device.ModelNr = 2
         else:
             ac_device.ModelNr = find_match(ac_device.ModelNrRaw, 0, 1, 2)
@@ -419,8 +417,8 @@ class RacParser:
             # Mirrors the self-clean bit written in receive_to_bytes() above.
             # No longer exposed as an entity: the real cycle can only be
             # started locally via the IR remote, the WiFi module offers no way
-            # to trigger it (see #209). Kept because it's read-only and would
-            # be needed again if a triggerable path ever turns up.
+            # to trigger it. Kept because it's read-only and would be needed
+            # again if a triggerable path ever turns up.
             ac_device.IsSelfCleanOperation = (content[15] & 1) != 0
         code = content[6] & 127
         ac_device.ErrorCode = (
@@ -485,8 +483,8 @@ class RacParser:
         """Decode one operation-data segment (see SERVICE_DATA_CODES).
         Formulas and op1/op2 naming from MHI-AC-Ctrl, cross-checked live
         against a load test (varying compressor frequency) and a batched
-        request - see wf-rac-module-reference.md §5.4/todo.md. Op3 carries no
-        known data for any of these four codes."""
+        request - see wf-rac-module-reference.md §5.4. Op3 carries no known
+        data for any of these four codes."""
         if code == SERVICE_DATA_COMPRESSOR_FREQ:
             ac_device.CompressorFrequency = (op1 - 0x10) * 25.6 + 0.1 * op2
         elif code == SERVICE_DATA_OPERATING_CURRENT:

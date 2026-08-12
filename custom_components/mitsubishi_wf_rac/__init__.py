@@ -77,7 +77,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # time when the flag was dead code (see create_device_from_entry), so
         # every entry predating v2 has been running with no retry tolerance at
         # all: one failed poll marks the device unavailable. The WF-RAC module
-        # reassociates on its own roughly once an hour (#173), which a 60s poll
+        # reassociates on its own roughly once an hour, which a 60s poll
         # interval turns into a visible outage. Turn the check on, and lift
         # limits below 2, which are equivalent to it being off (Device.
         # _set_availability() needs limit-1 consecutive failures to tolerate).

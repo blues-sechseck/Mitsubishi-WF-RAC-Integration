@@ -1,8 +1,7 @@
-"""Klartext descriptions for the self-diagnosis ErrorCode (rac_parser.py).
+"""Plain-language descriptions for the self-diagnosis ErrorCode (rac_parser.py).
 
-Source and confidence notes: ../../../../fehlercodes-selfdiagnose.md
-(transcribed from the official MHI service/user manuals and, since 09.08.2026,
-the SRK databooks). Not hardware-verified against a real occurrence - only
+Transcribed from the official MHI service/user manuals and the SRK
+databooks. Not hardware-verified against a real occurrence - only
 cross-checked between documents.
 
 The unit numbers errors and protective stops out of one shared space (the
@@ -67,8 +66,7 @@ def describe_error_code(code: str) -> str | None:
     distinction survives into the UI, since a protective stop that recovered on
     its own is not the same news as a fault the unit is displaying.
 
-    Anything outside the tables gets no text rather than a guess - see
-    fehlercodes-selfdiagnose.md.
+    Anything outside the tables gets no text rather than a guess.
     """
     if not code or code == "00":
         return None

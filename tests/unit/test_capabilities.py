@@ -1,6 +1,6 @@
-"""Unit tests for wfrac/capabilities.py - the #187 model_no_type table.
+"""Unit tests for wfrac/capabilities.py - the model_no_type table.
 
-Ground truth is `smartMAir_apk/jadx-out/resources/res/values/arrays.xml`
+Ground truth is the app's own `res/values/arrays.xml`
 (`model_no_type_function_*`) and `model/ModelNoType.java` (table selection,
 flag order) - see capabilities.py's own docstring.
 """

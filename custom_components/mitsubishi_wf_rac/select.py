@@ -25,13 +25,12 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Same values the former HomeLeaveModeSwitch ("crutch") used, now confirmed by
-# the live Tag-248 read (05.08.2026): the unit's own Heating TempSetting was
-# 10.0°C, matching HOME_LEAVE_TEMP_HEAT exactly. Its Cooling TempSetting read
-# 33.0°C, but the applied PresetTemp while the official app's away-cool mode
-# was actually running measured 31.0°C - hardcoding the empirically-observed
-# value rather than trusting the configured TempSetting, since only the
-# former is confirmed to actually flip Vacant. See todo.md.
+# Heating uses the unit's own Heating TempSetting (10.0°C), which matches
+# HOME_LEAVE_TEMP_HEAT exactly. Cooling does not: the unit's Cooling
+# TempSetting reads 33.0°C, but the temperature actually applied while the
+# official app's away-cool mode is running is 31.0°C - so this hardcodes the
+# applied value rather than trusting the configured TempSetting, since only
+# the applied value is known to flip Vacant.
 HOME_LEAVE_TEMP_HEAT = 10.0
 HOME_LEAVE_TEMP_COOL = 31.0
 # Temperature to restore when leaving Home Leave mode. There's no reliable way
@@ -61,13 +60,13 @@ async def async_setup_entry(_hass, entry: MitsubishiWfRacConfigEntry, async_add_
         entities = []
         _LOGGER.info("No Setup Horizontal Select: %s, %s", device.device_name, device.airco_id)
 
-    # Same VacantProperty capability gate (#187) the removed HomeLeaveModeSwitch
-    # used, see OccupancyBinarySensor in binary_sensor.py.
+    # Same VacantProperty capability gate as OccupancyBinarySensor in
+    # binary_sensor.py.
     if device.airco.Capabilities.vacant_property:
         entities.append(HomeLeaveModeSelect(device))
 
-    # Same HomeLeaveMode capability gate (#187) the former home_leave_*_air_flow
-    # diagnostic sensors used, see sensor.py.
+    # Same HomeLeaveMode capability gate as the diagnostic sensors removed by
+    # _async_remove_home_leave_mode_sensors() in sensor.py.
     if device.airco.Capabilities.home_leave_mode:
         entities.append(HomeLeaveAirFlowSelect(device, "cooling"))
         entities.append(HomeLeaveAirFlowSelect(device, "heating"))
@@ -215,11 +214,9 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
     """Select to enter/leave the unit's own Home Leave (vacant property) mode,
     in either direction.
 
-    Replaces the former HomeLeaveModeSwitch, which could only fake the
-    Heat+10°C direction. The official app's own "Abwesenheitsmodus" has two
-    independent target points (Heat and Cool, each with its own Tag-248
-    threshold/setting - see the home_leave_* diagnostic sensors in
-    sensor.py), confirmed live (05.08.2026) to flip the same Vacant bit this
+    The official app's away mode has two independent target points (Heat and
+    Cool, each with its own Tag-248 threshold/setting - see the home_leave_*
+    diagnostic sensors in sensor.py) and flips the same Vacant bit this
     entity reads/writes. See HOME_LEAVE_TEMP_HEAT/_COOL above for the values
     used and why they're hardcoded rather than read from the live Tag-248
     TempSetting.

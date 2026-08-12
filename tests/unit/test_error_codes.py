@@ -1,5 +1,5 @@
-"""Unit tests for wfrac/error_codes.py - see fehlercodes-selfdiagnose.md for
-the sourcing/confidence notes behind these values."""
+"""Unit tests for wfrac/error_codes.py - see error_codes.py's own docstring
+for the sourcing/confidence notes behind these values."""
 
 from custom_components.mitsubishi_wf_rac.wfrac.error_codes import describe_error_code
 

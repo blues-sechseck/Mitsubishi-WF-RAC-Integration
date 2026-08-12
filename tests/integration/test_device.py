@@ -556,9 +556,9 @@ async def test_update_detects_available_firmware_update(device, monkeypatch):
 
 
 async def test_update_does_not_flag_downgrade_or_equal_version_as_update(device, monkeypatch):
-    # Strictly-greater-than only (see FUNDE.md's updateFirmware section): the
-    # module silently no-ops a requested version <= its current one, so
-    # neither "equal" nor "older" may be reported as an available update.
+    # Strictly-greater-than only: the module silently no-ops a requested
+    # version <= its current one, so neither "equal" nor "older" may be
+    # reported as an available update.
     device._firmware_update_check_enabled = True
     fetch = AsyncMock(return_value={"wireless": "025", "mcu": "200"})
     monkeypatch.setattr(device_module, "fetch_latest_firmware", fetch)
