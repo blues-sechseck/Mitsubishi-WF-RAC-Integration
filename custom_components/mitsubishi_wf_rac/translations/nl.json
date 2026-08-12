@@ -243,12 +243,6 @@
       "indoor_coil_outlet_temp": {
         "name": "Binnenunit warmtewisselaar uitlaattemperatuur"
       },
-      "indoor_coil_raw": {
-        "name": "Binnenunit warmtewisselaar sensor (ruw)"
-      },
-      "indoor_coil_outlet_raw": {
-        "name": "Binnenunit warmtewisselaar uitlaatsensor (ruw)"
-      },
       "outdoor_coil_raw": {
         "name": "Buitenunit warmtewisselaar sensor (ruw)"
       },

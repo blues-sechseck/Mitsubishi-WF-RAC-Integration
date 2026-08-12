@@ -243,12 +243,6 @@
       "indoor_coil_outlet_temp": {
         "name": "Indoor Coil Outlet Temperature"
       },
-      "indoor_coil_raw": {
-        "name": "Indoor Coil Sensor (raw)"
-      },
-      "indoor_coil_outlet_raw": {
-        "name": "Indoor Coil Outlet Sensor (raw)"
-      },
       "outdoor_coil_raw": {
         "name": "Outdoor Coil Sensor (raw)"
       },

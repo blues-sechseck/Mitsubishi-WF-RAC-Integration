@@ -243,12 +243,6 @@
       "indoor_coil_outlet_temp": {
         "name": "室內熱交換器出口溫度"
       },
-      "indoor_coil_raw": {
-        "name": "室內熱交換器感測器（原始值）"
-      },
-      "indoor_coil_outlet_raw": {
-        "name": "室內熱交換器出口感測器（原始值）"
-      },
       "outdoor_coil_raw": {
         "name": "室外熱交換器感測器（原始值）"
       },
