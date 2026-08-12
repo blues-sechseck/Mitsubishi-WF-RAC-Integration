@@ -87,9 +87,9 @@ SERVICE_DATA_CODES: Final = (
 #
 # byte = GAIN * Rs / (Rs + R(T)),  R(T) = R25 * exp(B * (1/T - 1/298.15))
 #
-# R25/B are the sensor alexnikgr identified (~5 kOhm, B~3950, see issue #223);
-# with GAIN and the two air channels' own series resistors this reproduces
-# both app tables to ~0.3 K, so only Rs is specific to the coil channel.
+# R25/B are the thermistor's own datasheet values (~5 kOhm, B~3950); with
+# GAIN and the two air channels' own series resistors this reproduces both
+# app tables to ~0.3 K, so only Rs is specific to the coil channel.
 COIL_THERMISTOR_R25: Final = 5200.0
 COIL_THERMISTOR_B: Final = 3900.0
 COIL_ADC_GAIN: Final = 367.0
@@ -199,7 +199,7 @@ class RacParser:
         command that doesn't touch either, including every command this
         integration sent before these features existed). Mirrors
         AirconStatCoder.addCommandVariableData(); unverified on real hardware
-        except where noted - see todo.md.
+        except where noted in the branches below.
         """
         if aircon_stat.HomeLeaveModeStatusRequest:
             segments = [

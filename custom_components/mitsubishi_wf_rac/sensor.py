@@ -95,7 +95,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         DiagnosticsSensor(device, "Account Expires", ATTR_ACCOUNT_EXPIRES, True),
         # Off until it is understood: reads a constant 1 on both test units
         # regardless of what the machine is doing, so it does not currently
-        # track the unit's LED - see todo.md.
+        # track the unit's LED.
         DiagnosticsSensor(device, "LED Status", ATTR_LED_STATUS),
         DiagnosticsSensor(device, "Auto Heating", ATTR_AUTO_HEATING, True),
         DiagnosticsSensor(device, "Model Nr", ATTR_MODEL_NR),
@@ -208,7 +208,7 @@ def _async_remove_home_leave_mode_sensors(hass, device: Device) -> None:
     Replaced by writable entities on the Controls section of the device page:
     HomeLeaveModeNumber (TempRule/TempSetting) in number.py, the AirFlow
     selects in select.py - editable directly instead of only via the
-    set_home_leave_mode action, see todo.md.
+    set_home_leave_mode action.
     """
     registry = er.async_get(hass)
     for mode in ("cooling", "heating"):
