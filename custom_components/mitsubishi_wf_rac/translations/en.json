@@ -242,15 +242,6 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Indoor Coil Outlet Temperature"
-      },
-      "outdoor_coil_raw": {
-        "name": "Outdoor Coil Sensor (raw)"
-      },
-      "discharge_superheat_raw": {
-        "name": "Discharge Superheat (raw)"
-      },
-      "protection_raw": {
-        "name": "Protection Number (raw)"
       }
     },
     "binary_sensor": {

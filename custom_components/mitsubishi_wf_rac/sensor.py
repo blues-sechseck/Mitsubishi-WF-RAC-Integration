@@ -119,14 +119,11 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
             ServiceDataSensor(device, ATTR_EEV_POSITION),
             ServiceDataSensor(device, ATTR_INDOOR_COIL_TEMP),
             ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
-            ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
-            ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
-            ServiceDataSensor(device, ATTR_PROTECTION_RAW),
         ]
     else:
         _async_remove_service_data_sensors(hass, device)
 
-    _async_remove_indoor_coil_raw_sensors(hass, device)
+    _async_remove_raw_byte_sensors(hass, device)
     _async_remove_home_leave_mode_sensors(hass, device)
 
     async_add_entities(entities)
@@ -167,9 +164,6 @@ def _async_remove_service_data_sensors(hass, device: Device) -> None:
         ATTR_EEV_POSITION,
         ATTR_INDOOR_COIL_TEMP,
         ATTR_INDOOR_COIL_OUTLET_TEMP,
-        ATTR_OUTDOOR_COIL_RAW,
-        ATTR_DISCHARGE_SUPERHEAT_RAW,
-        ATTR_PROTECTION_RAW,
     ):
         entity_id = registry.async_get_entity_id(
             "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-{custom_type}-sensor"
@@ -179,25 +173,36 @@ def _async_remove_service_data_sensors(hass, device: Device) -> None:
             registry.async_remove(entity_id)
 
 
-def _async_remove_indoor_coil_raw_sensors(hass, device: Device) -> None:
-    """Drop the two indoor-coil raw byte sensors from the entity registry.
+def _async_remove_raw_byte_sensors(hass, device: Device) -> None:
+    """Drop the raw byte sensors from the entity registry.
 
-    They existed to calibrate the coil conversion against a thermometer, which
-    is done - the conversion now covers the whole byte range, heating included
-    (see RacParser._coil_temp). Runs unconditionally, unlike the service-data
-    cleanup: whoever enabled them would otherwise keep two entities that
-    nothing feeds any more.
+    None of these is exposed any more. The two indoor-coil ones existed to
+    calibrate the coil conversion against a thermometer, which is done - the
+    conversion now covers the whole byte range, heating included (see
+    RacParser._coil_temp). The other three carry bytes for which no conversion
+    is established, which makes them useful to someone decoding the protocol
+    and to nobody else; they are held back until they can be published as
+    something other than a unitless number.
 
-    The outdoor coil, discharge superheat and protection bytes stay: no
-    conversion is established for those, so the byte is all there is.
+    The parser keeps asking for all five codes, so re-exposing them is a matter
+    of adding the entities back.
+
+    Runs unconditionally, unlike the service-data cleanup: whoever enabled them
+    would otherwise keep entities that nothing feeds any more.
     """
     registry = er.async_get(hass)
-    for custom_type in (ATTR_INDOOR_COIL_RAW, ATTR_INDOOR_COIL_OUTLET_RAW):
+    for custom_type in (
+        ATTR_INDOOR_COIL_RAW,
+        ATTR_INDOOR_COIL_OUTLET_RAW,
+        ATTR_OUTDOOR_COIL_RAW,
+        ATTR_DISCHARGE_SUPERHEAT_RAW,
+        ATTR_PROTECTION_RAW,
+    ):
         entity_id = registry.async_get_entity_id(
             "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-{custom_type}-sensor"
         )
         if entity_id:
-            _LOGGER.debug("Removing calibration sensor %s", entity_id)
+            _LOGGER.debug("Removing raw byte sensor %s", entity_id)
             registry.async_remove(entity_id)
 
 
@@ -464,9 +469,12 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
 
     Enabled once they exist: switching the option on is already the opt-in, so
     making the user enable each one on top would be a second hurdle for
-    nothing. The raw-byte ones are the exception, see _RAW_TYPES below.
-    Diagnostic because they describe how the machine is running rather than
-    what it is set to.
+    nothing. Diagnostic because they describe how the machine is running rather
+    than what it is set to.
+
+    Every value here carries a unit. The parser also decodes three bytes with
+    no established conversion - outdoor coil, discharge superheat, protection
+    number - and those have no sensor, see _async_remove_raw_byte_sensors().
     """
 
     _attr_has_entity_name = True
@@ -481,21 +489,7 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         ATTR_EEV_POSITION: "EevPosition",
         ATTR_INDOOR_COIL_TEMP: "IndoorCoilTemp",
         ATTR_INDOOR_COIL_OUTLET_TEMP: "IndoorCoilOutletTemp",
-        ATTR_OUTDOOR_COIL_RAW: "OutdoorCoilRaw",
-        ATTR_DISCHARGE_SUPERHEAT_RAW: "DischargeSuperheatRaw",
-        ATTR_PROTECTION_RAW: "ProtectionRaw",
     }
-
-    # Thermistor and status bytes with no established conversion. No unit and
-    # no device class on purpose: these are real measurements, but labelling a
-    # byte "degrees" would be a guess. Off by default, because a unitless raw
-    # value is only useful to someone decoding it - which is exactly what the
-    # people asking for them are doing.
-    _RAW_TYPES = (
-        ATTR_OUTDOOR_COIL_RAW,
-        ATTR_DISCHARGE_SUPERHEAT_RAW,
-        ATTR_PROTECTION_RAW,
-    )
 
     def __init__(self, device: Device, custom_type: str) -> None:
         """Initialize the sensor."""
@@ -519,17 +513,8 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
             self._attr_native_unit_of_measurement = PERCENTAGE
             self._attr_icon = "mdi:valve"
         elif custom_type in (ATTR_INDOOR_COIL_TEMP, ATTR_INDOOR_COIL_OUTLET_TEMP):
-            # Converted only inside the calibrated band, unknown above it - the
-            # matching raw sensor covers the rest, see RacParser._coil_temp().
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        elif custom_type in self._RAW_TYPES:
-            self._attr_entity_registry_enabled_default = False
-            self._attr_icon = (
-                "mdi:shield-alert-outline"
-                if custom_type == ATTR_PROTECTION_RAW
-                else "mdi:snowflake-thermometer"
-            )
         self._update_state()
 
     def _update_state(self) -> None:

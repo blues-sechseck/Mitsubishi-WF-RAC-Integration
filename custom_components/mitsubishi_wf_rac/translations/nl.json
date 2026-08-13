@@ -242,15 +242,6 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Binnenunit warmtewisselaar uitlaattemperatuur"
-      },
-      "outdoor_coil_raw": {
-        "name": "Buitenunit warmtewisselaar sensor (ruw)"
-      },
-      "discharge_superheat_raw": {
-        "name": "Persgasoververhitting (ruw)"
-      },
-      "protection_raw": {
-        "name": "Beveiligingscode (ruw)"
       }
     },
     "binary_sensor": {
