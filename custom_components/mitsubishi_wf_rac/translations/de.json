@@ -242,15 +242,6 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Innen-Wärmetauscher Austritt Temperatur"
-      },
-      "outdoor_coil_raw": {
-        "name": "Außen-Wärmetauscher Fühler (roh)"
-      },
-      "discharge_superheat_raw": {
-        "name": "Druckgas-Überhitzung (roh)"
-      },
-      "protection_raw": {
-        "name": "Schutzcode (roh)"
       }
     },
     "binary_sensor": {

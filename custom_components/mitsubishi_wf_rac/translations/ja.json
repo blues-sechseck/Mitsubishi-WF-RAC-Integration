@@ -242,15 +242,6 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "室内熱交換器出口温度"
-      },
-      "outdoor_coil_raw": {
-        "name": "室外熱交換器センサー (生値)"
-      },
-      "discharge_superheat_raw": {
-        "name": "吐出過熱度 (生値)"
-      },
-      "protection_raw": {
-        "name": "保護番号 (生値)"
       }
     },
     "binary_sensor": {

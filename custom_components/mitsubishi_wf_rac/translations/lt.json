@@ -242,15 +242,6 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Vidaus šilumokaičio išėjimo temperatūra"
-      },
-      "outdoor_coil_raw": {
-        "name": "Lauko šilumokaičio jutiklis (neapdorotas)"
-      },
-      "discharge_superheat_raw": {
-        "name": "Išmetamų dujų perkaitimas (neapdorotas)"
-      },
-      "protection_raw": {
-        "name": "Apsaugos numeris (neapdorotas)"
       }
     },
     "binary_sensor": {
