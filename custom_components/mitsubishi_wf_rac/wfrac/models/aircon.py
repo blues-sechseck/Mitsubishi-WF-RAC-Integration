@@ -18,6 +18,7 @@ class AirconCommands(StrEnum):
     Entrust = "Entrust"
     IsSelfCleanOperation = "IsSelfCleanOperation"
     IsSelfCleanReset = "IsSelfCleanReset"
+    ExternalTemperature = "ExternalTemperature"
     # CoolHotJudge = ''
 
     # Vacant = ''
@@ -75,6 +76,7 @@ class Aircon(AirconBase):
 
     IndoorTemp: float = 0.0
     OutdoorTemp: float = 0.0
+    ExternalTemperatureOverride: float | None = None
     Electric: float | None = None
     ErrorCode: str = ""
     IsSelfCleanOperation: bool = False
@@ -131,6 +133,7 @@ class AirconStat(AirconBase):
     HomeLeaveModeForCooling: HomeLeaveModeSetting | None = None
     HomeLeaveModeForHeating: HomeLeaveModeSetting | None = None
     # See AirconCommands - only ever set via Device._maybe_request_service_data().
+    ExternalTemperature: float | None = None
     ServiceDataStatusRequest: bool = False
 
     @classmethod

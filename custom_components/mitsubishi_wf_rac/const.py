@@ -89,6 +89,7 @@ SERVICE_SET_HORIZONTAL_SWING_MODE = "set_horizontal_swing_mode"
 SERVICE_SET_VERTICAL_SWING_MODE = "set_vertical_swing_mode"
 SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS = "request_home_leave_mode_status"
 SERVICE_SET_HOME_LEAVE_MODE = "set_home_leave_mode"
+SERVICE_SET_EXTERNAL_TEMPERATURE = "set_external_temperature"
 SERVICE_SET_ENERGY_TOTAL = "set_energy_total"
 
 # Carries a new total from the reset button (button.py) to the accumulating

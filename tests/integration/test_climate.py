@@ -182,3 +182,12 @@ async def test_round_trip_symmetry_survives_unit_being_off(device):
     entity._update_state()
 
     assert entity._attr_target_temperature == 21
+
+
+async def test_set_external_temperature_forwards_to_device(device):
+    device.async_set_external_temperature = AsyncMock()
+    entity = AircoClimate(device)
+
+    await entity.async_set_external_temperature(temperature=18.7)
+
+    device.async_set_external_temperature.assert_awaited_once_with(18.7)

@@ -610,3 +610,23 @@ def test_to_base64_writes_the_state_alongside_a_home_leave_mode_set(parser):
     )
     block = b64decode(parser.to_base64(stat))[:18]
     assert block == parser.command_to_byte(stat)
+
+def test_command_to_byte_external_temperature_defaults_to_internal_sensor(parser):
+    stat_byte = parser.command_to_byte(_base_stat())
+    assert stat_byte[5] == 0xFF
+
+
+def test_status_request_to_byte_preserves_external_temperature_override(parser):
+    stat = _base_stat(ExternalTemperature=23.5, ServiceDataStatusRequest=True)
+    stat_byte = parser.status_request_to_byte(stat)
+    assert stat_byte[5] == round(23.5 * 4) + 61
+
+
+def test_command_to_byte_external_temperature_encodes_correctly(parser):
+    stat_byte = parser.command_to_byte(_base_stat(ExternalTemperature=23.5))
+    assert stat_byte[5] == round(23.5 * 4) + 61
+
+
+def test_command_to_byte_external_temperature_out_of_range_raises(parser):
+    with pytest.raises(ValueError):
+        parser.command_to_byte(_base_stat(ExternalTemperature=100.0))
