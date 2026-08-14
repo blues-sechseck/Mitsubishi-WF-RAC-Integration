@@ -76,7 +76,6 @@ class Aircon(AirconBase):
 
     IndoorTemp: float = 0.0
     OutdoorTemp: float = 0.0
-    ExternalTemperatureOverride: float | None = None
     Electric: float | None = None
     ErrorCode: str = ""
     IsSelfCleanOperation: bool = False

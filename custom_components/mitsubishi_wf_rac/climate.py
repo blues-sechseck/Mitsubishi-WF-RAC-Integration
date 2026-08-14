@@ -19,10 +19,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .entity import WfRacEntity
 from .coordinator import Device
 from .wfrac.models.aircon import Aircon, AirconCommands, HomeLeaveModeSetting
+from .wfrac.rac_parser import is_external_temperature_mode
 from .const import (
     DOMAIN,
     FAN_MODE_TRANSLATION,
@@ -114,8 +116,10 @@ async def async_setup_entry(
     )
 
 
-class AircoClimate(WfRacEntity, ClimateEntity):
+class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     """Representation of a climate entity"""
+
+    _external_temperature_override: float | None = None
 
     _attr_supported_features: ClimateEntityFeature = SUPPORT_FLAGS
     _attr_temperature_unit: str = UnitOfTemperature.CELSIUS
@@ -135,7 +139,33 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         super().__init__(device)
         self._attr_name = device.device_name
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-climate"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state:
+            restored = last_state.attributes.get("external_temperature_override")
+            if restored is not None:
+                try:
+                    self._external_temperature_override = float(restored)
+                    self._device.set_external_temperature_override(
+                        self._external_temperature_override
+                    )
+                except (TypeError, ValueError):
+                    pass
         self._update_state()
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the integration-side external temperature override so it
+        is recorded by the state recorder and restored after a restart or
+        config-entry reload.
+        """
+        attrs = super().extra_state_attributes or {}
+        if self._external_temperature_override is not None:
+            attrs["external_temperature_override"] = self._external_temperature_override
+        return attrs
 
     def _min_temp_for_mode(self, hvac_mode: HVACMode) -> float:
         """Minimum setpoint depends on hvac_mode.
@@ -296,12 +326,19 @@ class AircoClimate(WfRacEntity, ClimateEntity):
             )
 
     async def async_set_external_temperature(self, temperature: float | None = None) -> None:
-        """Set the external room temperature override or revert to the internal sensor."""
-        if temperature is not None and not (-15.25 <= temperature <= 48.25):
-            raise ServiceValidationError(
-                "External temperature must be between -15.25 and 48.25 °C"
-            )
-        await self._device.async_set_external_temperature(temperature)
+        """Set the external room temperature override or revert to the internal sensor.
+
+        The valid range is enforced by the service schema. The value is stored
+        integration-side so it survives restarts and reloads. It is only sent
+        to the unit when the unit is in a temperature-controlling mode; in
+        off or fan_only the command is deferred and re-armed automatically
+        once the unit switches back to a mode that can use it.
+        """
+        self._external_temperature_override = temperature
+        self._device.set_external_temperature_override(temperature)
+        airco = self._device.airco
+        if is_external_temperature_mode(airco.Operation, airco.OperationMode):
+            await self._device.async_set_external_temperature(temperature)
 
     async def async_turn_off(self) -> None:
         """Turn the entity off."""
@@ -361,8 +398,14 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         target_offset = self._resolve_target_offset(mode_from_operation)
 
         self._attr_target_temperature = airco.PresetTemp + target_offset
-        if airco.ExternalTemperatureOverride is not None:
-            self._attr_current_temperature = airco.ExternalTemperatureOverride
+        # Only show the external temperature override when the unit is in a
+        # mode that actually uses a room temperature for control. Off and
+        # fan_only do not, so falling back to the indoor sensor keeps the
+        # climate card honest and avoids masking a meaningless override value.
+        if self._external_temperature_override is not None and is_external_temperature_mode(
+            airco.Operation, airco.OperationMode
+        ):
+            self._attr_current_temperature = self._external_temperature_override
         else:
             self._attr_current_temperature = airco.IndoorTemp + indoor_offset
         self._attr_fan_mode = list(FAN_MODE_TRANSLATION.keys())[airco.AirFlow]

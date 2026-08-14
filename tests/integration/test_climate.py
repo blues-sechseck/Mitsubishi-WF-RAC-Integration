@@ -19,6 +19,7 @@ from custom_components.mitsubishi_wf_rac.climate import AircoClimate
 from custom_components.mitsubishi_wf_rac.sensor import TemperatureSensor
 from custom_components.mitsubishi_wf_rac.const import (
     ATTR_TARGET_TEMPERATURE,
+    CONF_INDOOR_OFFSET,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -241,10 +242,94 @@ async def test_target_sensor_matches_climate_entity(device, hvac_mode, override_
     assert sensor._attr_native_value == climate._attr_target_temperature
 
 
-async def test_set_external_temperature_forwards_to_device(device):
+async def test_set_external_temperature_forwards_to_device_in_cool_mode(device):
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
     device.async_set_external_temperature = AsyncMock()
     entity = AircoClimate(device)
 
     await entity.async_set_external_temperature(temperature=18.7)
 
     device.async_set_external_temperature.assert_awaited_once_with(18.7)
+
+
+async def test_update_state_uses_indoor_temp_without_override(device):
+    device.config_entry.options[CONF_INDOOR_OFFSET] = 1.5
+    device.airco.IndoorTemp = 22.0
+    entity = AircoClimate(device)
+
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 23.5
+
+
+async def test_update_state_uses_override_when_set(device):
+    device.config_entry.options[CONF_INDOOR_OFFSET] = 1.5
+    device.airco.IndoorTemp = 22.0
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    entity = AircoClimate(device)
+
+    await entity.async_set_external_temperature(temperature=20.0)
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 20.0
+
+
+async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
+    device.config_entry.options[CONF_INDOOR_OFFSET] = 1.5
+    device.airco.IndoorTemp = 22.0
+    entity = AircoClimate(device)
+
+    await entity.async_set_external_temperature(temperature=20.0)
+
+    for operation, mode in (
+        (False, HVAC_TRANSLATION[HVACMode.COOL]),
+        (True, HVAC_TRANSLATION[HVACMode.FAN_ONLY]),
+    ):
+        device.airco.Operation = operation
+        device.airco.OperationMode = mode
+        entity._update_state()
+
+        assert entity._attr_current_temperature == 23.5
+
+
+async def test_set_external_temperature_none_clears_override(device):
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    device.async_set_external_temperature = AsyncMock()
+    entity = AircoClimate(device)
+
+    await entity.async_set_external_temperature(temperature=20.0)
+    await entity.async_set_external_temperature(temperature=None)
+
+    assert entity._external_temperature_override is None
+    device.async_set_external_temperature.assert_awaited_with(None)
+
+
+async def test_set_external_temperature_deferred_when_off(device):
+    device.airco.Operation = False
+    device.async_set_external_temperature = AsyncMock()
+    entity = AircoClimate(device)
+
+    await entity.async_set_external_temperature(temperature=20.0)
+
+    assert entity._external_temperature_override == 20.0
+    device.async_set_external_temperature.assert_not_awaited()
+
+
+async def test_restore_state_restores_external_temperature_override(device):
+    device.async_set_external_temperature = AsyncMock()
+    entity = AircoClimate(device)
+    entity.hass = device.hass
+    entity.entity_id = "climate.test_ac"
+
+    restored_state = SimpleNamespace(
+        attributes={"external_temperature_override": 19.25}
+    )
+    entity.async_get_last_state = AsyncMock(return_value=restored_state)
+
+    await entity.async_added_to_hass()
+
+    assert entity._external_temperature_override == 19.25
+    assert device._external_temperature_override == 19.25

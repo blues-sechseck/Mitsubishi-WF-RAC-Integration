@@ -305,6 +305,25 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         assert self.config_entry is not None
         return self.config_entry.entry_id
 
+    @property
+    def external_temperature_override(self) -> float | None:
+        """Return the integration-side external temperature override, if any.
+
+        This is tracked by the integration rather than read back from the unit,
+        because the wire byte reports the temperature the controller is working
+        with regardless of its source and provides no flag for whether that
+        value originated from an external override.
+        """
+        return self._external_temperature_override
+
+    def set_external_temperature_override(self, value: float | None) -> None:
+        """Set the integration-side override state.
+
+        Used by the climate entity when restoring persisted state; the value
+        is re-armed into future commands without immediately issuing a new one.
+        """
+        self._external_temperature_override = value
+
     async def update(self) -> bool:
         """Update the device information from API.
 

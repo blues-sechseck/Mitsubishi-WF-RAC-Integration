@@ -272,6 +272,18 @@ device before saving it.
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 
+## Services
+
+The climate entity exposes the following entity services (use as `mitsubishi_wf_rac.<service>`).
+
+| Service | Fields | Description |
+|---|---|---|
+| `set_horizontal_swing_mode` | `swing_mode` | Set the horizontal (left/right) louver position. |
+| `set_vertical_swing_mode` | `swing_mode` | Set the vertical (up/down) louver position. |
+| `request_home_leave_mode_status` | — | Ask the unit to report its Home Leave Mode thresholds/airflow (only on supporting models). |
+| `set_home_leave_mode` | `temp_rule_cooling`, `temp_setting_cooling`, `air_flow_cooling`, `temp_rule_heating`, `temp_setting_heating`, `air_flow_heating` | Write new Home Leave Mode thresholds/airflow (only on supporting models). |
+| `set_external_temperature` | `temperature` (optional) | Provide an external room temperature to the AC, overriding its own indoor sensor. Omit `temperature` or pass `null` to revert to the internal sensor. The value is persisted across restarts and reloaded with every ordinary command. |
+
 ### Target Temp. Offset sign convention
 
 The unit's internal temperature sensor is a **return-air sensor built into the indoor unit**, not a sensor sitting where you actually care about the temperature. It reads a biased version of the room - but which direction, and by how much, depends on your installation, not on cooling vs. heating alone:
