@@ -122,6 +122,11 @@ class Aircon(AirconBase):
 class AirconStat(AirconBase):
     """Aircon (command) class extends AirconBase class"""
 
+    # The receive half of an outgoing frame echoes the model byte verbatim, so
+    # it needs the value the unit actually reported rather than the coarse
+    # ModelNr grouping. None marks a stat built by hand instead of from a
+    # received state - see receive_to_bytes() for what it falls back to.
+    ModelNrRaw: int | None = None
     IsSelfCleanOperation: bool = False
     IsSelfCleanReset: bool = False
     # See AirconCommands - only ever set explicitly via
@@ -145,6 +150,7 @@ class AirconStat(AirconBase):
             PresetTemp=aircon.PresetTemp,
             Entrust=aircon.Entrust,
             ModelNr=aircon.ModelNr,
+            ModelNrRaw=aircon.ModelNrRaw,
             Vacant=aircon.Vacant,
             CoolHotJudge=aircon.CoolHotJudge,
             IsSelfCleanOperation=aircon.IsSelfCleanOperation,
