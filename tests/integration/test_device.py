@@ -13,6 +13,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from custom_components.mitsubishi_wf_rac.wfrac import device as device_module
 from custom_components.mitsubishi_wf_rac.wfrac.device import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
@@ -86,6 +89,7 @@ def _shorten_service_data_timing(monkeypatch, offset_ms: int = 5) -> None:
 async def device(hass):
     dev = Device(
         hass,
+        MockConfigEntry(domain=DOMAIN),
         "Test AC",
         "127.0.0.1",
         51443,
@@ -466,7 +470,8 @@ async def test_availability_tolerates_failures_below_limit(hass):
     """The module reassociates to WiFi about once an hour and misses a poll
     while it does; only a sustained run of failures is a real outage."""
     dev = Device(
-        hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
+        hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
+        "device-id", "operator-id", "airco-id",
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()
@@ -490,13 +495,15 @@ async def test_availability_limit_can_be_raised_but_not_lowered(hass):
     enough. Below the floor it only ever produced phantom outages, so a lower
     value is clamped rather than honoured."""
     raised = Device(
-        hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
+        hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
+        "device-id", "operator-id", "airco-id",
         create_swing_mode_select=True, availability_failure_limit=5,
     )
     assert raised._availability_failure_limit == 5
 
     lowered = Device(
-        hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
+        hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
+        "device-id", "operator-id", "airco-id",
         create_swing_mode_select=True, availability_failure_limit=1,
     )
     assert lowered._availability_failure_limit == AVAILABILITY_FAILURE_LIMIT_MIN
@@ -515,7 +522,8 @@ async def test_availability_recovers_and_resets_the_failure_count(hass):
     """A success in between must clear the run, not leave it part-way to the
     limit."""
     dev = Device(
-        hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
+        hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
+        "device-id", "operator-id", "airco-id",
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()

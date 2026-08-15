@@ -10,14 +10,18 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.mitsubishi_wf_rac.button import EnergyTotalResetButton
+from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from custom_components.mitsubishi_wf_rac.wfrac.device import Device
 
 
 @pytest.fixture
 async def device(hass):
     dev = Device(
-        hass, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id",
+        hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
+        "device-id", "operator-id", "airco-id",
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()
