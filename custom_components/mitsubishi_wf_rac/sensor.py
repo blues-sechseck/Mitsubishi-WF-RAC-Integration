@@ -61,7 +61,6 @@ from .const import (
     ATTR_COOL_HOT_JUDGE,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
-    CONF_TARGET_OFFSET,
     CONF_SERVICE_DATA,
     SERVICE_SET_ENERGY_TOTAL,
     SIGNAL_SET_ENERGY_TOTAL,
@@ -331,9 +330,10 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
             outdoor_offset = self._device.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0)
             self._attr_native_value = self._device.airco.OutdoorTemp + outdoor_offset
         elif self._custom_type == ATTR_TARGET_TEMPERATURE:
-            # Kept symmetric with climate.py's target_temperature - see the
-            # comment in ClimateEntity._update_state().
-            target_offset = self._device.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
+            # Kept symmetric with climate.py's target_temperature by going
+            # through the same resolver, per-mode overrides included - see
+            # WfRacEntity._resolve_target_offset().
+            target_offset = self._resolve_target_offset(self._hvac_mode_from_operation)
             self._attr_native_value = self._device.airco.PresetTemp + target_offset
 
 
