@@ -8,6 +8,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -135,6 +136,16 @@ POLL_TIMEOUT = 2 * REQUEST_TIMEOUT + MIN_TIME_BETWEEN_REQUESTS + timedelta(secon
 AVAILABILITY_FAILURE_LIMIT_MIN = 3
 
 
+def registration_full_issue_id(entry_id: str) -> str:
+    """Repair-issue id for a full account table on this entry's airco.
+
+    Shared between Device (which raises/clears it) and async_unload_entry
+    (which clears it on removal, so a deleted entry doesn't leave a dangling
+    issue behind) - one format, so the two can never drift apart.
+    """
+    return f"too_many_devices_{entry_id}"
+
+
 class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instance-attributes
     """Device Class"""
 
@@ -218,6 +229,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         assert self.config_entry is not None
         return self.config_entry.options
+
+    @property
+    def entry_id(self) -> str:
+        """Id of the config entry that owns this device - see options above."""
+        assert self.config_entry is not None
+        return self.config_entry.entry_id
 
     async def update(self) -> bool:
         """Update the device information from API.
@@ -501,12 +518,42 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def add_account(self) -> dict[str, Any] | None:
         """Add account (operator id) from the airco"""
         try:
-            return await self._api.update_account_info(
+            result = await self._api.update_account_info(
                 self._airco_id, self._hass.config.time_zone
             )
         except (AirconApiError, KeyError, TypeError):
             _LOGGER.warning("Could not add account from airco %s", self._airco_id)
             return None
+
+        # result:2 means the airco's fixed-size account table is genuinely
+        # full (see the retry this backs in update() above) - re-registering
+        # cannot succeed on its own until a slot frees up elsewhere (the
+        # official app, or another integration instance), which is nothing
+        # HA can do for the user. That is a standing condition worth a repair
+        # issue rather than a warning that scrolls out of the log every
+        # cycle; a normal-looking response means whatever caused it is gone,
+        # so the issue (if any) clears itself.
+        if result and int(result.get("result", 0)) == 2:
+            self._report_registration_full()
+        else:
+            self._clear_registration_full_issue()
+        return result
+
+    def _report_registration_full(self) -> None:
+        ir.async_create_issue(
+            self._hass,
+            DOMAIN,
+            registration_full_issue_id(self.entry_id),
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="too_many_devices",
+            translation_placeholders={"device_name": self.device_name},
+        )
+
+    def _clear_registration_full_issue(self) -> None:
+        ir.async_delete_issue(
+            self._hass, DOMAIN, registration_full_issue_id(self.entry_id)
+        )
 
     async def set_airco(
         self, params: dict[AirconCommands, Any], *, log_failure: bool = True

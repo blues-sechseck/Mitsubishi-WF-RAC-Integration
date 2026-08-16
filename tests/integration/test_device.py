@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.const import DOMAIN
@@ -137,7 +138,7 @@ async def test_update_none_response_marks_unavailable(device):
 
 async def test_update_api_error_marks_unavailable_and_reregisters(device):
     device._api.get_aircon_stats.side_effect = AirconApiError("boom")
-    device._api.update_account_info = AsyncMock()
+    device._api.update_account_info = AsyncMock(return_value={"result": 0})
     assert await device.update() is False
     assert device.available is False
     device._api.update_account_info.assert_awaited_once()
@@ -154,7 +155,7 @@ async def test_update_transient_unreachable_is_debug_only(device, caplog):
     caplog.clear()
 
     device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
-    device._api.update_account_info = AsyncMock()
+    device._api.update_account_info = AsyncMock(return_value={"result": 0})
     await device.update()
 
     assert device.available is True
@@ -178,7 +179,7 @@ async def test_update_sustained_unreachable_logs_one_transition(device, caplog):
     caplog.clear()
 
     device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
-    device._api.update_account_info = AsyncMock()
+    device._api.update_account_info = AsyncMock(return_value={"result": 0})
     for _ in range(10):
         await device.update()
 
@@ -205,7 +206,7 @@ async def test_update_initially_unreachable_logs_threshold_once(device, caplog):
     even though its public availability flag starts out false.
     """
     device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
-    device._api.update_account_info = AsyncMock()
+    device._api.update_account_info = AsyncMock(return_value={"result": 0})
     for _ in range(5):
         await device.update()
 
@@ -245,7 +246,7 @@ async def test_update_refused_command_reregisters(device):
     out, so this path keeps the re-registration attempt.
     """
     device._api.get_aircon_stats.side_effect = AirconCommandError("refused")
-    device._api.update_account_info = AsyncMock()
+    device._api.update_account_info = AsyncMock(return_value={"result": 0})
     await device.update()
     assert device.available is False
     device._api.update_account_info.assert_awaited_once()
@@ -497,7 +498,7 @@ async def test_availability_tolerates_failures_below_limit(hass):
     assert dev.available is True
 
     dev._api.get_aircon_stats.side_effect = AirconApiError("boom")
-    dev._api.update_account_info = AsyncMock()
+    dev._api.update_account_info = AsyncMock(return_value={"result": 0})
 
     await dev.update()
     assert dev.available is True  # 1st failure - within tolerance
@@ -526,7 +527,7 @@ async def test_availability_limit_can_be_raised_but_not_lowered(hass):
     assert lowered._availability_failure_limit == AVAILABILITY_FAILURE_LIMIT_MIN
 
     lowered._api = AsyncMock()
-    lowered._api.update_account_info = AsyncMock()
+    lowered._api.update_account_info = AsyncMock(return_value={"result": 0})
     lowered._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await lowered.update()
 
@@ -544,7 +545,7 @@ async def test_availability_recovers_and_resets_the_failure_count(hass):
         swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
-    dev._api.update_account_info = AsyncMock()
+    dev._api.update_account_info = AsyncMock(return_value={"result": 0})
     dev._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await dev.update()
 
@@ -756,6 +757,51 @@ async def test_add_account_returns_none_on_api_error(device):
     device._api.update_account_info.side_effect = AirconApiError("failed")
 
     assert await device.add_account() is None
+
+
+# --- add_account() / registration-full repair issue -----------------------
+
+
+def _issue(device):
+    return ir.async_get(device._hass).async_get_issue(
+        DOMAIN, device_module.registration_full_issue_id(device.config_entry.entry_id)
+    )
+
+
+async def test_add_account_reports_repair_issue_when_table_is_full(device):
+    device._api.update_account_info.return_value = {"result": 2}
+
+    await device.add_account()
+
+    assert _issue(device) is not None
+
+
+async def test_add_account_clears_repair_issue_once_registration_succeeds(device):
+    device._api.update_account_info.return_value = {"result": 2}
+    await device.add_account()
+    assert _issue(device) is not None
+
+    device._api.update_account_info.return_value = {"result": 0}
+    await device.add_account()
+
+    assert _issue(device) is None
+
+
+async def test_add_account_does_not_report_an_issue_on_ordinary_success(device):
+    device._api.update_account_info.return_value = {"result": 0}
+
+    await device.add_account()
+
+    assert _issue(device) is None
+
+
+async def test_update_reregister_reports_repair_issue_when_table_stays_full(device):
+    device._api.get_aircon_stats.side_effect = AirconApiError("evicted")
+    device._api.update_account_info.return_value = {"result": 2}
+
+    await device.update()
+
+    assert _issue(device) is not None
 
 
 async def test_set_airco_raises_when_refresh_does_not_provide_state(device):

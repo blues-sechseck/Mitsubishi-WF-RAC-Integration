@@ -41,6 +41,12 @@
       "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "Too many devices registered on {device_name}",
+      "description": "Home Assistant could not register itself with this Airco because the module's account table is full. Open the Smart M-Air app and remove another registered device, or do a factory reset of the module, then reload this integration."
+    }
+  },
   "options": {
     "step": {
       "init": {

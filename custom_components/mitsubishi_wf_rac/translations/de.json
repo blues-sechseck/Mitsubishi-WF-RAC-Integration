@@ -64,6 +64,12 @@
       "message": "{entity_id} ist kein Energieverbrauch-Gesamt-Sensor."
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "Zu viele Geräte an {device_name} registriert",
+      "description": "Home Assistant konnte sich bei dieser Klimaanlage nicht registrieren, weil die Konten-Tabelle des Moduls voll ist. Öffnen Sie die Smart-M-Air-App und entfernen Sie ein anderes registriertes Gerät, oder setzen Sie das Modul auf Werkseinstellungen zurück, und laden Sie diese Integration anschließend neu."
+    }
+  },
   "options": {
     "step": {
       "init": {

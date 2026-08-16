@@ -64,6 +64,12 @@
       "message": "{entity_id} は積算電力量センサーではありません。"
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "{device_name} に登録されているデバイスが多すぎます",
+      "description": "モジュールのアカウントテーブルが一杯のため、Home Assistantはこのエアコンに登録できませんでした。Smart M-Airアプリで登録済みの別のデバイスを削除するか、モジュールを工場出荷時設定にリセットしてから、このインテグレーションを再読み込みしてください。"
+    }
+  },
   "options": {
     "step": {
       "init": {

@@ -64,6 +64,12 @@
       "message": "{entity_id} 不是累計用電量感測器。"
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "{device_name} 上註冊的裝置過多",
+      "description": "由於模組的帳戶表已滿，Home Assistant 無法在此空調上註冊。請在 Smart M-Air 應用程式中刪除另一個已註冊的裝置，或對模組進行出廠重置，然後重新載入此整合。"
+    }
+  },
   "options": {
     "step": {
       "init": {

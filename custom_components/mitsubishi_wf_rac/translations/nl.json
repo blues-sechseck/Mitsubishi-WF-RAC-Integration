@@ -64,6 +64,12 @@
       "message": "{entity_id} is geen totaal-energieverbruiksensor."
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "Te veel apparaten geregistreerd op {device_name}",
+      "description": "Home Assistant kon zich niet registreren bij deze airco omdat de accounttabel van de module vol is. Open de Smart M-Air-app en verwijder een ander geregistreerd apparaat, of reset de module naar de fabrieksinstellingen, en herlaad daarna deze integratie."
+    }
+  },
   "options": {
     "step": {
       "init": {
