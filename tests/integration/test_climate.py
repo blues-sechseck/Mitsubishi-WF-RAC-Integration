@@ -54,7 +54,7 @@ async def device(hass):
         "device-id",
         "operator-id",
         "airco-id",
-        create_swing_mode_select=True,
+        swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
     return dev

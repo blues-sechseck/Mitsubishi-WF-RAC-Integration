@@ -38,7 +38,7 @@ from ..unit.live_captures import LIVE_CAPTURES
 async def platform_device(hass):
     entry = MockConfigEntry(domain=DOMAIN, options={})
     entry.add_to_hass(hass)
-    device = Device(hass, entry, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id", create_swing_mode_select=True)
+    device = Device(hass, entry, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id", "airco-id", swing_selects_enabled_default=True)
     device._api = AsyncMock()
     device._api.get_aircon_stats.return_value = {"numOfAccount": 1, "airconStat": LIVE_CAPTURES["on_cool"][0]}
     await device.update()
@@ -123,11 +123,12 @@ async def test_platform_option_and_capability_gates(hass, platform_device):
     entry = _entry(platform_device)
     platform_device.airco.Electric = None
     platform_device.airco.Capabilities = replace(platform_device.airco.Capabilities, vacant_property=False, home_leave_mode=False)
-    platform_device._create_swing_mode_select = False
+    platform_device._swing_selects_enabled_default = False
     assert await _entities(binary_sensor.async_setup_entry, hass, entry)
     assert await _entities(button.async_setup_entry, hass, entry) == []
     assert await _entities(number.async_setup_entry, hass, entry) == []
-    assert await _entities(select.async_setup_entry, hass, entry) == []
+    swing_entities = await _entities(select.async_setup_entry, hass, entry)
+    assert [entity.entity_registry_enabled_default for entity in swing_entities] == [False, False, False]
     assert await _entities(switch.async_setup_entry, hass, entry) == []
 
     platform_device._firmware_update_check_enabled = False

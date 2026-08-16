@@ -29,6 +29,8 @@ CONF_AVAILABILITY_RETRY_LIMIT = "availability_retry_limit"
 # availability polling, this isn't required for the integration to work, and
 # some users may not want any cloud call at all - see Device._maybe_check_firmware_update().
 CONF_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
+# Read only for entries created before swing selects were always registered.
+# New entries must not write this key.
 CONF_CREATE_SWING_MODE_SELECT = "create_swing_mode_select"
 CONF_CONNECTION_METHOD = "connection_method"
 ATTR_DEVICE_ID = "device_id"

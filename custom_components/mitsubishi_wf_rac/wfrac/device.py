@@ -147,7 +147,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             device_id: str,
             operator_id: str,
             airco_id: str,
-            create_swing_mode_select: bool,
+            swing_selects_enabled_default: bool,
             availability_failure_limit: int = AVAILABILITY_FAILURE_LIMIT_MIN,
             firmware_update_check_enabled: bool = False,
             connection_method: str | None = None,
@@ -190,7 +190,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._availability_failure_limit = max(
             AVAILABILITY_FAILURE_LIMIT_MIN, availability_failure_limit
         )
-        self._create_swing_mode_select = create_swing_mode_select
+        self._swing_selects_enabled_default = swing_selects_enabled_default
         # Serializes set_airco() calls end-to-end (snapshot build through
         # self._airco update) so a call can never build its diff from a
         # snapshot that's stale because another set_airco() is still in
@@ -778,9 +778,9 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         return self._available
 
     @property
-    def create_swing_mode_select(self) -> bool:
-        """Create swing mode select"""
-        return self._create_swing_mode_select
+    def swing_selects_enabled_default(self) -> bool:
+        """Return the registry default for the standalone swing selects."""
+        return self._swing_selects_enabled_default
 
     @property
     def connection_method(self) -> str | None:

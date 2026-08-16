@@ -17,8 +17,7 @@
           "name": "Airco Name",
           "host": "Host (IP) address",
           "port": "Port",
-          "force_update": "Ignore Duplicate IP (can/will cause Errors so check error log)",
-          "create_swing_mode_select": "Whether to create an additional swing mode selectors."
+          "force_update": "Ignore Duplicate IP (can/will cause Errors so check error log)"
         },
         "description": "Please fill in the correct information to add the Airco Manually",
         "title": "WF-RAC AC connection info"
@@ -40,14 +39,17 @@
           "host": "Host (IP) address",
           "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
-          "create_swing_mode_select": "Whether to create an additional swing mode selectors.",
           "indoor_offset": "Indoor Temp. Sensor Offset",
           "outdoor_offset": "Outdoor Temp. Sensor Offset",
           "target_offset": "Target Temp. Offset",
           "target_offset_cool": "Target Temp. Offset (Cooling)",
           "target_offset_heat": "Target Temp. Offset (Heating)"
         },
-        "title": "WF-RAC AC connection info"
+        "title": "WF-RAC options",
+        "data_description": {
+          "target_offset_cool": "Leave empty to use the general target temperature offset.",
+          "target_offset_heat": "Leave empty to use the general target temperature offset."
+        }
       }
     }
   },

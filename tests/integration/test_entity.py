@@ -23,7 +23,7 @@ async def device(hass):
     dev = Device(
         hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
         "device-id", "operator-id", "airco-id",
-        create_swing_mode_select=True,
+        swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
     return dev

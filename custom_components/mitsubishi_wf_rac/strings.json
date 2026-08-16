@@ -39,26 +39,102 @@
           "host": "[%key:common::config_flow::data::host%]",
           "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
+          "indoor_offset": "Indoor Temp. Sensor Offset",
+          "outdoor_offset": "Outdoor Temp. Sensor Offset",
+          "target_offset": "Target Temp. Offset",
           "target_offset_cool": "Target Temp. Offset (Cooling)",
           "target_offset_heat": "Target Temp. Offset (Heating)"
         },
-        "title": "WF-RAC AC connection info"
+        "title": "WF-RAC options",
+        "data_description": {
+          "target_offset_cool": "Leave empty to use the general target temperature offset.",
+          "target_offset_heat": "Leave empty to use the general target temperature offset."
+        }
       }
     }
   },
   "entity": {
     "sensor": {
+      "indoor": {
+        "name": "Indoor"
+      },
+      "outdoor": {
+        "name": "Outdoor"
+      },
+      "target": {
+        "name": "Target"
+      },
+      "airco_id": {
+        "name": "Airco ID"
+      },
+      "operator_id": {
+        "name": "Operator ID"
+      },
+      "device_id": {
+        "name": "Device ID"
+      },
+      "host": {
+        "name": "IP"
+      },
+      "connected_accounts": {
+        "name": "Accounts"
+      },
+      "error": {
+        "name": "Error"
+      },
+      "updated_by": {
+        "name": "Updated By"
+      },
+      "account_expires": {
+        "name": "Account Expires"
+      },
+      "led_status": {
+        "name": "LED Status"
+      },
+      "auto_heating": {
+        "name": "Auto Heating"
+      },
+      "model_nr": {
+        "name": "Model Nr"
+      },
       "cool_hot_judge": {
         "name": "Cool Hot Judge"
+      },
+      "energy_usage": {
+        "name": "Energy Usage (current run)"
+      },
+      "energy_usage_total": {
+        "name": "Energy Usage Total"
+      },
+      "compressor_frequency": {
+        "name": "Compressor Frequency"
       },
       "compressor_frequency_raw": {
         "name": "Compressor Frequency (raw)"
       },
+      "operating_current": {
+        "name": "Operating Current"
+      },
       "operating_current_raw": {
         "name": "Operating Current (raw)"
       },
+      "hot_gas_temp": {
+        "name": "Hot Gas Temperature"
+      },
       "hot_gas_temp_raw": {
         "name": "Hot Gas Temperature (raw)"
+      },
+      "eev_pulses": {
+        "name": "EEV Pulses"
+      },
+      "eev_position": {
+        "name": "EEV Position"
+      },
+      "indoor_coil_temp": {
+        "name": "Indoor Coil Temperature"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Indoor Coil Outlet Temperature"
       },
       "indoor_coil_raw": {
         "name": "Indoor Coil Temperature (raw)"
@@ -79,6 +155,139 @@
     "update": {
       "firmware_update": {
         "name": "Firmware Update"
+      }
+    },
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "auto": "Auto",
+              "quiet": "Quiet",
+              "low": "Low",
+              "medium": "Medium",
+              "high": "High"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "up_down_auto": "Up/Down Auto",
+              "highest": "Highest",
+              "middle": "Middle",
+              "normal": "Normal",
+              "lowest": "Lowest",
+              "3d_auto": "3D Auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "left_right_auto": "Left/Right Auto",
+              "left_left": "Left-Left",
+              "left_center": "Left-Center",
+              "center_center": "Center-Center",
+              "center_right": "Center-Right",
+              "right_right": "Right-Right",
+              "left_right": "Left-Right",
+              "right_left": "Right-Left",
+              "3d_auto": "3D Auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Horizontal Swing Direction",
+        "state": {
+          "left_right_auto": "Left/Right Auto",
+          "left_left": "Left-Left",
+          "left_center": "Left-Center",
+          "center_center": "Center-Center",
+          "center_right": "Center-Right",
+          "right_right": "Right-Right",
+          "left_right": "Left-Right",
+          "right_left": "Right-Left",
+          "3d_auto": "3D Auto"
+        }
+      },
+      "vertical_swing": {
+        "name": "Vertical Swing Direction",
+        "state": {
+          "up_down_auto": "Up/Down Auto",
+          "highest": "Highest",
+          "middle": "Middle",
+          "normal": "Normal",
+          "lowest": "Lowest",
+          "3d_auto": "3D Auto"
+        }
+      },
+      "fan_speed": {
+        "name": "Fan Speed",
+        "state": {
+          "auto": "Auto",
+          "quiet": "Quiet",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        }
+      },
+      "home_leave_mode": {
+        "name": "Home Leave Mode",
+        "state": {
+          "off": "Off",
+          "away_cool": "Away Cooling",
+          "away_heat": "Away Heating"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Home Leave Cooling Air Flow",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Home Leave Heating Air Flow",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Home Leave Cooling Outdoor Temp. Threshold"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Home Leave Cooling Target Room Temp."
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Home Leave Heating Outdoor Temp. Threshold"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Home Leave Heating Target Room Temp."
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      },
+      "occupancy": {
+        "name": "Presence"
+      },
+      "compressor": {
+        "name": "Compressor Demand"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Reset Energy Usage Total"
       }
     }
   }

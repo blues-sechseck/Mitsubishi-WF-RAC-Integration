@@ -17,8 +17,7 @@
           "name": "Airco Naam",
           "host": "Host (IP) adres",
           "port": "Poort",
-          "force_update": "Negeer dubbel IP (kan en zal fouten veroorzaken, dus controleer het foutlog)",
-          "create_swing_mode_select": "Of er extra zwaaimodus-selectors moeten worden aangemaakt."
+          "force_update": "Negeer dubbel IP (kan en zal fouten veroorzaken, dus controleer het foutlog)"
         },
         "description": "Voer de juiste informatie toe om de airco handmatig toe te voegen ",
         "title": "WF-RAC AC verbinding info"
@@ -40,14 +39,13 @@
           "host": "Host (IP) adres",
           "availability_retry_limit": "Herhaal limiet (minimaal 3)",
           "firmware_update_check": "Firmware-updatecontrole (online)",
-          "create_swing_mode_select": "Of er extra zwaaimodus-selectors moeten worden aangemaakt.",
           "indoor_offset": "Binnen offset",
           "outdoor_offset": "Buiten offset",
           "target_offset": "Doel offset",
           "target_offset_cool": "Doel offset (Koelen)",
           "target_offset_heat": "Doel offset (Verwarmen)"
         },
-        "title": "WF-RAC AC connectie info"
+        "title": "WF-RAC opties"
       }
     }
   },
