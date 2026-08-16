@@ -45,7 +45,11 @@
           "target_offset_cool": "Zieltemperatur-Offset (Kühlen)",
           "target_offset_heat": "Zieltemperatur-Offset (Heizen)"
         },
-        "title": "WF-RAC Optionen"
+        "title": "WF-RAC Optionen",
+        "data_description": {
+          "target_offset_cool": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden.",
+          "target_offset_heat": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden."
+        }
       }
     }
   },
@@ -222,11 +226,20 @@
       "compressor_frequency": {
         "name": "Kompressorfrequenz"
       },
+      "compressor_frequency_raw": {
+        "name": "Kompressorfrequenz (Rohwert)"
+      },
       "operating_current": {
         "name": "Betriebsstrom"
       },
+      "operating_current_raw": {
+        "name": "Betriebsstrom (Rohwert)"
+      },
       "hot_gas_temp": {
         "name": "Heißgastemperatur"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Heißgastemperatur (Rohwert)"
       },
       "eev_pulses": {
         "name": "EEV-Pulse"
@@ -239,6 +252,21 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Innen-Wärmetauscher Austritt Temperatur"
+      },
+      "indoor_coil_raw": {
+        "name": "Innen-Wärmetauscher Temperatur (Rohwert)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Innen-Wärmetauscher Austritt Temperatur (Rohwert)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Außen-Wärmetauscher Temperatur (Rohwert)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Druckgas-Überhitzung (Rohwert)"
+      },
+      "protection_raw": {
+        "name": "Schutznummer (Rohwert)"
       }
     },
     "binary_sensor": {
@@ -252,7 +280,6 @@
         "name": "Kompressoranforderung"
       }
     },
-    "switch": {},
     "update": {
       "firmware_update": {
         "name": "Firmware-Update"
@@ -262,6 +289,7 @@
       "reset_energy_total": {
         "name": "Energieverbrauch gesamt zurücksetzen"
       }
-    }
+    },
+    "switch": {}
   }
 }
