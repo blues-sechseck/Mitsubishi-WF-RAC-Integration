@@ -9,7 +9,8 @@
     },
     "abort": {
       "existing_instance_updated": "Huidige configuratie is geüpdatet.",
-      "already_configured": "Airco is al geconfigureerd"
+      "already_configured": "Airco is al geconfigureerd",
+      "reconfigure_successful": "Herconfiguratie geslaagd"
     },
     "step": {
       "user": {
@@ -28,6 +29,15 @@
         "data": {
           "name": "Airco naam"
         }
+      },
+      "reconfigure": {
+        "data": {
+          "name": "Airco Naam",
+          "host": "Host (IP) adres",
+          "port": "Poort"
+        },
+        "description": "Werk de verbindingsgegevens voor deze airco bij.",
+        "title": "WF-RAC AC verbinding herconfigureren"
       }
     }
   },
@@ -59,7 +69,6 @@
       "init": {
         "description": "Hieronder zijn instellingen die je kan aanpassen voor deze airco.",
         "data": {
-          "host": "Host (IP) adres",
           "availability_retry_limit": "Herhaal limiet (minimaal 3)",
           "firmware_update_check": "Firmware-updatecontrole (online)",
           "indoor_offset": "Binnen offset",

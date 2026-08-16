@@ -133,11 +133,13 @@ These duplicate the climate entity's swing/fan attributes as standalone entities
 
 ## Options
 
-Configurable via the integration's "Configure" (options) flow.
+Configurable via the integration's "Configure" (options) flow. The host/IP
+address itself isn't here - it's connection-critical, so changing it goes
+through "Reconfigure" instead, which re-validates the new address against the
+device before saving it.
 
 | Option | Range | Description |
 |---|---|---|
-| Host (IP) address | IP or hostname | Address of the WF-RAC module. |
 | Retry limit | 3 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link; it cannot be set lower. |
 | Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. |
 | Outdoor Temp. Sensor Offset | -15..15 °C | Same, for the Outdoor Temperature sensor. |

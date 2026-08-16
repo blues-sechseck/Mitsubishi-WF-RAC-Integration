@@ -17,6 +17,15 @@
         "data": {
           "name": "[%key:common::config_flow::data::name%]"
         }
+      },
+      "reconfigure": {
+        "data": {
+          "name": "[%key:common::config_flow::data::name%]",
+          "host": "[%key:common::config_flow::data::host%]",
+          "port": "[%key:common::config_flow::data::port%]"
+        },
+        "description": "Update the connection details for this Airco.",
+        "title": "Reconfigure WF-RAC AC connection"
       }
     },
     "error": {
@@ -28,7 +37,8 @@
     },
     "abort": {
       "existing_instance_updated": "Updated existing configuration.",
-      "already_configured": "[%key:common::config_flow::abort::already_configured_service%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_service%]",
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
     }
   },
   "options": {
@@ -36,7 +46,6 @@
       "init": {
         "description": "Below are the options you can change for this airco.",
         "data": {
-          "host": "[%key:common::config_flow::data::host%]",
           "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
           "indoor_offset": "Indoor Temp. Sensor Offset",

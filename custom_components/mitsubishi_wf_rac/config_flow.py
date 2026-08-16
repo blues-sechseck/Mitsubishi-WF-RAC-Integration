@@ -76,7 +76,10 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return None
 
     async def _async_register_airco(
-            self, hass: HomeAssistant, data: dict[str, Any]
+            self,
+            hass: HomeAssistant,
+            data: dict[str, Any],
+            exclude_entry_id: str | None = None,
     ) -> dict[str, Any]:
         """Validate the user input allows us to connect, and register with the airco device"""
         if len(data[CONF_HOST]) < 3:
@@ -86,11 +89,13 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             raise InvalidName
 
         if not data.get(CONF_FORCE_UPDATE):
-            # Is this hostname or IP address already configured?
+            # Is this hostname or IP address already configured on a *different*
+            # entry? During reconfigure, the entry being edited already owns
+            # this host among its own options, so it must not flag itself.
             existing_entry = self._find_entry_matching_option(
                 CONF_HOST, lambda h: h == data[CONF_HOST]
             )
-            if existing_entry:
+            if existing_entry and existing_entry.entry_id != exclude_entry_id:
                 raise HostAlreadyConfigured(error_name=existing_entry.data[CONF_NAME])
 
         repository = Repository(
@@ -268,6 +273,68 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=data_schema, user_input=user_input
         )
 
+    async def async_step_reconfigure(
+            self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle changing an existing entry's connection details (host/port/name)."""
+        reconfigure_entry = self._get_reconfigure_entry()
+        current = {
+            CONF_NAME: reconfigure_entry.data[CONF_NAME],
+            CONF_HOST: reconfigure_entry.options[CONF_HOST],
+            CONF_PORT: reconfigure_entry.data[CONF_PORT],
+        }
+
+        field = partial(self._field, user_input or current)
+        data_schema = vol.Schema(
+            {
+                field(CONF_NAME, vol.Required): cv.string,
+                field(CONF_HOST, vol.Required): cv.string,
+                field(CONF_PORT, vol.Optional, 51443): cv.port,
+            }
+        )
+
+        errors: dict[str, str] = {}
+        description_placeholders: dict[str, str] = {}
+
+        if user_input:
+            try:
+                data = dict(user_input)
+                data[CONF_OPERATOR_ID] = reconfigure_entry.data[CONF_OPERATOR_ID]
+                data[CONF_DEVICE_ID] = reconfigure_entry.data[CONF_DEVICE_ID]
+
+                info = await self._async_register_airco(
+                    self.hass, data, exclude_entry_id=reconfigure_entry.entry_id
+                )
+
+                new_data = {**reconfigure_entry.data, **data}
+                new_options = {**reconfigure_entry.options, CONF_HOST: new_data.pop(CONF_HOST)}
+
+                return self.async_update_reload_and_abort(
+                    reconfigure_entry,
+                    title=info[CONF_NAME],
+                    data=new_data,
+                    options=new_options,
+                )
+            except KnownError as error:
+                errors, placeholders = error.get_errors_and_placeholders(
+                    data_schema.schema
+                )
+                description_placeholders.update(
+                    {k: str(v) for k, v in placeholders.items()}
+                )
+            except Exception:  # pylint: disable=broad-except
+                # Same outermost boundary as _async_create_common: a bug here
+                # should surface as "unexpected_error", not crash the flow.
+                _LOGGER.error("Unexpected exception", exc_info=True)
+                errors[CONF_BASE] = "unexpected_error"
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders=description_placeholders,
+        )
+
     async def async_step_zeroconf(
             self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
@@ -314,7 +381,12 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Host moved to the reconfigure flow (validated against the
+            # device) - keep the entry's existing value, since this form no
+            # longer collects it and async_create_entry replaces options
+            # wholesale rather than merging.
+            data = {**user_input, CONF_HOST: self.config_entry.options[CONF_HOST]}
+            return self.async_create_entry(title="", data=data)
 
         offset_range_validator = vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0))
         # target_offset_cool/heat are optional per-mode overrides that must
@@ -335,10 +407,6 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_HOST,
-                        default=self.config_entry.options.get(CONF_HOST),
-                    ): str,
                     # Floor, not a free number: values below the minimum were
                     # the reason this option kept needing correcting in
                     # migrations. Raising it stays available for weak links.
