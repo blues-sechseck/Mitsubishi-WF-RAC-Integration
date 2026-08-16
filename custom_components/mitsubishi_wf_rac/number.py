@@ -16,6 +16,7 @@ from .wfrac.models.aircon import HomeLeaveModeSetting
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 # Same bounds as the temp_rule_*/temp_setting_* fields in services.yaml's
 # set_home_leave_mode action.

@@ -24,6 +24,7 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 # Heating uses the unit's own Heating TempSetting (10.0°C), which matches
 # HOME_LEAVE_TEMP_HEAT exactly. Cooling does not: the unit's Cooling
