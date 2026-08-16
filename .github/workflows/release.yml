@@ -1,0 +1,60 @@
+name: Release
+
+# Attaches the installable archive to a release. HACS reads `zip_release` in
+# hacs.json and installs that asset instead of GitHub's source zipball, which
+# is also the only way GitHub counts downloads at all - the zipball is not
+# counted.
+#
+# With `zip_release` set, a release WITHOUT this asset cannot be installed, so
+# this workflow is not cosmetic: every published release and pre-release needs
+# it to finish. workflow_dispatch re-attaches the asset to an existing tag if a
+# run ever fails.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and attach the asset to"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    name: Build and attach
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
+
+      - name: Check manifest version against the tag
+        # The version in manifest.json is what Home Assistant and HACS report
+        # to the user; a tag that disagrees with it produces an install that
+        # claims the wrong version and never offers the update.
+        run: |
+          tag="${{ inputs.tag || github.event.release.tag_name }}"
+          manifest=$(python3 -c "import json;print(json.load(open('custom_components/mitsubishi_wf_rac/manifest.json'))['version'])")
+          if [ "$tag" != "$manifest" ]; then
+            echo "::error::tag $tag does not match manifest.json version $manifest"
+            exit 1
+          fi
+
+      - name: Build the archive
+        # Zipped from inside the integration directory: HACS extracts the
+        # archive straight into custom_components/mitsubishi_wf_rac/, so
+        # manifest.json has to sit at the root of the zip rather than in a
+        # nested folder.
+        run: |
+          cd custom_components/mitsubishi_wf_rac
+          zip -r "$GITHUB_WORKSPACE/mitsubishi_wf_rac.zip" . \
+            -x '__pycache__/*' '*/__pycache__/*'
+
+      - name: Attach it to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.event.release.tag_name }}
+          files: mitsubishi_wf_rac.zip
