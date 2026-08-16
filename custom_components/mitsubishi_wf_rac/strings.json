@@ -53,6 +53,29 @@
       }
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Could not reach the Airco at {device}."
+    },
+    "temperature_required": {
+      "message": "A target temperature is required."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C is below the {min_temp} °C minimum for this mode."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C is above the {max_temp} °C maximum for this mode."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "This model does not report the Home Leave Mode capability."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Home Leave Mode values are unknown yet. Call the climate entity's \"Request Home Leave Mode status\" action once first - the unit doesn't include them in a plain poll."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} is not an Energy Usage Total sensor."
+    }
+  },
   "entity": {
     "sensor": {
       "indoor": {

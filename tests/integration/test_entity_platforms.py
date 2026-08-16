@@ -7,6 +7,7 @@ import pytest
 
 from homeassistant.components.climate.const import HVACAction, HVACMode
 from homeassistant.const import EntityCategory
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry, MockEntityPlatform
 
@@ -212,11 +213,11 @@ async def test_climate_commands_and_state_branches(platform_device):
     await entity.async_set_swing_horizontal_mode(horizontal)
     assert platform_device.async_queue_command.await_args.args[0][AirconCommands.Entrust] is False
 
-    with pytest.raises(ValueError, match="required"):
+    with pytest.raises(ServiceValidationError, match="required"):
         await entity.async_set_temperature()
-    with pytest.raises(ValueError, match="below minimum"):
+    with pytest.raises(ServiceValidationError, match="below minimum"):
         await entity.async_set_temperature(temperature=9, hvac_mode=HVACMode.HEAT)
-    with pytest.raises(ValueError, match="above maximum"):
+    with pytest.raises(ServiceValidationError, match="above maximum"):
         await entity.async_set_temperature(temperature=34, hvac_mode=HVACMode.COOL)
 
     platform_device.airco.Operation = True

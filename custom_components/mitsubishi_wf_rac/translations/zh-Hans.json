@@ -31,6 +31,29 @@
       }
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "无法连接到位于 {device} 的空调。"
+    },
+    "temperature_required": {
+      "message": "需要指定目标温度。"
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature}°C 低于此模式下的最低温度 {min_temp}°C。"
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature}°C 高于此模式下的最高温度 {max_temp}°C。"
+    },
+    "home_leave_mode_not_supported": {
+      "message": "此型号未报告支持离家模式（Home Leave Mode）功能。"
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "离家模式的数值尚未知晓。请先调用一次空调实体的“请求离家模式状态”操作 —— 常规轮询不包含这些数值。"
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} 不是累计用电量传感器。"
+    }
+  },
   "options": {
     "step": {
       "init": {

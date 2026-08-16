@@ -31,6 +31,29 @@
       }
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Nepavyko pasiekti kondicionieriaus adresu {device}."
+    },
+    "temperature_required": {
+      "message": "Būtina nurodyti norimą temperatūrą."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C yra žemiau šio režimo minimumo ({min_temp} °C)."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C yra virš šio režimo maksimumo ({max_temp} °C)."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "Šis modelis nepraneša apie Home Leave Mode galimybę."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Home Leave Mode reikšmės dar nežinomos. Pirmiausia kartą iškvieskite kondicionieriaus veiksmą \"Request Home Leave Mode status\" - įprasta apklausa šių reikšmių negrąžina."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} nėra bendro energijos suvartojimo jutiklis."
+    }
+  },
   "options": {
     "step": {
       "init": {

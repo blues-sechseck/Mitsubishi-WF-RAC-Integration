@@ -31,6 +31,29 @@
       }
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "{device} のエアコンに到達できませんでした。"
+    },
+    "temperature_required": {
+      "message": "目標温度を指定してください。"
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature}°Cはこのモードの最低温度{min_temp}°Cを下回っています。"
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature}°Cはこのモードの最高温度{max_temp}°Cを超えています。"
+    },
+    "home_leave_mode_not_supported": {
+      "message": "この機種はHome Leave Mode機能を報告していません。"
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Home Leave Modeの値はまだ不明です。エアコンエンティティの「Home Leave Modeステータスを要求」アクションを一度実行してください。通常のポーリングにはこの値は含まれません。"
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} は積算電力量センサーではありません。"
+    }
+  },
   "options": {
     "step": {
       "init": {

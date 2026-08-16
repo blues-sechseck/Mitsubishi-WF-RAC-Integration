@@ -22,6 +22,7 @@ from .const import (
     CONF_CONNECTION_METHOD,
     CONF_FIRMWARE_UPDATE_CHECK,
     CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
+    DOMAIN,
 )
 from .wfrac.device import AVAILABILITY_FAILURE_LIMIT_MIN, Device
 
@@ -116,7 +117,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
     # device that's unreachable at startup gets HA's automatic retry-with-backoff
     # rather than a silently "loaded" entry with no working entities.
     if not _device.available:
-        raise ConfigEntryNotReady(f"Could not reach device [{device}]")
+        raise ConfigEntryNotReady(
+            f"Could not reach device [{device}]",
+            translation_domain=DOMAIN,
+            translation_key="cannot_connect",
+            translation_placeholders={"device": device},
+        )
 
     # Persist the discovered connection method (http/https) so we can skip
     # protocol discovery (and its potential extra round-trip) after the next

@@ -8,6 +8,7 @@ adds a language.
 """
 
 import json
+import re
 from pathlib import Path
 
 import custom_components.mitsubishi_wf_rac as component
@@ -21,6 +22,25 @@ def test_entity_keys_match_english_translation():
     """Both files carry the same English text, so they must carry the same keys."""
     for domain, entries in ENGLISH["entity"].items():
         assert set(STRINGS["entity"].get(domain, {})) == set(entries), domain
+
+
+def test_exception_keys_match_english_translation():
+    assert set(STRINGS["exceptions"]) == set(ENGLISH["exceptions"])
+
+
+def test_raised_translation_keys_exist_in_strings():
+    """Every `translation_key="..."` passed to a HomeAssistantError subclass
+    must resolve somewhere - a typo here fails silently at runtime (HA falls
+    back to the plain message arg) rather than raising, so nothing else would
+    catch it.
+    """
+    used_keys = set()
+    for path in COMPONENT.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        used_keys.update(re.findall(r'translation_key="([a-z_]+)"', text))
+
+    assert used_keys, "expected to find at least one translation_key in the source"
+    assert used_keys <= set(STRINGS["exceptions"])
 
 
 def test_step_data_keys_match_english_translation():

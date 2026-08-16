@@ -107,7 +107,9 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
             raise HomeAssistantError(
                 "Home Leave Mode values are unknown yet - call the climate "
                 "entity's 'Request Home Leave Mode status' action once "
-                "first, the unit doesn't include them in a plain poll."
+                "first, the unit doesn't include them in a plain poll.",
+                translation_domain=DOMAIN,
+                translation_key="home_leave_mode_status_unknown",
             )
         if self._mode == "cooling":
             cooling = replace(cooling, **{self._attribute: value})

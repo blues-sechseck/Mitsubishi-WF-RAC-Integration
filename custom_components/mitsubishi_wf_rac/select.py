@@ -332,7 +332,9 @@ class HomeLeaveAirFlowSelect(WfRacEntity, SelectEntity):
             raise HomeAssistantError(
                 "Home Leave Mode values are unknown yet - call the climate "
                 "entity's 'Request Home Leave Mode status' action once "
-                "first, the unit doesn't include them in a plain poll."
+                "first, the unit doesn't include them in a plain poll.",
+                translation_domain=DOMAIN,
+                translation_key="home_leave_mode_status_unknown",
             )
         air_flow = HOME_LEAVE_AIRFLOW_OPTIONS.index(option)
         if self._mode == "cooling":

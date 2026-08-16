@@ -158,7 +158,11 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         """Set new target temperature."""
         set_temp = kwargs.get(ATTR_TEMPERATURE)
         if set_temp is None:
-            raise ValueError("Temperature is required")
+            raise ServiceValidationError(
+                "Temperature is required",
+                translation_domain=DOMAIN,
+                translation_key="temperature_required",
+            )
 
         # If this call also switches hvac_mode, the minimum must reflect the mode
         # being switched to, not the (still stale until the next poll) current one.
@@ -168,10 +172,26 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         max_temp = self._max_temp_for_mode(target_hvac_mode)
 
         if set_temp < min_temp:
-            raise ValueError(f"Temperature {set_temp} is below minimum {min_temp}")
+            raise ServiceValidationError(
+                f"Temperature {set_temp} is below minimum {min_temp}",
+                translation_domain=DOMAIN,
+                translation_key="temperature_below_minimum",
+                translation_placeholders={
+                    "temperature": str(set_temp),
+                    "min_temp": str(min_temp),
+                },
+            )
 
         if set_temp > max_temp:
-            raise ValueError(f"Temperature {set_temp} is above maximum {max_temp}")
+            raise ServiceValidationError(
+                f"Temperature {set_temp} is above maximum {max_temp}",
+                translation_domain=DOMAIN,
+                translation_key="temperature_above_maximum",
+                translation_placeholders={
+                    "temperature": str(set_temp),
+                    "max_temp": str(max_temp),
+                },
+            )
 
         # The AC unit's own thermostat logic uses its own indoor sensor reading,
         # subject to the same calibration bias CONF_INDOOR_OFFSET corrects for
@@ -259,7 +279,9 @@ class AircoClimate(WfRacEntity, ClimateEntity):
     def _require_home_leave_mode_capability(self) -> None:
         if not self._device.airco.Capabilities.home_leave_mode:
             raise ServiceValidationError(
-                "This model does not report the HomeLeaveMode capability"
+                "This model does not report the HomeLeaveMode capability",
+                translation_domain=DOMAIN,
+                translation_key="home_leave_mode_not_supported",
             )
 
     async def async_request_home_leave_mode_status(self) -> None:
