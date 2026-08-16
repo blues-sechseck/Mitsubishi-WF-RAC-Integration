@@ -1,5 +1,7 @@
 {
   "name": "Smart M-Air (Mitsubishi WF-RAC)",
   "homeassistant": "2025.12",
-  "render_readme": true
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "mitsubishi_wf_rac.zip"
 }
