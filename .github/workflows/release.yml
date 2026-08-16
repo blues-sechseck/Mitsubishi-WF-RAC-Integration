@@ -1,54 +1,69 @@
 name: Release
 
-# Builds the installable archive and puts it on a DRAFT release, so the tag
-# push is the only thing needed to get a release ready.
+# Uploads the installable archive to a release while it is still a DRAFT.
 #
-# Why a draft, and why this trigger: GitHub releases are immutable once
-# published, so an asset cannot be attached afterwards - a workflow running on
-# `release: published` is always too late. The archive therefore has to exist
-# before the release goes live.
+# Two GitHub rules decide the shape of this workflow, and together they leave
+# exactly one working order:
+#   - a published release is immutable, so an asset cannot be added afterwards
+#   - tag creation is restricted, so a tag cannot be pushed ahead of time
+# A draft release is therefore the only place the archive can land: it has no
+# tag yet and is still mutable. Publishing it creates the tag and freezes both.
 #
 # Releasing is two steps:
-#   1. git push origin <tag>          -> this workflow drafts the release
-#   2. gh release edit <tag> --notes-file notes.md --draft=false
+#   1. gh release create <tag> --draft --prerelease \
+#        --target <sha> --notes-file notes.md      -> this workflow attaches the archive
+#   2. gh release edit <tag> --draft=false
 #
 # HACS reads `zip_release` in hacs.json and installs this asset instead of
 # GitHub's source zipball, which is also the only way GitHub counts downloads -
 # the zipball is not counted. With `zip_release` set, a release without the
 # asset cannot be installed, so step 1 must be green before step 2.
 #
-# workflow_dispatch rebuilds the archive for a tag whose run failed.
+# workflow_dispatch retries the upload for a draft whose run failed.
 
 on:
-  push:
-    tags: ["*"]
+  release:
+    types: [created]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to build and attach the asset to"
+        description: "Tag of the draft release to build and attach the asset to"
         required: true
 
 permissions:
   contents: write
 
+env:
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+
 jobs:
   archive:
-    name: Build and draft
+    name: Build and attach
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve the tag and the commit to build
+        # A draft release has no git tag yet, so the archive must be built from
+        # target_commitish - checking out the tag name would find nothing.
+        id: target
+        run: |
+          tag="${{ inputs.tag || github.event.release.tag_name }}"
+          ref=$(gh release view "$tag" --json targetCommitish -q .targetCommitish)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ steps.target.outputs.ref }}
 
       - name: Check manifest version against the tag
         # The version in manifest.json is what Home Assistant and HACS report
         # to the user; a tag that disagrees with it produces an install that
         # claims the wrong version and never offers the update.
         run: |
-          tag="${{ inputs.tag || github.ref_name }}"
           manifest=$(python3 -c "import json;print(json.load(open('custom_components/mitsubishi_wf_rac/manifest.json'))['version'])")
-          if [ "$tag" != "$manifest" ]; then
-            echo "::error::tag $tag does not match manifest.json version $manifest"
+          if [ "${{ steps.target.outputs.tag }}" != "$manifest" ]; then
+            echo "::error::tag ${{ steps.target.outputs.tag }} does not match manifest.json version $manifest"
             exit 1
           fi
 
@@ -62,12 +77,7 @@ jobs:
           zip -r "$GITHUB_WORKSPACE/mitsubishi_wf_rac.zip" . \
             -x '__pycache__/*' '*/__pycache__/*'
 
-      - name: Draft the release with the archive attached
-        # A tag carrying a suffix (-beta1, -dev2) is a pre-release. Notes and
-        # publishing stay manual, see the header.
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          draft: true
-          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
-          files: mitsubishi_wf_rac.zip
+      - name: Attach it to the draft
+        # gh upload rather than a release action: it adds the asset and leaves
+        # the draft and pre-release flags exactly as the release was created.
+        run: gh release upload "${{ steps.target.outputs.tag }}" mitsubishi_wf_rac.zip --clobber
