@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -134,7 +135,7 @@ POLL_TIMEOUT = 2 * REQUEST_TIMEOUT + MIN_TIME_BETWEEN_REQUESTS + timedelta(secon
 AVAILABILITY_FAILURE_LIMIT_MIN = 3
 
 
-class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attributes
+class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instance-attributes
     """Device Class"""
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -182,7 +183,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._last_service_data_request: datetime | None = None
         self._last_service_data_response: datetime | None = None
         self._service_data_expired = False
-        self._service_data_task: asyncio.Task | None = None
+        self._service_data_task: asyncio.Task[None] | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
         # an older version, and refusing to set up over it would be worse than
@@ -196,8 +197,8 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         # snapshot that's stale because another set_airco() is still in
         # flight - see set_airco() below.
         self._send_lock = asyncio.Lock()
-        self._consolidated_params: dict[str, Any] = {}
-        self._consolidation_task: asyncio.Task | None = None
+        self._consolidated_params: dict[AirconCommands, Any] = {}
+        self._consolidation_task: asyncio.Task[None] | None = None
 
         super().__init__(
             hass,
@@ -206,6 +207,17 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             name=name,
             update_interval=MIN_TIME_BETWEEN_UPDATES,
         )
+
+    @property
+    def options(self) -> Mapping[str, Any]:
+        """Options of the config entry that owns this device.
+
+        DataUpdateCoordinator.config_entry is typed as optional because a
+        coordinator need not have one - this integration always constructs a
+        Device with one, passed to super().__init__() above.
+        """
+        assert self.config_entry is not None
+        return self.config_entry.options
 
     async def update(self) -> bool:
         """Update the device information from API.
@@ -310,12 +322,18 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         ):
             return
         self._last_firmware_check = now
-        self._hass.async_create_task(self._async_check_firmware_update())
+        self._hass.async_create_task(
+            self._async_check_firmware_update(
+                self._firm_type, self._wireless_firmware_ver
+            )
+        )
 
-    async def _async_check_firmware_update(self) -> None:
+    async def _async_check_firmware_update(
+        self, firm_type: str, wireless_firmware_ver: str
+    ) -> None:
         """Compare the locally-reported wireless firmware version against the
         manufacturer's latest for this firmType."""
-        latest = await fetch_latest_firmware(self._hass, self._firm_type)
+        latest = await fetch_latest_firmware(self._hass, firm_type)
         if latest is None or latest.get("wireless") is None:
             return
 
@@ -324,11 +342,11 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             # firmVer <= its current one as "nothing to do" and returns 200 OK
             # without flashing - a `!=` check would misreport that harmless
             # case as an available downgrade.
-            update_available = int(latest["wireless"]) > int(self._wireless_firmware_ver)
+            update_available = int(latest["wireless"]) > int(wireless_firmware_ver)
         except (TypeError, ValueError):
             _LOGGER.debug(
                 "Could not compare firmware versions: local=%r latest=%r",
-                self._wireless_firmware_ver,
+                wireless_firmware_ver,
                 latest["wireless"],
             )
             return
@@ -472,7 +490,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             SERVICE_DATA_MAX_AGE.total_seconds(),
         )
 
-    async def delete_account(self):
+    async def delete_account(self) -> dict[str, Any] | None:
         """Delete account (operator id) from the airco"""
         try:
             return await self._api.del_account_info(self._airco_id)
@@ -480,7 +498,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             _LOGGER.warning("Could not delete account from airco %s", self._airco_id)
             return None
 
-    async def add_account(self):
+    async def add_account(self) -> dict[str, Any] | None:
         """Add account (operator id) from the airco"""
         try:
             return await self._api.update_account_info(
@@ -491,7 +509,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             return None
 
     async def set_airco(
-        self, params: dict[str, Any], *, log_failure: bool = True
+        self, params: dict[AirconCommands, Any], *, log_failure: bool = True
     ) -> None:
         """Method to send airco command.
 
@@ -534,7 +552,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                     _LOGGER.warning("Could not send airco data: %s", str(ex))
                 raise
 
-    async def async_queue_command(self, params: dict[str, Any]) -> None:
+    async def async_queue_command(self, params: dict[AirconCommands, Any]) -> None:
         """Queue an airco command, coalescing with any other calls made within
         UPDATE_CONSOLIDATION_PERIOD into a single set_airco() call. Used by all
         entities instead of calling set_airco() directly, so that e.g. a fan
@@ -675,7 +693,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
                 "Could not reach the airco [%s]: %s", self.device_name, error
             )
 
-    def set_available(self, available: bool):
+    def set_available(self, available: bool) -> None:
         """Set available status"""
         self._set_availability(available)
 
@@ -787,7 +805,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         """Return the discovered/persisted communication method (http/https), if known."""
         return self._api.method
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> Aircon:
         """Update data via library.
 
         A missed poll is not an update failure. These modules restart their

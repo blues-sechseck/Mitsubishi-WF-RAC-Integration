@@ -1,3 +1,10 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.mypy]
+# Scoped to the integration itself, not tests/ - the Quality Scale's
+# strict-typing rule is about the shipped code. Homeassistant, voluptuous and
+# aiohttp all resolve cleanly here, so nothing needs ignore_missing_imports.
+files = ["custom_components/mitsubishi_wf_rac"]
+strict = true

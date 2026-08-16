@@ -1,7 +1,7 @@
 """Module that contains Utils that are used in codebase"""
 
 
-def find_match(content, *inputMatrix):
+def find_match(content: int, *inputMatrix: int) -> int:
     """Simple method for finding a match from inputMatrix"""
     i = 0
     for value in inputMatrix:

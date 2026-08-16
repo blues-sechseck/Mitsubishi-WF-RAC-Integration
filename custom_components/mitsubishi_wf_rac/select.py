@@ -7,10 +7,12 @@ from dataclasses import replace
 from . import MitsubishiWfRacConfigEntry
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.components.select import SelectEntity
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .entity import WfRacEntity
-from .wfrac.models.aircon import AirconCommands
+from .wfrac.models.aircon import AirconCommands, HomeLeaveModeSetting
 from .wfrac.device import Device
 from .const import (
     DOMAIN,
@@ -50,7 +52,11 @@ HOME_LEAVE_MODE_AWAY_HEAT = "away_heat"
 HOME_LEAVE_AIRFLOW_OPTIONS = ["auto", "1", "2", "3", "4"]
 
 
-async def async_setup_entry(_hass, entry: MitsubishiWfRacConfigEntry, async_add_entities):
+async def async_setup_entry(
+    _hass: HomeAssistant,
+    entry: MitsubishiWfRacConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Setup select entries"""
 
     device: Device = entry.runtime_data.device
@@ -311,7 +317,7 @@ class HomeLeaveAirFlowSelect(WfRacEntity, SelectEntity):
         )
         self._update_state()
 
-    def _current_setting(self):
+    def _current_setting(self) -> HomeLeaveModeSetting | None:
         return (
             self._device.airco.HomeLeaveModeForCooling
             if self._mode == "cooling"

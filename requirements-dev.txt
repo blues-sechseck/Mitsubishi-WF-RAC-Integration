@@ -5,3 +5,4 @@
 # pulls a much more current homeassistant pin.
 homeassistant>=2025.12.0
 pytest-homeassistant-custom-component
+mypy

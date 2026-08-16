@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from functools import partial
 from typing import Any
 from uuid import uuid4
@@ -45,7 +46,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 5
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
-    _discovery_info = {}
+    _discovery_info: dict[str, Any] = {}
     DOMAIN = DOMAIN
 
     def is_matching(self, other_flow: "WfRacConfigFlow") -> bool:
@@ -56,14 +57,18 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # For flows without unique IDs, consider them non-matching
         return False
 
-    def _find_entry_matching(self, key, matches):
+    def _find_entry_matching(
+        self, key: str, matches: Callable[[Any], bool]
+    ) -> config_entries.ConfigEntry | None:
         """Returns the first entry where matches(entry.data[key]) returns True"""
         for entry in self._async_current_entries():
             if key in entry.data and matches(entry.data[key]):
                 return entry
         return None
 
-    def _find_entry_matching_option(self, key, matches):
+    def _find_entry_matching_option(
+        self, key: str, matches: Callable[[Any], bool]
+    ) -> config_entries.ConfigEntry | None:
         """Returns the first entry where matches(entry.options[key]) returns True"""
         for entry in self._async_current_entries():
             if key in entry.options and matches(entry.options[key]):
@@ -71,7 +76,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return None
 
     async def _async_register_airco(
-            self, hass: HomeAssistant, data: dict
+            self, hass: HomeAssistant, data: dict[str, Any]
     ) -> dict[str, Any]:
         """Validate the user input allows us to connect, and register with the airco device"""
         if len(data[CONF_HOST]) < 3:
@@ -99,11 +104,11 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             airco_id = await repository.get_airco_id()
         except (AirconApiError, KeyError, TypeError) as query_failed:
-            raise CannotConnect(reason=str(query_failed)) from query_failed  # type: ignore
+            raise CannotConnect(reason=str(query_failed)) from query_failed
 
         data[CONF_AIRCO_ID] = airco_id
         if not airco_id:
-            raise CannotConnect(reason="unknown reason")  # type: ignore
+            raise CannotConnect(reason="unknown reason")
 
         _LOGGER.info(
             "Trying to register OperatorId[%s] on Airco[%s]",
@@ -118,18 +123,18 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return data
 
-    async def _async_fetch_operator_id(self):
+    async def _async_fetch_operator_id(self) -> str:
         """Fetch UUID operator id if exists otherwise create it"""
         entry = self._find_entry_matching(CONF_OPERATOR_ID, bool)
         if entry:
-            return entry.data[CONF_OPERATOR_ID]
+            return str(entry.data[CONF_OPERATOR_ID])
         return f"hassio-{str(uuid4())[7:]}"
 
-    async def _async_fetch_device_id(self):
+    async def _async_fetch_device_id(self) -> str:
         """Fetch unique device id if exists otherwise create it"""
         entry = self._find_entry_matching(CONF_DEVICE_ID, bool)
         if entry:
-            return entry.data[CONF_DEVICE_ID]
+            return str(entry.data[CONF_DEVICE_ID])
         return f"homeassistant-device-{uuid4().hex[21:]}"
 
     async def _async_create_common(
@@ -138,9 +143,9 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema: vol.Schema,
             user_input: dict[str, Any] | None = None,
             description_placeholders: dict[str, str] | None = None,
-    ):
+    ) -> ConfigFlowResult:
         """Create a new entry"""
-        errors = {}
+        errors: dict[str, str] = {}
         description_placeholders = description_placeholders or {}
 
         if user_input:
@@ -192,7 +197,12 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
-    def _field(user_input, name, which, default=None):
+    def _field(
+        user_input: dict[str, Any] | None,
+        name: str,
+        which: Callable[..., Any],
+        default: Any = None,
+    ) -> Any:
         """Helper for creating schema fields"""
         value = user_input.get(name, default) if user_input else default
         description = None
@@ -200,7 +210,9 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description = {"suggested_value": value}
         return which(name, description=description)
 
-    async def async_step_discovery_confirm(self, user_input=None):
+    async def async_step_discovery_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle adding device discovered by zeroconf."""
 
         description_placeholders = {
@@ -237,7 +249,9 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Create the options flow."""
         return WfRacOptionsFlowHandler()
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle adding device manually."""
 
         field = partial(self._field, user_input)
@@ -288,7 +302,8 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @property
     def _name(self) -> str | None:
-        return self.context.get(CONF_NAME)
+        name = self.context.get(CONF_NAME)
+        return name if isinstance(name, str) else None
 
 
 class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
@@ -296,7 +311,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(
             self, user_input: dict[str, Any] | None = None
-    ):
+    ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -308,10 +323,10 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
         # fallback-to-target_offset resolution in climate.py. suggested_value
         # (not default=) pre-fills the displayed value without forcing one
         # when absent.
-        per_mode_offset_fields = {
+        per_mode_offset_fields: dict[Any, Any] = {
             vol.Optional(
                 key,
-                description={"suggested_value": self.config_entry.options.get(key)},  # type: ignore
+                description={"suggested_value": self.config_entry.options.get(key)},
             ): vol.Any(None, offset_range_validator)
             for key in (CONF_TARGET_OFFSET_COOL, CONF_TARGET_OFFSET_HEAT)
         }
@@ -322,32 +337,32 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_HOST,
-                        default=self.config_entry.options.get(CONF_HOST),  # type: ignore
+                        default=self.config_entry.options.get(CONF_HOST),
                     ): str,
                     # Floor, not a free number: values below the minimum were
                     # the reason this option kept needing correcting in
                     # migrations. Raising it stays available for weak links.
                     vol.Required(
                         CONF_AVAILABILITY_RETRY_LIMIT,
-                        default=self.config_entry.options.get(  # type: ignore
+                        default=self.config_entry.options.get(
                             CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=AVAILABILITY_FAILURE_LIMIT_MIN)),
                     vol.Required(
                         CONF_FIRMWARE_UPDATE_CHECK,
-                        default=self.config_entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False),  # type: ignore
+                        default=self.config_entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False),
                     ): bool,
                     vol.Optional(
                         CONF_INDOOR_OFFSET,
-                        default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0), # type: ignore
+                        default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0),
                     ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
                     vol.Optional(
                         CONF_OUTDOOR_OFFSET,
-                        default=self.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0), # type: ignore
+                        default=self.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0),
                     ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
                     vol.Optional(
                         CONF_TARGET_OFFSET,
-                        default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0), # type: ignore
+                        default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0),
                     ): offset_range_validator,
                     **per_mode_offset_fields,
                 },
@@ -371,11 +386,13 @@ class KnownError(exceptions.HomeAssistantError):
     error_name = "unknown_error"
     applies_to_field = CONF_BASE
 
-    def __init__(self, *args: object, **kwargs: dict[str, str]) -> None:
+    def __init__(self, *args: object, **kwargs: str) -> None:
         super().__init__(*args)
         self._extra_info = kwargs
 
-    def get_errors_and_placeholders(self, schema):
+    def get_errors_and_placeholders(
+        self, schema: Any
+    ) -> tuple[dict[str, str], dict[str, str]]:
         """Return dicts of errors and description_placeholders, for adding to async_show_form"""
         key = self.applies_to_field
         # Errors will only be displayed to the user if the key is actually in the form (or
