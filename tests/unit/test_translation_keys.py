@@ -29,3 +29,23 @@ def test_step_data_keys_match_english_translation():
             assert actual == expected, f"{section}.{step}"
 
 
+def test_setup_and_options_steps_have_distinct_titles():
+    """The options form grew out of a copy of the setup step and kept its
+    heading while the fields diverged - it now holds offsets and polling
+    behaviour, none of which is connection info.
+    """
+    setup = STRINGS["config"]["step"]["user"]["title"]
+    options = STRINGS["options"]["step"]["init"]["title"]
+    assert setup != options
+
+
+def test_per_mode_offsets_explain_that_blank_means_the_general_offset():
+    """These two fields carry no default on purpose: blank resolves to the
+    general target offset (see climate.py). Without a description the form
+    gives the user no way to know that.
+    """
+    described = STRINGS["options"]["step"]["init"]["data_description"]
+    assert "target_offset_cool" in described
+    assert "target_offset_heat" in described
+
+

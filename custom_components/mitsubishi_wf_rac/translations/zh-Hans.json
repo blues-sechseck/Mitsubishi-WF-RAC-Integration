@@ -45,7 +45,7 @@
           "target_offset_cool": "目标偏移（制冷）",
           "target_offset_heat": "目标偏移（制热）"
         },
-        "title": "WF-RAC 空调连接信息"
+        "title": "WF-RAC 选项"
       }
     }
   },

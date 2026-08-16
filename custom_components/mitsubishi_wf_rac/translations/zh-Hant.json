@@ -45,7 +45,7 @@
           "target_offset_cool": "目標偏移（製冷）",
           "target_offset_heat": "目標偏移（製熱）"
         },
-        "title": "WF-RAC 空調連接資訊"
+        "title": "WF-RAC 選項"
       }
     }
   },

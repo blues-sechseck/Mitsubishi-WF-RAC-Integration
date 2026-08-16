@@ -45,7 +45,7 @@
           "target_offset_cool": "設定オフセット（冷房時）",
           "target_offset_heat": "設定オフセット（暖房時）"
         },
-        "title": "WF-RACエアコン接続情報"
+        "title": "WF-RAC の設定"
       }
     }
   },

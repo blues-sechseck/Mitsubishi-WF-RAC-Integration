@@ -45,7 +45,11 @@
           "target_offset_cool": "Target Temp. Offset (Cooling)",
           "target_offset_heat": "Target Temp. Offset (Heating)"
         },
-        "title": "WF-RAC AC connection info"
+        "title": "WF-RAC options",
+        "data_description": {
+          "target_offset_cool": "Leave empty to use the general target temperature offset.",
+          "target_offset_heat": "Leave empty to use the general target temperature offset."
+        }
       }
     }
   },
