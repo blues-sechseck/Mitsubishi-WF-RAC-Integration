@@ -71,14 +71,14 @@ This integration creates one device per airco with the following entities.
 | EEV Position *(diagnostic, only with Service Data on)* | % | Same value as EEV Pulses, linearly mapped to 0-255=0-100%. The real full-open pulse count is unknown, so treat this as relative, not calibrated - useful for comparing indoor units on the same system. Same "Service Data" requirement as above. |
 | Indoor Coil Temperature *(diagnostic, only with Service Data on)* | °C | Indoor heat-exchanger temperature (MHI's THI-R1). Per indoor unit, not shared. In cooling it drops as the coil gets cold and rises back to room temperature once the compressor stops - the clearest signal there is for what the unit is actually doing. Works in heating too, where the coil is the condenser and runs to 45 °C and beyond. Same "Service Data" requirement as above. |
 | Indoor Coil Outlet Temperature *(diagnostic, only with Service Data on)* | °C | Indoor heat-exchanger outlet, on the suction side (MHI's THI-R3). Also per indoor unit. Equal to Indoor Coil Temperature while the compressor is off; the difference between the two while it runs is the evaporator superheat. Same "Service Data" requirement as above. |
-| Airco ID *(diagnostic)* | text | Internal ID of the airco. |
+| Airco ID *(diagnostic, disabled by default)* | text | Internal ID of the airco. |
 | Operator ID *(diagnostic, disabled by default)* | text | Internal operator/account ID. |
 | Device ID *(diagnostic, disabled by default)* | text | Internal device ID. |
 | IP *(diagnostic, disabled by default)* | text | Local IP address of the WF-RAC module. |
 | Accounts *(diagnostic, disabled by default)* | number | Number of app accounts currently connected to the unit. |
 | Error *(diagnostic)* | error code | Raw error code reported by the unit; `00` means no error. |
 | Updated By *(diagnostic)* | text | Which account last changed the unit's settings (this integration or the Smart M-Air app). |
-| Account Expires *(diagnostic)* | text | Expiry of the current operator session. |
+| Account Expires *(diagnostic, disabled by default)* | text | Expiry of the current operator session. |
 | LED Status *(diagnostic, disabled by default)* | text | State of the unit's status LED. |
 | Auto Heating *(diagnostic)* | text | State of the unit's automatic heating assist. |
 | Model Nr *(diagnostic, disabled by default)* | number | Raw model-identifier byte reported by the unit. Used to gate which optional features (occupancy, Home Leave) are exposed; mostly useful for diagnosing unsupported models. |
