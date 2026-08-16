@@ -13,7 +13,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, MockEn
 from custom_components.mitsubishi_wf_rac import binary_sensor, button, climate, number, select, sensor, switch, update
 from custom_components.mitsubishi_wf_rac.const import (
     ATTR_COMPRESSOR_FREQUENCY,
+    ATTR_COMPRESSOR_FREQUENCY_RAW,
+    ATTR_OPERATING_CURRENT_RAW,
+    ATTR_HOT_GAS_TEMP_RAW,
     ATTR_INDOOR_COIL_RAW,
+    ATTR_INDOOR_COIL_OUTLET_RAW,
+    ATTR_OUTDOOR_COIL_RAW,
+    ATTR_DISCHARGE_SUPERHEAT_RAW,
+    ATTR_PROTECTION_RAW,
     CONF_SERVICE_DATA,
     DOMAIN,
     HVAC_TRANSLATION,
@@ -92,6 +99,21 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device, m
     assert details[f"{DOMAIN}-airco-id-home-leave-cooling-temp_rule-number"] == (False, None)
     assert details[f"{DOMAIN}-airco-id-home-leave-heating-air-flow-select"] == (False, None)
     assert details[f"{DOMAIN}-airco-id-compressor_frequency-sensor"] == (True, EntityCategory.DIAGNOSTIC)
+    for raw_type in (
+        ATTR_COMPRESSOR_FREQUENCY_RAW,
+        ATTR_OPERATING_CURRENT_RAW,
+        ATTR_HOT_GAS_TEMP_RAW,
+        ATTR_INDOOR_COIL_RAW,
+        ATTR_INDOOR_COIL_OUTLET_RAW,
+        ATTR_OUTDOOR_COIL_RAW,
+        ATTR_DISCHARGE_SUPERHEAT_RAW,
+        ATTR_PROTECTION_RAW,
+    ):
+        raw_sensor = next(entity for entity in entities if entity.unique_id == f"{DOMAIN}-airco-id-{raw_type}-sensor")
+        assert raw_sensor.entity_registry_enabled_default is False
+        assert raw_sensor.entity_category is EntityCategory.DIAGNOSTIC
+        assert raw_sensor.device_class is None
+        assert raw_sensor.native_unit_of_measurement is None
     assert details[f"{DOMAIN}-airco-id-airco_id-sensor"] == (False, EntityCategory.DIAGNOSTIC)
     assert details[f"{DOMAIN}-airco-id-operator_id-sensor"] == (False, EntityCategory.DIAGNOSTIC)
     assert details[f"{DOMAIN}-airco-id-account_expires-sensor"] == (False, EntityCategory.DIAGNOSTIC)
@@ -124,8 +146,7 @@ async def test_platform_option_and_capability_gates(hass, platform_device):
 @pytest.mark.parametrize(
     ("helper", "unique_ids"),
     [
-        (sensor._async_remove_service_data_sensors, [f"{DOMAIN}-airco-id-{ATTR_COMPRESSOR_FREQUENCY}-sensor"]),
-        (sensor._async_remove_raw_byte_sensors, [f"{DOMAIN}-airco-id-{ATTR_INDOOR_COIL_RAW}-sensor"]),
+        (sensor._async_remove_service_data_sensors, [f"{DOMAIN}-airco-id-{ATTR_COMPRESSOR_FREQUENCY}-sensor", f"{DOMAIN}-airco-id-{ATTR_INDOOR_COIL_RAW}-sensor"]),
         (
             sensor._async_remove_home_leave_mode_sensors,
             [

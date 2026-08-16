@@ -27,9 +27,17 @@ from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
 )
 from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
     RacParser,
+    SERVICE_DATA_CODE_BY_FIELD,
     SERVICE_DATA_CODES,
+    SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
     SERVICE_DATA_HOT_GAS_TEMP,
+    SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
+    SERVICE_DATA_INDOOR_COIL_RAW,
+    SERVICE_DATA_OPERATING_CURRENT,
+    SERVICE_DATA_OUTDOOR_COIL_RAW,
+    SERVICE_DATA_PROTECTION_RAW,
 )
 from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     AirconApiError,
@@ -730,6 +738,34 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "code"),
+    (
+        ("CompressorFrequencyRaw", SERVICE_DATA_COMPRESSOR_FREQ),
+        ("OperatingCurrentRaw", SERVICE_DATA_OPERATING_CURRENT),
+        ("HotGasTempRaw", SERVICE_DATA_HOT_GAS_TEMP),
+        ("IndoorCoilRaw", SERVICE_DATA_INDOOR_COIL_RAW),
+        ("IndoorCoilOutletRaw", SERVICE_DATA_INDOOR_COIL_OUTLET_RAW),
+        ("OutdoorCoilRaw", SERVICE_DATA_OUTDOOR_COIL_RAW),
+        ("DischargeSuperheatRaw", SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW),
+        ("ProtectionRaw", SERVICE_DATA_PROTECTION_RAW),
+    ),
+)
+async def test_raw_service_data_sensor_requests_its_segment_code(device, monkeypatch, field, code):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    assert SERVICE_DATA_CODE_BY_FIELD[field] == code
+    monkeypatch.setattr(device, "async_contexts", lambda: {code})
+    device.set_airco = set_airco = AsyncMock()
+
+    device._maybe_request_service_data()
+    await asyncio.sleep(0.05)
+
+    set_airco.assert_awaited_once_with(
+        {AirconCommands.ServiceDataStatusRequest: (code,)}, log_failure=False
+    )
+
+
 async def test_service_data_request_does_not_overlap_an_active_request(device, monkeypatch):
     device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
@@ -1067,6 +1103,20 @@ async def test_service_data_is_carried_forward_between_polls(device):
     device._carry_forward_service_data(new_airco)
 
     assert new_airco.CompressorFrequency == 40.0
+
+
+async def test_raw_service_data_is_carried_forward_between_polls(device):
+    device._airco.CompressorFrequencyRaw = 0x10C8
+    device._airco.OperatingCurrentRaw = 0x04
+    device._airco.HotGasTempRaw = 0x15
+    device._last_service_data_response = datetime.now()
+    new_airco = Aircon()
+
+    device._carry_forward_service_data(new_airco)
+
+    assert new_airco.CompressorFrequencyRaw == 0x10C8
+    assert new_airco.OperatingCurrentRaw == 0x04
+    assert new_airco.HotGasTempRaw == 0x15
 
 
 async def test_unconvertible_coil_reading_is_not_carried_forward(device):

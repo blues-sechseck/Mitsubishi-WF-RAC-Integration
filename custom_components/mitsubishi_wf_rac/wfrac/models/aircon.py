@@ -99,8 +99,11 @@ class Aircon(AirconBase):
     # Device._carry_forward_service_data(), same rationale as HomeLeaveMode
     # above: the unit reports these extension segments exactly once.
     CompressorFrequency: float | None = None  # Hz
+    CompressorFrequencyRaw: int | None = None
     OperatingCurrent: float | None = None  # A
+    OperatingCurrentRaw: int | None = None
     HotGasTemp: float | None = None  # deg C
+    HotGasTempRaw: int | None = None
     EevPulses: int | None = None
     EevPosition: int | None = None  # % of raw pulse range 0-255, full-open pulse count unknown
     # deg C, THI-R1/THI-R3, per indoor unit. None outside the calibrated band,
