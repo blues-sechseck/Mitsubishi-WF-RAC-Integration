@@ -40,7 +40,6 @@
           "host": "Host (IP) adresas",
           "availability_retry_limit": "Pakartotinio bandymo limitas (min. 3)",
           "firmware_update_check": "Programinės įrangos atnaujinimų tikrinimas (internetu)",
-          "service_data": "Serviso duomenys",
           "create_swing_mode_select": "Ar kurti papildomus svyravimo režimo pasirinkiklius.",
           "indoor_offset": "Vidaus poslinkis",
           "outdoor_offset": "Lauko poslinkis",

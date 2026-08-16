@@ -39,7 +39,6 @@
           "host": "[%key:common::config_flow::data::host%]",
           "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
-          "service_data": "Service Data",
           "target_offset_cool": "Target Temp. Offset (Cooling)",
           "target_offset_heat": "Target Temp. Offset (Heating)"
         },

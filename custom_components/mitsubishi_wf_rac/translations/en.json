@@ -40,7 +40,6 @@
           "host": "Host (IP) address",
           "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
-          "service_data": "Service Data",
           "create_swing_mode_select": "Whether to create an additional swing mode selectors.",
           "indoor_offset": "Indoor Temp. Sensor Offset",
           "outdoor_offset": "Outdoor Temp. Sensor Offset",

@@ -21,7 +21,6 @@ from custom_components.mitsubishi_wf_rac.const import (
     ATTR_OUTDOOR_COIL_RAW,
     ATTR_DISCHARGE_SUPERHEAT_RAW,
     ATTR_PROTECTION_RAW,
-    CONF_SERVICE_DATA,
     DOMAIN,
     HVAC_TRANSLATION,
     FAN_MODE_TRANSLATION,
@@ -80,7 +79,7 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device, m
     """All optional entities retain their current default-enabled/category contract."""
     platform_device.airco.Capabilities = replace(platform_device.airco.Capabilities, vacant_property=True, home_leave_mode=True)
     platform_device.airco.Electric = 1.2
-    entry = _entry(platform_device, {CONF_SERVICE_DATA: True})
+    entry = _entry(platform_device)
     fake_platform = MagicMock()
     monkeypatch.setattr(sensor.entity_platform, "async_get_current_platform", lambda: fake_platform)
     monkeypatch.setattr(climate.entity_platform, "async_get_current_platform", lambda: fake_platform)
@@ -98,20 +97,17 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device, m
     assert details[f"{DOMAIN}-airco-id-occupancy"] == (True, None)
     assert details[f"{DOMAIN}-airco-id-home-leave-cooling-temp_rule-number"] == (False, None)
     assert details[f"{DOMAIN}-airco-id-home-leave-heating-air-flow-select"] == (False, None)
-    assert details[f"{DOMAIN}-airco-id-compressor_frequency-sensor"] == (True, EntityCategory.DIAGNOSTIC)
+    operation_data_sensors = [entity for entity in entities if isinstance(entity, sensor.ServiceDataSensor)]
+    assert len(operation_data_sensors) == 15
+    assert all(entity.entity_registry_enabled_default is False for entity in operation_data_sensors)
+    assert all(entity.entity_category is EntityCategory.DIAGNOSTIC for entity in operation_data_sensors)
     for raw_type in (
-        ATTR_COMPRESSOR_FREQUENCY_RAW,
-        ATTR_OPERATING_CURRENT_RAW,
-        ATTR_HOT_GAS_TEMP_RAW,
-        ATTR_INDOOR_COIL_RAW,
-        ATTR_INDOOR_COIL_OUTLET_RAW,
-        ATTR_OUTDOOR_COIL_RAW,
-        ATTR_DISCHARGE_SUPERHEAT_RAW,
-        ATTR_PROTECTION_RAW,
+        ATTR_COMPRESSOR_FREQUENCY_RAW, ATTR_OPERATING_CURRENT_RAW,
+        ATTR_HOT_GAS_TEMP_RAW, ATTR_INDOOR_COIL_RAW,
+        ATTR_INDOOR_COIL_OUTLET_RAW, ATTR_OUTDOOR_COIL_RAW,
+        ATTR_DISCHARGE_SUPERHEAT_RAW, ATTR_PROTECTION_RAW,
     ):
-        raw_sensor = next(entity for entity in entities if entity.unique_id == f"{DOMAIN}-airco-id-{raw_type}-sensor")
-        assert raw_sensor.entity_registry_enabled_default is False
-        assert raw_sensor.entity_category is EntityCategory.DIAGNOSTIC
+        raw_sensor = next(entity for entity in operation_data_sensors if entity.unique_id == f"{DOMAIN}-airco-id-{raw_type}-sensor")
         assert raw_sensor.device_class is None
         assert raw_sensor.native_unit_of_measurement is None
     assert details[f"{DOMAIN}-airco-id-airco_id-sensor"] == (False, EntityCategory.DIAGNOSTIC)
@@ -146,7 +142,6 @@ async def test_platform_option_and_capability_gates(hass, platform_device):
 @pytest.mark.parametrize(
     ("helper", "unique_ids"),
     [
-        (sensor._async_remove_service_data_sensors, [f"{DOMAIN}-airco-id-{ATTR_COMPRESSOR_FREQUENCY}-sensor", f"{DOMAIN}-airco-id-{ATTR_INDOOR_COIL_RAW}-sensor"]),
         (
             sensor._async_remove_home_leave_mode_sensors,
             [

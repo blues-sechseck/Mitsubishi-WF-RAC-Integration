@@ -30,7 +30,6 @@ from .const import (
     CONF_OPERATOR_ID,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
-    CONF_SERVICE_DATA,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -158,11 +157,6 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_HOST: user_input[CONF_HOST],
                     CONF_AVAILABILITY_RETRY_LIMIT: AVAILABILITY_FAILURE_LIMIT_MIN,
                     CONF_FIRMWARE_UPDATE_CHECK: False,
-                    # Off by default: each poll would otherwise carry an
-                    # extra write to the unit just to piggy-back a read
-                    # request on it - see wfrac/device.py's
-                    # _maybe_request_service_data().
-                    CONF_SERVICE_DATA: False,
                 }
                 data_input.pop(CONF_HOST)
 
@@ -344,10 +338,6 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_FIRMWARE_UPDATE_CHECK,
                         default=self.config_entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False),  # type: ignore
-                    ): bool,
-                    vol.Required(
-                        CONF_SERVICE_DATA,
-                        default=self.config_entry.options.get(CONF_SERVICE_DATA, False),  # type: ignore
                     ): bool,
                     vol.Optional(
                         CONF_INDOOR_OFFSET,
