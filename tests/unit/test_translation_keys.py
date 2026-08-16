@@ -10,7 +10,9 @@ adds a language.
 import json
 from pathlib import Path
 
-COMPONENT = Path("custom_components/mitsubishi_wf_rac")
+import custom_components.mitsubishi_wf_rac as component
+
+COMPONENT = Path(component.__file__).parent
 STRINGS = json.loads((COMPONENT / "strings.json").read_text(encoding="utf-8"))
 ENGLISH = json.loads((COMPONENT / "translations/en.json").read_text(encoding="utf-8"))
 

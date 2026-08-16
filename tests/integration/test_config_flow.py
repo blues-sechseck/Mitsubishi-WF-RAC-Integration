@@ -14,6 +14,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components import mitsubishi_wf_rac
 from custom_components.mitsubishi_wf_rac.const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
@@ -515,11 +516,8 @@ async def test_options_form_fields_all_have_a_label(hass: HomeAssistant):
     result = await hass.config_entries.options.async_init(entry.entry_id)
     fields = {str(key.schema) for key in result["data_schema"].schema}
 
-    strings = json.loads(
-        Path("custom_components/mitsubishi_wf_rac/strings.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    strings_file = Path(mitsubishi_wf_rac.__file__).parent / "strings.json"
+    strings = json.loads(strings_file.read_text(encoding="utf-8"))
     assert set(strings["options"]["step"]["init"]["data"]) == fields
 
 

@@ -123,7 +123,7 @@ The number/select entities above stay `unknown` until the climate entity's "Requ
 
 ## Select
 
-These duplicate the climate entity's swing/fan attributes as standalone entities, useful for dashboards or automations that prefer a plain `select` over a `climate` attribute. Existing installations that had these selects disabled during setup retain them as disabled entities; enable them from the entity registry when wanted.
+These duplicate the climate entity's swing/fan attributes as standalone entities, useful for dashboards or automations that prefer a plain `select` over a `climate` attribute. Installations that declined them during setup get them as disabled entities, to be enabled from the entity list when wanted.
 
 | Entity | Values | Description |
 |---|---|---|
