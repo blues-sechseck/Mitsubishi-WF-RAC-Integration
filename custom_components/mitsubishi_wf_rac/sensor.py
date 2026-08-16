@@ -156,7 +156,10 @@ async def _async_set_energy_total(entity: SensorEntity, call: ServiceCall) -> No
     """
     if not isinstance(entity, EnergyTotalSensor):
         raise ServiceValidationError(
-            f"{entity.entity_id} is not an Energy Usage Total sensor"
+            f"{entity.entity_id} is not an Energy Usage Total sensor",
+            translation_domain=DOMAIN,
+            translation_key="entity_not_energy_total_sensor",
+            translation_placeholders={"entity_id": entity.entity_id},
         )
     await entity.async_set_total(call.data["value"])
 

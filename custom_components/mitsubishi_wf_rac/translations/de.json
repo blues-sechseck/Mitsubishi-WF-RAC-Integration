@@ -31,6 +31,29 @@
       }
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Die Klimaanlage unter {device} war nicht erreichbar."
+    },
+    "temperature_required": {
+      "message": "Eine Zieltemperatur ist erforderlich."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C liegt unter dem Minimum von {min_temp} °C für diesen Modus."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C liegt über dem Maximum von {max_temp} °C für diesen Modus."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "Dieses Modell meldet die Home-Leave-Mode-Fähigkeit nicht."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Die Home-Leave-Mode-Werte sind noch nicht bekannt. Rufen Sie zuerst einmal die Aktion \"Home-Leave-Mode-Status abfragen\" der Klima-Entität auf - das Gerät liefert diese Werte nicht bei einer normalen Abfrage."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} ist kein Energieverbrauch-Gesamt-Sensor."
+    }
+  },
   "options": {
     "step": {
       "init": {
