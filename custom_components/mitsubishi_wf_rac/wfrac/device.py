@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from ..const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
 from .firmware_check import fetch_latest_firmware
 from .models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
-from .rac_parser import RacParser
+from .rac_parser import RacParser, SERVICE_DATA_CODES
 from .repository import (
     MIN_TIME_BETWEEN_REQUESTS,
     REQUEST_TIMEOUT,
@@ -39,11 +39,11 @@ UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 # interval instead.
 FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
-# Service data (operation-data codes) is opt-in and costs a second request per
-# poll, but it stays on the local network, changes nothing on the unit (see
-# RacParser.status_request_to_byte) and a batched request answers every code in
-# one round trip, so there's no reason to throttle it below the regular poll
-# cadence. See Device._maybe_request_service_data().
+# Service data is requested for active operation-data entities when the option
+# is enabled, and costs a second request per poll. It stays on the local
+# network and changes nothing on the unit (see RacParser.status_request_to_byte),
+# so there's no reason to throttle it below the regular poll cadence. See
+# Device._maybe_request_service_data().
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
 # The rate limit is a guard against a second request inside the same cycle, not
@@ -338,13 +338,15 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self.async_set_updated_data(self._airco)
 
     def _maybe_request_service_data(self) -> None:
-        """Kick off a background service-data request if due and enabled (see
-        SERVICE_DATA_MIN_SPACING). Opt-in like the firmware check above, but
-        for a different reason: this stays on the local network, yet it rides
-        on a setAirconStat (see rac_parser.SERVICE_DATA_CODES) and so doubles
-        the traffic the unit has to answer.
+        """Kick off a background request for active service-data segments if
+        due and enabled (see SERVICE_DATA_MIN_SPACING).
         """
         if not self._service_data_enabled:
+            return
+        service_data_codes = tuple(
+            sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES))
+        )
+        if not service_data_codes:
             return
         if self._service_data_task is not None and not self._service_data_task.done():
             # A retry from the previous cycle is still in flight; piling a
@@ -364,12 +366,12 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         # waiting out the offset, and HA cancels background tasks at shutdown
         # instead of waiting for them.
         self._service_data_task = self._hass.async_create_background_task(
-            self._async_request_service_data(),
+            self._async_request_service_data(service_data_codes),
             name=f"{DOMAIN} service data request {self._airco_id}",
         )
 
-    async def _async_request_service_data(self) -> None:
-        """Ask the unit for the operation-data block, offset from the poll and
+    async def _async_request_service_data(self, service_data_codes: tuple[int, ...]) -> None:
+        """Ask the unit for operation-data segments, offset from the poll and
         retried once if the unit refuses it (see SERVICE_DATA_REQUEST_OFFSET).
         Sends directly rather than through async_queue_command() so the
         refusal is visible here: a queued command is flushed by a detached
@@ -381,7 +383,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         # RacParser.status_request_to_byte). The offset stays because it is
         # about spacing requests, not about what they contain - a second
         # request too soon after the poll is what the module refuses.
-        params = {AirconCommands.ServiceDataStatusRequest: True}
+        params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
         for attempt in (1, 2):
             try:
                 await self.set_airco(params, log_failure=False)

@@ -25,7 +25,12 @@ from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
     Aircon,
     AirconCommands,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import RacParser
+from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
+    RacParser,
+    SERVICE_DATA_CODES,
+    SERVICE_DATA_EEV_PULSES,
+    SERVICE_DATA_HOT_GAS_TEMP,
+)
 from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     AirconApiError,
     AirconCommandError,
@@ -83,6 +88,10 @@ def _shorten_service_data_timing(monkeypatch, offset_ms: int = 5) -> None:
     monkeypatch.setattr(
         device_module, "SERVICE_DATA_RETRY_DELAY", timedelta(milliseconds=5)
     )
+
+
+def _activate_service_data_contexts(device, monkeypatch) -> None:
+    monkeypatch.setattr(device, "async_contexts", lambda: set(SERVICE_DATA_CODES))
 
 
 @pytest.fixture
@@ -653,6 +662,7 @@ async def test_update_does_not_request_service_data_when_disabled_by_default(dev
     # poll, so it must stay off unless explicitly enabled via the
     # service_data option (see const.py's CONF_SERVICE_DATA).
     assert device.service_data_enabled is False
+    _activate_service_data_contexts(device, monkeypatch)
     monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
@@ -663,8 +673,24 @@ async def test_update_does_not_request_service_data_when_disabled_by_default(dev
     device._api.send_airco_command.assert_not_awaited()
 
 
+async def test_update_does_not_request_service_data_without_active_entities(
+    device, monkeypatch
+):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_not_awaited()
+    assert device._last_service_data_request is None
+
+
 async def test_update_requests_service_data_when_enabled(device, monkeypatch):
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
@@ -675,11 +701,66 @@ async def test_update_requests_service_data_when_enabled(device, monkeypatch):
     device._api.send_airco_command.assert_awaited_once()
 
 
+async def test_service_data_request_uses_active_segment_codes(device, monkeypatch):
+    device._service_data_enabled = True
+    _shorten_service_data_timing(monkeypatch)
+    monkeypatch.setattr(
+        device,
+        "async_contexts",
+        lambda: {
+            SERVICE_DATA_HOT_GAS_TEMP,
+            SERVICE_DATA_EEV_PULSES,
+            SERVICE_DATA_EEV_PULSES,
+        },
+    )
+    set_airco = AsyncMock()
+    device.set_airco = set_airco
+
+    device._maybe_request_service_data()
+    await asyncio.sleep(0.05)
+
+    set_airco.assert_awaited_once_with(
+        {
+            AirconCommands.ServiceDataStatusRequest: (
+                SERVICE_DATA_EEV_PULSES,
+                SERVICE_DATA_HOT_GAS_TEMP,
+            )
+        },
+        log_failure=False,
+    )
+
+
+async def test_service_data_request_does_not_overlap_an_active_request(device, monkeypatch):
+    device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
+    device._service_data_task = MagicMock()
+    device._service_data_task.done.return_value = False
+
+    device._maybe_request_service_data()
+
+    assert device._last_service_data_request is None
+
+
+async def test_add_account_returns_none_on_api_error(device):
+    device._api.update_account_info.side_effect = AirconApiError("failed")
+
+    assert await device.add_account() is None
+
+
+async def test_set_airco_raises_when_refresh_does_not_provide_state(device):
+    device._airco = None
+    device._api.get_aircon_stats.return_value = None
+
+    with pytest.raises(ValueError, match="Airco object is empty"):
+        await device.set_airco({})
+
+
 async def test_service_data_request_is_offset_from_the_poll(device, monkeypatch):
     """It must not ride straight off the back of the status poll - landing a
     second write that close is what the unit refuses with HTTP 501 (#230).
     """
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch, offset_ms=40)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
@@ -698,6 +779,7 @@ async def test_service_data_request_carries_no_set_bits(device, monkeypatch):
     unit itself from being undone a minute later (#241/#250).
     """
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch, offset_ms=40)
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     sent = []
@@ -733,6 +815,7 @@ async def test_service_data_request_does_not_re_read_before_sending(
     (#247) is unnecessary now that the write applies nothing.
     """
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch, offset_ms=40)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
@@ -751,6 +834,7 @@ async def test_service_data_request_runs_after_a_change_at_the_unit(
     and skipping cost a cycle of every operation-data sensor.
     """
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     changed_at_the_unit = _stats_response(ON_COOL_PAYLOAD) | {"updatedBy": "aircon"}
     device._api.get_aircon_stats.return_value = changed_at_the_unit
@@ -764,6 +848,7 @@ async def test_service_data_request_runs_after_a_change_at_the_unit(
 
 async def test_service_data_request_is_retried_once_when_refused(device, monkeypatch):
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     calls = []
@@ -784,6 +869,7 @@ async def test_service_data_request_is_retried_once_when_refused(device, monkeyp
 
 async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch, caplog):
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(
@@ -804,6 +890,7 @@ async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch
 
 async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
@@ -824,6 +911,7 @@ async def test_service_data_survives_a_poll_that_answered_early(device, monkeypa
     reporting unit).
     """
     device._service_data_enabled = True
+    _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)

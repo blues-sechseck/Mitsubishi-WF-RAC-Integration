@@ -281,13 +281,12 @@ def test_home_leave_mode_encode_decode_round_trip(parser):
 
 
 def test_service_data_trailer_status_request(parser):
-    stat = _base_stat(ServiceDataStatusRequest=True)
+    requested_codes = (0x90, 0x13, 0x11)
+    stat = _base_stat(ServiceDataStatusRequest=requested_codes)
     trailer = parser._variable_trailer(stat)
-    assert trailer[0] == 9  # nine 4-byte segments
-    groups = [trailer[1 + i * 4:5 + i * 4] for i in range(9)]
-    for group, code in zip(
-        groups, (0x11, 0x90, 0x85, 0x13, 0x81, 0x82, 0x87, 0xB1, 0x7C)
-    ):
+    assert trailer[0] == len(requested_codes)
+    groups = [trailer[1 + i * 4:5 + i * 4] for i in range(len(requested_codes))]
+    for group, code in zip(groups, sorted(requested_codes)):
         # OP1=OP2=OP3=255 -> "report current value", never 0 (a write to the
         # climate MCU).
         assert list(group) == [code, 255, 255, 255]
@@ -570,7 +569,7 @@ def test_translate_bytes_wraps_failures_in_value_error(parser):
 
 
 def test_status_request_block_leaves_every_set_bit_clear(parser):
-    stat = _base_stat(ServiceDataStatusRequest=True)
+    stat = _base_stat(ServiceDataStatusRequest=(0x11,))
     block = parser.status_request_to_byte(stat)
     # Power DB0[1], mode DB0[5], vane DB0[7]/DB1[7], fan DB1[3], setpoint
     # DB2[7], plus the extended bytes command_to_byte() fills in.
@@ -586,7 +585,7 @@ def test_status_request_block_still_carries_cool_hot_judge(parser):
 
 @pytest.mark.parametrize(
     "request_kwargs",
-    [{"ServiceDataStatusRequest": True}, {"HomeLeaveModeStatusRequest": True}],
+    [{"ServiceDataStatusRequest": (0x11,)}, {"HomeLeaveModeStatusRequest": True}],
 )
 def test_to_base64_sends_no_set_bits_for_a_status_request(parser, request_kwargs):
     stat = _base_stat(Operation=True, PresetTemp=22.0, **request_kwargs)

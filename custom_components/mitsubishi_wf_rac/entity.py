@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.core import callback
@@ -29,8 +30,8 @@ class WfRacEntity(CoordinatorEntity[Device]):
     command completes.
     """
 
-    def __init__(self, device: Device) -> None:
-        super().__init__(device)
+    def __init__(self, device: Device, context: Any | None = None) -> None:
+        super().__init__(device, context=context)
         self._device = device
         self._attr_device_info = device.device_info
 

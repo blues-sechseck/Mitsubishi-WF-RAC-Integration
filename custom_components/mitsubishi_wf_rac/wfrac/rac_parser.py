@@ -76,6 +76,15 @@ SERVICE_DATA_CODES: Final = (
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_PROTECTION_RAW,
 )
+SERVICE_DATA_CODE_BY_FIELD: Final = {
+    "CompressorFrequency": SERVICE_DATA_COMPRESSOR_FREQ,
+    "OperatingCurrent": SERVICE_DATA_OPERATING_CURRENT,
+    "HotGasTemp": SERVICE_DATA_HOT_GAS_TEMP,
+    "EevPulses": SERVICE_DATA_EEV_PULSES,
+    "EevPosition": SERVICE_DATA_EEV_PULSES,
+    "IndoorCoilTemp": SERVICE_DATA_INDOOR_COIL_RAW,
+    "IndoorCoilOutletTemp": SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
+}
 
 # The coil thermistor is the same part as the two air sensors - MHI's manuals
 # print one characteristic for room air, indoor coil, outdoor coil and outdoor
@@ -230,9 +239,11 @@ class RacParser:
 
         if aircon_stat.ServiceDataStatusRequest:
             # OP1=255 means "report the current value" - never 0, which in
-            # this trailer would be a write to the climate MCU. All four
-            # segments answer in the same setAirconStat response.
-            segments = [(code, 255, 255, 255) for code in SERVICE_DATA_CODES]
+            # this trailer would be a write to the climate MCU.
+            segments = [
+                (code, 255, 255, 255)
+                for code in sorted(aircon_stat.ServiceDataStatusRequest)
+            ]
             return cls._build_trailer(segments)
 
         return VARIABLE_SUFFIX
