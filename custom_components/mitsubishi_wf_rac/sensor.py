@@ -32,6 +32,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .entity import WfRacEntity
 from .wfrac.device import Device
+from .wfrac.rac_parser import SERVICE_DATA_CODE_BY_FIELD
 from .const import (
     ATTR_TARGET_TEMPERATURE,
     ATTR_COMPRESSOR_FREQUENCY,
@@ -105,11 +106,11 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         entities.append(EnergySensor(device))
         entities.append(EnergyTotalSensor(device))
 
-    # Tied to CONF_SERVICE_DATA rather than merely disabled by default: the
-    # option is what makes Device request these values at all, so without it
-    # the entities could only ever read `unknown`. Changing the option reloads
-    # the entry (see async_update_options), so they appear and disappear with
-    # it.
+    # Tied to CONF_SERVICE_DATA rather than merely disabled by default: it
+    # controls whether these entities exist. Their active coordinator contexts
+    # determine which operation-data segments Device requests. Changing the
+    # option reloads the entry (see async_update_options), so they appear and
+    # disappear with it.
     if entry.options.get(CONF_SERVICE_DATA, False):
         entities += [
             ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
@@ -464,9 +465,8 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
 class ServiceDataSensor(WfRacEntity, SensorEntity):
     """Operation-data sensors (compressor frequency, current, hot gas temp,
     EEV pulses/position, coil temperatures) - see rac_parser.SERVICE_DATA_CODES.
-    Only created while CONF_SERVICE_DATA is on, which is what makes Device
-    request these values in the first place - see
-    Device._maybe_request_service_data().
+    Only created while CONF_SERVICE_DATA is on. Active sensors register their
+    segment code with Device, which requests only those segments.
 
     Enabled once they exist: switching the option on is already the opt-in, so
     making the user enable each one on top would be a second hurdle for
@@ -494,8 +494,10 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
 
     def __init__(self, device: Device, custom_type: str) -> None:
         """Initialize the sensor."""
-        super().__init__(device)
         self._custom_type = custom_type
+        super().__init__(
+            device, context=SERVICE_DATA_CODE_BY_FIELD[self._FIELD_BY_TYPE[custom_type]]
+        )
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-{custom_type}-sensor"
         self._attr_translation_key = custom_type
         if custom_type == ATTR_COMPRESSOR_FREQUENCY:

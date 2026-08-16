@@ -131,7 +131,7 @@ class AirconStat(AirconBase):
     HomeLeaveModeForCooling: HomeLeaveModeSetting | None = None
     HomeLeaveModeForHeating: HomeLeaveModeSetting | None = None
     # See AirconCommands - only ever set via Device._maybe_request_service_data().
-    ServiceDataStatusRequest: bool = False
+    ServiceDataStatusRequest: tuple[int, ...] = ()
 
     @classmethod
     def from_aircon(cls, aircon: Aircon) -> "AirconStat":
