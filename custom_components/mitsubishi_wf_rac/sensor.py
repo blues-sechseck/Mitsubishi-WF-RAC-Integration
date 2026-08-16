@@ -96,9 +96,10 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         DiagnosticsSensor(device, "Error", CONF_ERROR, True),
         DiagnosticsSensor(device, "Updated By", ATTR_UPDATED_BY, True),
         DiagnosticsSensor(device, "Account Expires", ATTR_ACCOUNT_EXPIRES),
-        # Off until it is understood: reads a constant 1 on both test units
-        # regardless of what the machine is doing, so it does not currently
-        # track the unit's LED.
+        # Off by default: mirrors the unit's own "LED ON" display-light
+        # setting (see wf-rac-module-reference.md §2.8), which nobody has
+        # switched off on either test unit - a constant 1 is the default,
+        # not a broken read.
         DiagnosticsSensor(device, "LED Status", ATTR_LED_STATUS),
         DiagnosticsSensor(device, "Auto Heating", ATTR_AUTO_HEATING, True),
         DiagnosticsSensor(device, "Model Nr", ATTR_MODEL_NR),

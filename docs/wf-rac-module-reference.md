@@ -215,7 +215,11 @@ The `WCBN4612L` module image contains exactly these JSON key strings and no
 others `[FW]`. **This is closed for that branch only.** The `WF-RAC` and
 `WF-RAC-HTTPS` images are encrypted and could not be inventoried — and a live
 `WF-RAC-HTTPS 025` device returns two fields that are *not* in this list,
-`ledStat` (integer) and `mcu` (object, `{"firmVer": "200"}`) `[HW]`. Expect
+`ledStat` (integer) and `mcu` (object, `{"firmVer": "200"}`) `[HW]`.
+`ledStat` is the unit's own "LED ON" display-light toggle from the app's
+Option Settings screen (`OptionSettingViewModel.java`, gated by the
+`led_light` capability), not a Wi-Fi module status flag — a constant `1`
+just means the setting has never been switched off `[APP]`. Expect
 per-branch additions:
 
 `command`, `apiVer`, `operatorId`, `deviceId`, `timestamp`, `contents`,
