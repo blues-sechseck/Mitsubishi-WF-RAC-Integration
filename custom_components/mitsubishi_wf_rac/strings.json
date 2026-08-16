@@ -51,6 +51,30 @@
     "sensor": {
       "cool_hot_judge": {
         "name": "Cool Hot Judge"
+      },
+      "compressor_frequency_raw": {
+        "name": "Compressor Frequency (raw)"
+      },
+      "operating_current_raw": {
+        "name": "Operating Current (raw)"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Hot Gas Temperature (raw)"
+      },
+      "indoor_coil_raw": {
+        "name": "Indoor Coil Temperature (raw)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Indoor Coil Outlet Temperature (raw)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Outdoor Coil Temperature (raw)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Discharge Superheat (raw)"
+      },
+      "protection_raw": {
+        "name": "Protection Number (raw)"
       }
     },
     "update": {

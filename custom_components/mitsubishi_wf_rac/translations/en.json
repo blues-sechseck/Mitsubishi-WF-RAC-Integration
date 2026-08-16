@@ -225,11 +225,20 @@
       "compressor_frequency": {
         "name": "Compressor Frequency"
       },
+      "compressor_frequency_raw": {
+        "name": "Compressor Frequency (raw)"
+      },
       "operating_current": {
         "name": "Operating Current"
       },
+      "operating_current_raw": {
+        "name": "Operating Current (raw)"
+      },
       "hot_gas_temp": {
         "name": "Hot Gas Temperature"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Hot Gas Temperature (raw)"
       },
       "eev_pulses": {
         "name": "EEV Pulses"
@@ -242,6 +251,21 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Indoor Coil Outlet Temperature"
+      },
+      "indoor_coil_raw": {
+        "name": "Indoor Coil Temperature (raw)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Indoor Coil Outlet Temperature (raw)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Outdoor Coil Temperature (raw)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Discharge Superheat (raw)"
+      },
+      "protection_raw": {
+        "name": "Protection Number (raw)"
       }
     },
     "binary_sensor": {

@@ -78,12 +78,20 @@ SERVICE_DATA_CODES: Final = (
 )
 SERVICE_DATA_CODE_BY_FIELD: Final = {
     "CompressorFrequency": SERVICE_DATA_COMPRESSOR_FREQ,
+    "CompressorFrequencyRaw": SERVICE_DATA_COMPRESSOR_FREQ,
     "OperatingCurrent": SERVICE_DATA_OPERATING_CURRENT,
+    "OperatingCurrentRaw": SERVICE_DATA_OPERATING_CURRENT,
     "HotGasTemp": SERVICE_DATA_HOT_GAS_TEMP,
+    "HotGasTempRaw": SERVICE_DATA_HOT_GAS_TEMP,
     "EevPulses": SERVICE_DATA_EEV_PULSES,
     "EevPosition": SERVICE_DATA_EEV_PULSES,
     "IndoorCoilTemp": SERVICE_DATA_INDOOR_COIL_RAW,
+    "IndoorCoilRaw": SERVICE_DATA_INDOOR_COIL_RAW,
     "IndoorCoilOutletTemp": SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
+    "IndoorCoilOutletRaw": SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
+    "OutdoorCoilRaw": SERVICE_DATA_OUTDOOR_COIL_RAW,
+    "DischargeSuperheatRaw": SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
+    "ProtectionRaw": SERVICE_DATA_PROTECTION_RAW,
 }
 
 # The coil thermistor is the same part as the two air sensors - MHI's manuals
@@ -498,10 +506,13 @@ class RacParser:
         data for any of these four codes."""
         if code == SERVICE_DATA_COMPRESSOR_FREQ:
             ac_device.CompressorFrequency = (op1 - 0x10) * 25.6 + 0.1 * op2
+            ac_device.CompressorFrequencyRaw = op1 << 8 | op2
         elif code == SERVICE_DATA_OPERATING_CURRENT:
             ac_device.OperatingCurrent = op2 * 14 / 51
+            ac_device.OperatingCurrentRaw = op2
         elif code == SERVICE_DATA_HOT_GAS_TEMP:
             ac_device.HotGasTemp = op2 / 2 + 32
+            ac_device.HotGasTempRaw = op2
         elif code == SERVICE_DATA_EEV_PULSES:
             ac_device.EevPulses = op2
             ac_device.EevPosition = round(op2 * 100 / 255)

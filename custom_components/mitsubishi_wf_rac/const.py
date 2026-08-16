@@ -51,8 +51,11 @@ ATTR_TARGET_TEMPERATURE = "target_temperature"
 
 # Service data (operation-data codes), see CONF_SERVICE_DATA above
 ATTR_COMPRESSOR_FREQUENCY = "compressor_frequency"
+ATTR_COMPRESSOR_FREQUENCY_RAW = "compressor_frequency_raw"
 ATTR_OPERATING_CURRENT = "operating_current"
+ATTR_OPERATING_CURRENT_RAW = "operating_current_raw"
 ATTR_HOT_GAS_TEMP = "hot_gas_temp"
+ATTR_HOT_GAS_TEMP_RAW = "hot_gas_temp_raw"
 ATTR_EEV_PULSES = "eev_pulses"
 ATTR_EEV_POSITION = "eev_position"
 ATTR_INDOOR_COIL_TEMP = "indoor_coil_temp"

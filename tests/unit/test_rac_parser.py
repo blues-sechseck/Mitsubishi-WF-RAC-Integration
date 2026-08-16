@@ -316,8 +316,11 @@ def test_parse_temperatures_service_data_segments(parser):
     parser._parse_temperatures(ac, vals)
 
     assert ac.CompressorFrequency == pytest.approx(20.0)
+    assert ac.CompressorFrequencyRaw == 0x10C8
     assert ac.OperatingCurrent == pytest.approx(4 * 14 / 51)
+    assert ac.OperatingCurrentRaw == 0x04
     assert ac.HotGasTemp == pytest.approx(42.5)
+    assert ac.HotGasTempRaw == 0x15
     assert ac.EevPulses == 106
     assert ac.EevPosition == 42
     # 0x2F = 47 and 0x5D = 93 through the thermistor curve, see
@@ -341,8 +344,11 @@ def test_parse_temperatures_service_data_absent_by_default(parser):
     ac = Aircon()
     parser._parse_temperatures(ac, [])
     assert ac.CompressorFrequency is None
+    assert ac.CompressorFrequencyRaw is None
     assert ac.OperatingCurrent is None
+    assert ac.OperatingCurrentRaw is None
     assert ac.HotGasTemp is None
+    assert ac.HotGasTempRaw is None
     assert ac.EevPulses is None
     assert ac.EevPosition is None
     assert ac.IndoorCoilTemp is None

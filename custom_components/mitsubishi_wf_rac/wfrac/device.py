@@ -81,8 +81,11 @@ SERVICE_DATA_MAX_AGE = 3 * SERVICE_DATA_REQUEST_INTERVAL
 # Fields fed exclusively by those segments.
 SERVICE_DATA_FIELDS = (
     "CompressorFrequency",
+    "CompressorFrequencyRaw",
     "OperatingCurrent",
+    "OperatingCurrentRaw",
     "HotGasTemp",
+    "HotGasTempRaw",
     "EevPulses",
     "EevPosition",
     "IndoorCoilTemp",
