@@ -2,28 +2,34 @@ name: Release
 
 # Uploads the installable archive to a release while it is still a DRAFT.
 #
-# Two GitHub rules decide the shape of this workflow, and together they leave
-# exactly one working order:
+# Three GitHub rules decide the shape of this workflow, and together they rule
+# out every automatic trigger:
 #   - a published release is immutable, so an asset cannot be added afterwards
 #   - tag creation is restricted, so a tag cannot be pushed ahead of time
-# A draft release is therefore the only place the archive can land: it has no
-# tag yet and is still mutable. Publishing it creates the tag and freezes both.
+#   - draft releases do not trigger workflows at all
+# A draft is the only place the archive can land - no tag yet, still mutable -
+# and the only way to start a run against one is by hand.
 #
-# Releasing is two steps:
+# Releasing is three steps:
 #   1. gh release create <tag> --draft --prerelease \
-#        --target <sha> --notes-file notes.md      -> this workflow attaches the archive
-#   2. gh release edit <tag> --draft=false
+#        --target <sha> --notes-file notes.md
+#   2. gh workflow run release.yml --ref main -f tag=<tag>     # wait for green
+#   3. gh api -X PATCH repos/$GH_REPO/releases/<id> \
+#        -f tag_name=<tag> -f target_commitish=<sha> -F draft=false -F prerelease=true
+#
+# Step 3 goes through the API because `gh release edit --draft=false` drops the
+# tag reference and is rejected with "Published releases must have a valid tag".
 #
 # HACS reads `zip_release` in hacs.json and installs this asset instead of
 # GitHub's source zipball, which is also the only way GitHub counts downloads -
 # the zipball is not counted. With `zip_release` set, a release without the
-# asset cannot be installed, so step 1 must be green before step 2.
+# asset cannot be installed, so step 2 must be green before step 3.
 #
-# workflow_dispatch retries the upload for a draft whose run failed.
+# A tag name is burned for good once a release has used it: deleting the
+# release does not free it. A failed attempt costs the next number, never a
+# retry of the same one.
 
 on:
-  release:
-    types: [created]
   workflow_dispatch:
     inputs:
       tag:
@@ -47,7 +53,7 @@ jobs:
         # target_commitish - checking out the tag name would find nothing.
         id: target
         run: |
-          tag="${{ inputs.tag || github.event.release.tag_name }}"
+          tag="${{ inputs.tag }}"
           ref=$(gh release view "$tag" --json targetCommitish -q .targetCommitish)
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
