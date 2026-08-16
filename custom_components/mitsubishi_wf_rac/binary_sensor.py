@@ -17,6 +17,7 @@ from .wfrac.error_codes import describe_error_code
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_entities):

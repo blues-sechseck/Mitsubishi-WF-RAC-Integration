@@ -38,6 +38,7 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_entities):
