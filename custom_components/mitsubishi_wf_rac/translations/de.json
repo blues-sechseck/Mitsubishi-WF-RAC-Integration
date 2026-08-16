@@ -17,8 +17,7 @@
           "name": "Klima Name",
           "host": "Host (IP) Adresse",
           "port": "Port",
-          "force_update": "Doppelte IP ignorieren (kann/wird Fehler verursachen, überprüfen Sie daher das Fehlerprotokoll)",
-          "create_swing_mode_select": "Ob zusätzliche Schwenkmodus-Auswahlen erstellt werden sollen."
+          "force_update": "Doppelte IP ignorieren (kann/wird Fehler verursachen, überprüfen Sie daher das Fehlerprotokoll)"
         },
         "description": "Bitte geben Sie die korrekten Informationen ein, um die Klimaanlage manuell hinzuzufügen",
         "title": "WF-RAC AC Verbindungs-Info"
@@ -40,7 +39,6 @@
           "host": "Host (IP) Adresse",
           "availability_retry_limit": "max. Anzahl Wiederholungen (mind. 3)",
           "firmware_update_check": "Firmware-Update-Prüfung (Online)",
-          "create_swing_mode_select": "Ob zusätzliche Schwenkmodus-Auswahlen erstellt werden sollen.",
           "indoor_offset": "Innentemperatur Sensor-Offset",
           "outdoor_offset": "Außentemperatur Sensor-Offset",
           "target_offset": "Zieltemperatur-Offset",

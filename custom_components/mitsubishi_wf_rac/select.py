@@ -55,11 +55,7 @@ async def async_setup_entry(_hass, entry: MitsubishiWfRacConfigEntry, async_add_
 
     device: Device = entry.runtime_data.device
     _LOGGER.info("Setup Fan, Horizontal and Vertical Select: %s, %s", device.device_name, device.airco_id)
-    if device.create_swing_mode_select:
-        entities = [HorizontalSwingSelect(device), VerticalSwingSelect(device), FanSpeedSelect(device)]
-    else:
-        entities = []
-        _LOGGER.info("No Setup Horizontal Select: %s, %s", device.device_name, device.airco_id)
+    entities = [HorizontalSwingSelect(device), VerticalSwingSelect(device), FanSpeedSelect(device)]
 
     # Same VacantProperty capability gate as OccupancyBinarySensor in
     # binary_sensor.py.
@@ -83,6 +79,7 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
 
     def __init__(self, device: Device) -> None:
         super().__init__(device)
+        self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORT_SWING_HORIZONTAL_MODES
         self._attr_icon = "mdi:weather-dust"
         self._attr_unique_id = (
@@ -137,6 +134,7 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
 
     def __init__(self, device: Device) -> None:
         super().__init__(device)
+        self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORT_SWING_MODES
         self._attr_icon = "mdi:weather-dust"
         self._attr_unique_id = (
@@ -189,6 +187,7 @@ class FanSpeedSelect(WfRacEntity, SelectEntity):
 
     def __init__(self, device: Device) -> None:
         super().__init__(device)
+        self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORTED_FAN_MODES
         self._attr_icon = "mdi:fan"
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-fan-speed"

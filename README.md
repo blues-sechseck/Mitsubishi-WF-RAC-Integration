@@ -121,9 +121,9 @@ The unit's own frost-protection/low-power standby mode for when nobody's home, w
 
 The number/select entities above stay `unknown` until the climate entity's "Request Home Leave Mode status" action has been called once - the unit omits these values from a plain poll otherwise. Writing to them before that is refused rather than guessed at. See the `request_home_leave_mode_status`/`set_home_leave_mode` climate actions.
 
-## Select (optional)
+## Select
 
-Only created if "Whether to create an additional swing mode selectors" is enabled in the integration's options — off by default. These duplicate the climate entity's swing/fan attributes as standalone entities, useful for dashboards or automations that prefer a plain `select` over a `climate` attribute.
+These duplicate the climate entity's swing/fan attributes as standalone entities, useful for dashboards or automations that prefer a plain `select` over a `climate` attribute. Existing installations that had these selects disabled during setup retain them as disabled entities; enable them from the entity registry when wanted.
 
 | Entity | Values | Description |
 |---|---|---|

@@ -17,8 +17,7 @@
           "name": "空调名称",
           "host": "主机（IP）地址",
           "port": "端口",
-          "force_update": "忽略重复 IP（可能/将会引发错误，请检查错误日志）",
-          "create_swing_mode_select": "是否创建额外的摆风模式选择器。"
+          "force_update": "忽略重复 IP（可能/将会引发错误，请检查错误日志）"
         },
         "description": "请填写正确的信息以手动添加空调",
         "title": "WF-RAC 空调连接信息"
@@ -40,7 +39,6 @@
           "host": "主机（IP）地址",
           "availability_retry_limit": "重试次数上限（最少 3）",
           "firmware_update_check": "固件更新检查（在线）",
-          "create_swing_mode_select": "是否创建额外的摆风模式选择器。",
           "indoor_offset": "室内偏移",
           "outdoor_offset": "室外偏移",
           "target_offset": "目标偏移",

@@ -17,8 +17,7 @@
           "name": "空調名稱",
           "host": "主機（IP）地址",
           "port": "埠號",
-          "force_update": "忽略重複 IP（可能/將會引發錯誤，請檢查錯誤日誌）",
-          "create_swing_mode_select": "是否建立額外的擺風模式選擇器。"
+          "force_update": "忽略重複 IP（可能/將會引發錯誤，請檢查錯誤日誌）"
         },
         "description": "請填寫正確的信息以手動新增空調",
         "title": "WF-RAC 空調連接資訊"
@@ -40,7 +39,6 @@
           "host": "主機（IP）地址",
           "availability_retry_limit": "重試次數上限（最少 3）",
           "firmware_update_check": "韌體更新檢查（線上）",
-          "create_swing_mode_select": "是否建立額外的擺風模式選擇器。",
           "indoor_offset": "室內偏移",
           "outdoor_offset": "室外偏移",
           "target_offset": "目標偏移",

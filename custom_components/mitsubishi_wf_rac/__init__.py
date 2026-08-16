@@ -145,7 +145,7 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     operator_id: str = entry.data[CONF_OPERATOR_ID]
     port: int = entry.data[CONF_PORT]
     airco_id: str = entry.data[CONF_AIRCO_ID]
-    create_swing_mode_select: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
+    swing_selects_enabled_default: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
     # Off unless the user explicitly opted in via the options flow - this is
     # the only outbound internet call in the integration (see
     # wfrac/device.py's _maybe_check_firmware_update()).
@@ -157,7 +157,7 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     )
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
     _device = Device(hass, entry, name, device, port, device_id, operator_id, airco_id,
-                     create_swing_mode_select,
+                     swing_selects_enabled_default,
                      availability_failure_limit=availability_failure_limit,
                      firmware_update_check_enabled=firmware_update_check_enabled,
                      connection_method=connection_method)

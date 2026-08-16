@@ -113,7 +113,7 @@ async def device(hass):
         "device-id",
         "operator-id",
         "airco-id",
-        create_swing_mode_select=True,
+        swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
     return dev
@@ -466,7 +466,7 @@ async def test_properties_reflect_constructor_args(device):
     assert device.port == 51443
     assert device.device_id == "device-id"
     assert device.airco_id == "airco-id"
-    assert device.create_swing_mode_select is True
+    assert device.swing_selects_enabled_default is True
     assert device.device_info["name"] == "Test AC"
     assert device.device_info["identifiers"] == {("mitsubishi_wf_rac", "airco-id")}
 
@@ -489,7 +489,7 @@ async def test_availability_tolerates_failures_below_limit(hass):
     dev = Device(
         hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
         "device-id", "operator-id", "airco-id",
-        create_swing_mode_select=True,
+        swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
     dev._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -514,14 +514,14 @@ async def test_availability_limit_can_be_raised_but_not_lowered(hass):
     raised = Device(
         hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
         "device-id", "operator-id", "airco-id",
-        create_swing_mode_select=True, availability_failure_limit=5,
+        swing_selects_enabled_default=True, availability_failure_limit=5,
     )
     assert raised._availability_failure_limit == 5
 
     lowered = Device(
         hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
         "device-id", "operator-id", "airco-id",
-        create_swing_mode_select=True, availability_failure_limit=1,
+        swing_selects_enabled_default=True, availability_failure_limit=1,
     )
     assert lowered._availability_failure_limit == AVAILABILITY_FAILURE_LIMIT_MIN
 
@@ -541,7 +541,7 @@ async def test_availability_recovers_and_resets_the_failure_count(hass):
     dev = Device(
         hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
         "device-id", "operator-id", "airco-id",
-        create_swing_mode_select=True,
+        swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
     dev._api.update_account_info = AsyncMock()

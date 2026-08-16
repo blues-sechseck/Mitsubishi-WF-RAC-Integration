@@ -25,7 +25,6 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from .const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
-    CONF_CREATE_SWING_MODE_SELECT,
     CONF_FIRMWARE_UPDATE_CHECK,
     CONF_OPERATOR_ID,
     CONF_INDOOR_OFFSET,
@@ -248,7 +247,6 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 field(CONF_HOST, vol.Required): cv.string,
                 field(CONF_PORT, vol.Optional, 51443): cv.port,
                 field(CONF_FORCE_UPDATE, vol.Optional, False): cv.boolean,
-                field(CONF_CREATE_SWING_MODE_SELECT, vol.Optional, True): cv.boolean,
             }
         )
 
