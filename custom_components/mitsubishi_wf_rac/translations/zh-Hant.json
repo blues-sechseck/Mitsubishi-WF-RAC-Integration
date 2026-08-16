@@ -45,7 +45,11 @@
           "target_offset_cool": "目標偏移（製冷）",
           "target_offset_heat": "目標偏移（製熱）"
         },
-        "title": "WF-RAC 選項"
+        "title": "WF-RAC 選項",
+        "data_description": {
+          "target_offset_cool": "留空以使用通用的目標溫度偏移。",
+          "target_offset_heat": "留空以使用通用的目標溫度偏移。"
+        }
       }
     }
   },
@@ -222,11 +226,20 @@
       "compressor_frequency": {
         "name": "壓縮機頻率"
       },
+      "compressor_frequency_raw": {
+        "name": "壓縮機頻率（原始）"
+      },
       "operating_current": {
         "name": "運轉電流"
       },
+      "operating_current_raw": {
+        "name": "運轉電流（原始）"
+      },
       "hot_gas_temp": {
         "name": "排氣溫度"
+      },
+      "hot_gas_temp_raw": {
+        "name": "排氣溫度（原始）"
       },
       "eev_pulses": {
         "name": "電子膨脹閥脈衝"
@@ -239,6 +252,21 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "室內熱交換器出口溫度"
+      },
+      "indoor_coil_raw": {
+        "name": "室內熱交換器溫度（原始）"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "室內熱交換器出口溫度（原始）"
+      },
+      "outdoor_coil_raw": {
+        "name": "室外熱交換器溫度（原始）"
+      },
+      "discharge_superheat_raw": {
+        "name": "排氣過熱度（原始）"
+      },
+      "protection_raw": {
+        "name": "保護編號（原始）"
       }
     },
     "binary_sensor": {

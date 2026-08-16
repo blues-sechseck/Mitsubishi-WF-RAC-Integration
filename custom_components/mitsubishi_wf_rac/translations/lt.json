@@ -45,7 +45,11 @@
           "target_offset_cool": "Tikslinis poslinkis (vėsinimas)",
           "target_offset_heat": "Tikslinis poslinkis (šildymas)"
         },
-        "title": "WF-RAC parinktys"
+        "title": "WF-RAC parinktys",
+        "data_description": {
+          "target_offset_cool": "Palikite tuščią, jei norite naudoti bendrą tikslinės temperatūros poslinkį.",
+          "target_offset_heat": "Palikite tuščią, jei norite naudoti bendrą tikslinės temperatūros poslinkį."
+        }
       }
     }
   },
@@ -222,11 +226,20 @@
       "compressor_frequency": {
         "name": "Kompresoriaus dažnis"
       },
+      "compressor_frequency_raw": {
+        "name": "Kompresoriaus dažnis (neapdorota)"
+      },
       "operating_current": {
         "name": "Darbinė srovė"
       },
+      "operating_current_raw": {
+        "name": "Darbinė srovė (neapdorota)"
+      },
       "hot_gas_temp": {
         "name": "Karštų dujų temperatūra"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Karštų dujų temperatūra (neapdorota)"
       },
       "eev_pulses": {
         "name": "EEV impulsai"
@@ -239,6 +252,21 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Vidaus šilumokaičio išėjimo temperatūra"
+      },
+      "indoor_coil_raw": {
+        "name": "Vidaus šilumokaičio temperatūra (neapdorota)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Vidaus šilumokaičio išėjimo temperatūra (neapdorota)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Lauko šilumokaičio temperatūra (neapdorota)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Išleidimo dujų perkaitimas (neapdorota)"
+      },
+      "protection_raw": {
+        "name": "Apsaugos numeris (neapdorota)"
       }
     },
     "binary_sensor": {

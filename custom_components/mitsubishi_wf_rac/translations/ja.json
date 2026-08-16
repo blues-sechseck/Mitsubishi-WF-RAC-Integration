@@ -45,7 +45,11 @@
           "target_offset_cool": "設定オフセット（冷房時）",
           "target_offset_heat": "設定オフセット（暖房時）"
         },
-        "title": "WF-RAC の設定"
+        "title": "WF-RAC の設定",
+        "data_description": {
+          "target_offset_cool": "空欄の場合は、共通の設定オフセットが使用されます。",
+          "target_offset_heat": "空欄の場合は、共通の設定オフセットが使用されます。"
+        }
       }
     }
   },
@@ -222,11 +226,20 @@
       "compressor_frequency": {
         "name": "圧縮機周波数"
       },
+      "compressor_frequency_raw": {
+        "name": "圧縮機周波数 (生値)"
+      },
       "operating_current": {
         "name": "運転電流"
       },
+      "operating_current_raw": {
+        "name": "運転電流 (生値)"
+      },
       "hot_gas_temp": {
         "name": "吐出ガス温度"
+      },
+      "hot_gas_temp_raw": {
+        "name": "吐出ガス温度 (生値)"
       },
       "eev_pulses": {
         "name": "電子膨張弁パルス"
@@ -239,6 +252,21 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "室内熱交換器出口温度"
+      },
+      "indoor_coil_raw": {
+        "name": "室内熱交換器温度 (生値)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "室内熱交換器出口温度 (生値)"
+      },
+      "outdoor_coil_raw": {
+        "name": "室外熱交換器温度 (生値)"
+      },
+      "discharge_superheat_raw": {
+        "name": "吐出過熱度 (生値)"
+      },
+      "protection_raw": {
+        "name": "保護番号 (生値)"
       }
     },
     "binary_sensor": {

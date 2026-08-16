@@ -45,7 +45,11 @@
           "target_offset_cool": "Doel offset (Koelen)",
           "target_offset_heat": "Doel offset (Verwarmen)"
         },
-        "title": "WF-RAC opties"
+        "title": "WF-RAC opties",
+        "data_description": {
+          "target_offset_cool": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken.",
+          "target_offset_heat": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken."
+        }
       }
     }
   },
@@ -222,11 +226,20 @@
       "compressor_frequency": {
         "name": "Compressorfrequentie"
       },
+      "compressor_frequency_raw": {
+        "name": "Compressorfrequentie (onbewerkt)"
+      },
       "operating_current": {
         "name": "Bedrijfsstroom"
       },
+      "operating_current_raw": {
+        "name": "Bedrijfsstroom (onbewerkt)"
+      },
       "hot_gas_temp": {
         "name": "Heetgastemperatuur"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Heetgastemperatuur (onbewerkt)"
       },
       "eev_pulses": {
         "name": "EEV-pulsen"
@@ -239,6 +252,21 @@
       },
       "indoor_coil_outlet_temp": {
         "name": "Binnenunit warmtewisselaar uitlaattemperatuur"
+      },
+      "indoor_coil_raw": {
+        "name": "Binnenunit warmtewisselaar temperatuur (onbewerkt)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Binnenunit warmtewisselaar uitlaattemperatuur (onbewerkt)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Buitenunit warmtewisselaar temperatuur (onbewerkt)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Persgas oververhitting (onbewerkt)"
+      },
+      "protection_raw": {
+        "name": "Beveiligingsnummer (onbewerkt)"
       }
     },
     "binary_sensor": {
