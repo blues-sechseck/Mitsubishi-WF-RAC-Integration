@@ -13,6 +13,20 @@ the WF-RAC WiFi module and the **"Smart M-Air"** app.
 > your unit uses MELCloud, see Home Assistant's built-in
 > [MELCloud integration](https://www.home-assistant.io/integrations/melcloud/) instead.
 
+# Supported devices
+
+Any Mitsubishi Heavy Industries air conditioner that ships with the **WF-RAC** WiFi module — the
+network interface controlled through the **Smart M-Air** app — should work. The integration talks
+to the module's local HTTP API rather than to a specific indoor/outdoor unit model, and it probes
+both plain HTTP and HTTPS on setup, so it doesn't matter which of the module's firmware branches
+(`WF-RAC`, `WF-RAC-HTTPS`, `WCBN4612L`) yours happens to run.
+
+Confirmed working on a `SRK20ZS-WF` + `SRK35ZS-WF` multi-split on an `SCM45ZS-W` outdoor unit. Some
+entities are conditional on what the unit itself reports supporting — Occupancy and the Home Leave
+Mode entities, for example, only appear on units that report the corresponding capability, and a
+few diagnostic sensors depend on the model-identifier byte the unit sends back. An unsupported
+feature simply doesn't create its entity, rather than failing.
+
 ## History
 
 Created by [@jeatheak](https://github.com/jeatheak). In July 2026, jeatheak transferred ownership
@@ -131,7 +145,83 @@ These duplicate the climate entity's swing/fan attributes as standalone entities
 | Vertical Swing Direction | same as `swing_mode` above | |
 | Fan Speed | same as `fan_mode` above | |
 
-## Options
+# Data updates
+
+The integration polls the WF-RAC module directly over the local network every 60 seconds — there
+is no cloud, push, or webhook involved. A single poll reads the unit's full state in one request
+(mode, setpoint, temperatures, energy counter, and so on). The diagnostic operation-data sensors
+described above (compressor frequency, coil temperatures, EEV position, etc.) cost one additional
+request per poll, made only for the segments an enabled sensor actually needs, and not at all if
+none of them are enabled.
+
+The only outbound *internet* request this integration ever makes is the optional firmware-version
+check ("Check for firmware updates" under Options, off by default) — everything else, including
+every poll and every command, stays on the local network.
+
+# Use cases
+
+- **Whole-home climate scheduling and automations** — set mode, fan speed, swing and setpoint like
+  any other `climate` entity, from automations, scripts, or dashboards.
+- **Energy dashboard tracking** — feed Energy Usage Total into Home Assistant's built-in Energy
+  dashboard for a lifetime consumption figure per unit.
+- **Presence-based energy saving** — drive Home Leave Mode from a `person`/zone trigger instead of
+  a plain schedule, so the unit throttles back to a frost-protection setpoint while everyone's away
+  and returns to normal the moment someone gets home.
+- **Reacting to what the compressor is actually doing** — Compressor Demand and `hvac_action`
+  distinguish "on but idle, setpoint satisfied" from "actively heating/cooling", useful for
+  automations that should only fire while the unit is genuinely running.
+- **Diagnosing multi-split behaviour** — the diagnostic operation-data sensors (compressor
+  frequency, indoor coil temperature, EEV position) make short cycling, an oversubscribed outdoor
+  unit, or a struggling indoor unit visible in history graphs, without a service call or the app.
+
+# Examples
+
+Set Home Leave Mode automatically when the last person leaves, back to normal when someone returns:
+
+```yaml
+automation:
+  - alias: "AC: enable Home Leave Mode when everyone's away"
+    trigger:
+      - trigger: state
+        entity_id: zone.home
+        to: "0"
+    action:
+      - action: select.select_option
+        target:
+          entity_id: select.<name>_home_leave_mode
+        data:
+          option: away_cool
+  - alias: "AC: back to normal when someone gets home"
+    trigger:
+      - trigger: state
+        entity_id: zone.home
+        from: "0"
+    action:
+      - action: select.select_option
+        target:
+          entity_id: select.<name>_home_leave_mode
+        data:
+          option: "off"
+```
+
+Notify when the unit reports a fault:
+
+```yaml
+automation:
+  - alias: "AC: notify on error"
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.<name>_problem
+        to: "on"
+    action:
+      - action: notify.notify
+        data:
+          message: >-
+            {{ state_attr('binary_sensor.<name>_problem', 'error_description')
+               or state_attr('binary_sensor.<name>_problem', 'error_code') }}
+```
+
+# Options
 
 Configurable via the integration's "Configure" (options) flow. The host/IP
 address itself isn't here - it's connection-critical, so changing it goes
@@ -158,6 +248,27 @@ The unit's internal temperature sensor is a **return-air sensor built into the i
 Target Temp. Offset corrects for this bias: `true_room ≈ PresetTemp + offset`. To land the *room* on the temperature you actually requested, the setpoint sent to the unit is `commanded PresetTemp = requested − offset`.
 
 Concretely: **a negative offset raises the setpoint actually sent to the unit** (a positive offset lowers it). Because the bias flips sign between cooling and heating, no single value is correct for both at once - this is exactly why Target Temp. Offset (Cooling) / (Heating) exist as separate overrides. The offset calibrates the unit's *operating regime* (the return-air bias above), not a fixed mounting/calibration error of the sensor - don't expect one number to be "the correct" offset independent of mode.
+
+# Known limitations
+
+- **Self-clean cannot be started or monitored from Home Assistant.** The official app has no way to
+  trigger it either - the unit's self-clean cycle can only be started from its own IR remote, and
+  nothing on the wire distinguishes "self-clean running" from "off" (see
+  [§6.4 of the protocol reference](docs/wf-rac-module-reference.md#64-self-clean-cannot-be-started-remotely)).
+- **No external temperature sensor input.** The unit always controls off its own built-in
+  return-air sensor; there is currently no way to feed it a reading from an external Home Assistant
+  sensor instead. The Indoor/Outdoor Temp. Sensor Offset options only correct what's *displayed*,
+  not what the unit's own control loop uses.
+- **The Firmware Update entity is read-only.** It reports whether newer WF-RAC module firmware is
+  available; installing it isn't offered through this integration - the module updates itself via
+  the official app.
+- **Not every entity appears on every unit.** Occupancy, Home Leave Mode, and a few diagnostic
+  sensors only get created if the unit itself reports support for the underlying feature (see the
+  notes under Entities above) - missing rather than `unavailable` is expected there, not a bug.
+- **One device, one connection.** The WF-RAC module handles requests one at a time. This
+  integration already serializes its own requests to respect that, but running a second tool (a
+  custom script, another integration instance, the Smart M-Air app at the same moment) against the
+  same unit can still cause slow or occasionally failed responses on either side.
 
 # Troubleshooting
 
