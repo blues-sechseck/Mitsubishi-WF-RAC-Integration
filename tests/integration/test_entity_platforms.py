@@ -92,8 +92,12 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device, m
     assert details[f"{DOMAIN}-airco-id-home-leave-cooling-temp_rule-number"] == (False, None)
     assert details[f"{DOMAIN}-airco-id-home-leave-heating-air-flow-select"] == (False, None)
     assert details[f"{DOMAIN}-airco-id-compressor_frequency-sensor"] == (True, EntityCategory.DIAGNOSTIC)
-    assert details[f"{DOMAIN}-airco-id-airco_id-sensor"] == (True, EntityCategory.DIAGNOSTIC)
+    assert details[f"{DOMAIN}-airco-id-airco_id-sensor"] == (False, EntityCategory.DIAGNOSTIC)
     assert details[f"{DOMAIN}-airco-id-operator_id-sensor"] == (False, EntityCategory.DIAGNOSTIC)
+    assert details[f"{DOMAIN}-airco-id-account_expires-sensor"] == (False, EntityCategory.DIAGNOSTIC)
+    assert details[f"{DOMAIN}-airco-id-error-sensor"] == (True, EntityCategory.DIAGNOSTIC)
+    assert details[f"{DOMAIN}-airco-id-updated_by-sensor"] == (True, EntityCategory.DIAGNOSTIC)
+    assert details[f"{DOMAIN}-airco-id-auto_heating-sensor"] == (True, EntityCategory.DIAGNOSTIC)
     assert details[f"{DOMAIN}-airco-id-target_temperature-sensor"] == (False, None)
 
 

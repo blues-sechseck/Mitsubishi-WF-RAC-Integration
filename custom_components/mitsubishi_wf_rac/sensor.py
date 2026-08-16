@@ -85,14 +85,14 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         # plumbing (ids, session, addressing) that only matters when
         # diagnosing a connection problem. All of these come out of the
         # regular poll, so enabling one costs no extra request.
-        DiagnosticsSensor(device, "Airco ID", CONF_AIRCO_ID, True),
+        DiagnosticsSensor(device, "Airco ID", CONF_AIRCO_ID),
         DiagnosticsSensor(device, "Operator ID", CONF_OPERATOR_ID),
         DiagnosticsSensor(device, "Device ID", ATTR_DEVICE_ID),
         DiagnosticsSensor(device, "IP", CONF_HOST),
         DiagnosticsSensor(device, "Accounts", ATTR_CONNECTED_ACCOUNTS),
         DiagnosticsSensor(device, "Error", CONF_ERROR, True),
         DiagnosticsSensor(device, "Updated By", ATTR_UPDATED_BY, True),
-        DiagnosticsSensor(device, "Account Expires", ATTR_ACCOUNT_EXPIRES, True),
+        DiagnosticsSensor(device, "Account Expires", ATTR_ACCOUNT_EXPIRES),
         # Off until it is understood: reads a constant 1 on both test units
         # regardless of what the machine is doing, so it does not currently
         # track the unit's LED.
