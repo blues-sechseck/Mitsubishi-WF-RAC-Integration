@@ -8,12 +8,12 @@ the offset exactly like the climate entity. Needs the `hass` fixture (Device
 is a DataUpdateCoordinator), hence tests/integration/ rather than tests/unit/.
 """
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 from homeassistant.components.climate.const import HVACMode
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.climate import AircoClimate
 from custom_components.mitsubishi_wf_rac.sensor import TemperatureSensor
@@ -22,16 +22,32 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
+    DOMAIN,
     HVAC_TRANSLATION,
 )
 from custom_components.mitsubishi_wf_rac.wfrac.device import Device
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
 
 
+def _set_options(device: Device, options: dict[str, float]) -> None:
+    # ConfigEntry.options is a read-only mappingproxy, so tests set the offsets
+    # the same way the options flow does - through async_update_entry(), merged
+    # onto whatever is already there.
+    device.hass.config_entries.async_update_entry(
+        device.config_entry,
+        options={**device.config_entry.options, **options},
+    )
+
+
 @pytest.fixture
 async def device(hass):
+    # The climate paths use per-entry target offsets, so each test needs
+    # options it can tailor without a full integration setup.
+    entry = MockConfigEntry(domain=DOMAIN, options={})
+    entry.add_to_hass(hass)
     dev = Device(
         hass,
+        entry,
         "Test AC",
         "127.0.0.1",
         51443,
@@ -41,15 +57,11 @@ async def device(hass):
         create_swing_mode_select=True,
     )
     dev._api = AsyncMock()
-    # async_set_temperature()/_update_state() read the option straight off
-    # config_entry.options - Device doesn't get one from the coordinator base
-    # outside of a real config entry setup, so tests provide their own.
-    dev.config_entry = SimpleNamespace(options={})
     return dev
 
 
 async def test_set_temperature_subtracts_target_offset(device):
-    device.config_entry.options[CONF_TARGET_OFFSET] = 1.0
+    _set_options(device, {CONF_TARGET_OFFSET: 1.0})
     device.async_queue_command = AsyncMock()
     entity = AircoClimate(device)
 
@@ -60,7 +72,7 @@ async def test_set_temperature_subtracts_target_offset(device):
 
 
 async def test_update_state_re_adds_target_offset(device):
-    device.config_entry.options[CONF_TARGET_OFFSET] = 1.0
+    _set_options(device, {CONF_TARGET_OFFSET: 1.0})
     device.airco.PresetTemp = 22
     entity = AircoClimate(device)
 
@@ -99,8 +111,7 @@ async def test_target_offset_zero_is_identity(device):
     ],
 )
 async def test_resolve_target_offset_uses_override_when_set(device, hvac_mode, override_key):
-    device.config_entry.options[CONF_TARGET_OFFSET] = 1.0
-    device.config_entry.options[override_key] = 2.5
+    _set_options(device, {CONF_TARGET_OFFSET: 1.0, override_key: 2.5})
     entity = AircoClimate(device)
 
     assert entity._resolve_target_offset(hvac_mode) == 2.5
@@ -111,7 +122,7 @@ async def test_resolve_target_offset_uses_override_when_set(device, hvac_mode, o
     [HVACMode.COOL, HVACMode.DRY, HVACMode.HEAT],
 )
 async def test_resolve_target_offset_falls_back_when_override_unset(device, hvac_mode):
-    device.config_entry.options[CONF_TARGET_OFFSET] = 1.0
+    _set_options(device, {CONF_TARGET_OFFSET: 1.0})
     entity = AircoClimate(device)
 
     assert entity._resolve_target_offset(hvac_mode) == 1.0
@@ -124,9 +135,14 @@ async def test_resolve_target_offset_falls_back_when_override_unset(device, hvac
 async def test_resolve_target_offset_ignores_overrides_for_other_modes(device, hvac_mode):
     # AUTO/FAN_ONLY/OFF never had per-mode behaviour asked for them - they
     # must always use the global value even when both overrides are set.
-    device.config_entry.options[CONF_TARGET_OFFSET] = 1.0
-    device.config_entry.options[CONF_TARGET_OFFSET_COOL] = 2.5
-    device.config_entry.options[CONF_TARGET_OFFSET_HEAT] = -2.5
+    _set_options(
+        device,
+        {
+            CONF_TARGET_OFFSET: 1.0,
+            CONF_TARGET_OFFSET_COOL: 2.5,
+            CONF_TARGET_OFFSET_HEAT: -2.5,
+        },
+    )
     entity = AircoClimate(device)
 
     assert entity._resolve_target_offset(hvac_mode) == 1.0
@@ -152,9 +168,9 @@ async def test_resolve_target_offset_ignores_overrides_for_other_modes(device, h
 )
 async def test_round_trip_symmetry_per_mode(device, hvac_mode, override_key, offset):
     if override_key is not None:
-        device.config_entry.options[override_key] = offset
+        _set_options(device, {override_key: offset})
     else:
-        device.config_entry.options[CONF_TARGET_OFFSET] = offset
+        _set_options(device, {CONF_TARGET_OFFSET: offset})
     device.async_queue_command = AsyncMock()
     entity = AircoClimate(device)
 
@@ -172,8 +188,10 @@ async def test_round_trip_symmetry_survives_unit_being_off(device):
     # airco.OperationMode still reports the underlying cool/heat mode while
     # airco.Operation is False (unit off) - the offset resolution must use
     # that underlying mode, not the OFF hvac_mode the entity reports.
-    device.config_entry.options[CONF_TARGET_OFFSET] = 0.0
-    device.config_entry.options[CONF_TARGET_OFFSET_HEAT] = -2.0
+    _set_options(
+        device,
+        {CONF_TARGET_OFFSET: 0.0, CONF_TARGET_OFFSET_HEAT: -2.0},
+    )
     device.async_queue_command = AsyncMock()
     entity = AircoClimate(device)
 
@@ -206,11 +224,11 @@ async def test_round_trip_symmetry_survives_unit_being_off(device):
     ],
 )
 async def test_target_sensor_matches_climate_entity(device, hvac_mode, override_key, offset):
-    device.config_entry.options[CONF_TARGET_OFFSET] = 1.0
+    _set_options(device, {CONF_TARGET_OFFSET: 1.0})
     if override_key is not None:
-        device.config_entry.options[override_key] = offset
+        _set_options(device, {override_key: offset})
     else:
-        device.config_entry.options[CONF_TARGET_OFFSET] = offset
+        _set_options(device, {CONF_TARGET_OFFSET: offset})
     device.airco.PresetTemp = 22
     device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
 

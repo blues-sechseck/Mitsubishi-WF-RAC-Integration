@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -137,6 +138,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def __init__(  # pylint: disable=too-many-arguments
             self,
             hass: HomeAssistant,
+            config_entry: ConfigEntry,
             name: str,
             hostname: str,
             port: int,
@@ -200,6 +202,7 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=name,
             update_interval=MIN_TIME_BETWEEN_UPDATES,
         )

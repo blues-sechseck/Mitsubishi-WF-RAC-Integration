@@ -161,7 +161,7 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
         CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN
     )
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
-    _device = Device(hass, name, device, port, device_id, operator_id, airco_id,
+    _device = Device(hass, entry, name, device, port, device_id, operator_id, airco_id,
                      create_swing_mode_select,
                      availability_failure_limit=availability_failure_limit,
                      firmware_update_check_enabled=firmware_update_check_enabled,
