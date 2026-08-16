@@ -10,7 +10,7 @@ import os
 import ssl
 import time
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 from aiohttp import ClientConnectionError
@@ -208,7 +208,7 @@ class Repository:
                         raise AirconCommandError(
                             f"Aircon returned HTTP {resp.status} for {command!r}: {body}"
                         )
-                    return json.loads(body)
+                    return cast(dict[str, Any], json.loads(body))
             except (ClientConnectionError, asyncio.TimeoutError) as ex:
                 raise AirconConnectionError(f"Aircon returned error: {ex}") from ex
 
@@ -253,7 +253,7 @@ class Repository:
             # If we haven't yet determined if https is required, find out
             else:
                 _LOGGER.debug("No stored method; attempting discovery...")
-                methods = (
+                methods: tuple[str, ...] = (
                     (self._preferred_method,)
                     if self._preferred_method in ("http", "https")
                     else ()
@@ -311,6 +311,8 @@ class Repository:
         would otherwise fill the log with a message the user has already read.
         """
         raw = response.get("result")
+        if raw is None:
+            return
         try:
             code = int(raw)
         except (TypeError, ValueError):
@@ -330,13 +332,15 @@ class Repository:
             RESULT_CODES.get(code, "meaning unknown"),
         )
 
-    async def get_info(self) -> dict:
+    async def get_info(self) -> dict[str, Any]:
         """Simple command to get aircon details"""
-        return (await self._post("getDeviceInfo"))["contents"]
+        response = await self._post("getDeviceInfo")
+        return cast(dict[str, Any], response["contents"])
 
     async def get_airco_id(self) -> str:
         """Simple command to get aircon ID"""
-        return (await self.get_info())["airconId"]
+        info = await self.get_info()
+        return cast(str, info["airconId"])
 
     async def update_account_info(
         self, airco_id: str, time_zone: str
@@ -350,12 +354,14 @@ class Repository:
         }
         return await self._post("updateAccountInfo", contents)
 
-    async def del_account_info(self, airco_id: str) -> dict:
+    async def del_account_info(self, airco_id: str) -> dict[str, Any]:
         """delete the account info on the airco"""
         contents = {"accountId": self._operator_id, "airconId": airco_id}
         return await self._post("deleteAccountInfo", contents)
 
-    async def get_aircon_stats(self, airco_id: str | None = None, raw=False) -> dict:
+    async def get_aircon_stats(
+        self, airco_id: str | None = None, raw: bool = False
+    ) -> dict[str, Any]:
         """Get the Aricon Stats from the Airco
 
         Sends the airconId in the request body. The official Smart M-Air app and
@@ -369,10 +375,10 @@ class Repository:
         """
         contents = {"airconId": airco_id} if airco_id is not None else None
         result = await self._post("getAirconStat", contents)
-        return result if raw else result["contents"]
+        return result if raw else cast(dict[str, Any], result["contents"])
 
     async def send_airco_command(self, airco_id: str, command: str) -> str:
         """send command to the Airco"""
         contents = {"airconId": airco_id, "airconStat": command}
         result = await self._post("setAirconStat", contents)
-        return result["contents"]["airconStat"]
+        return cast(str, result["contents"]["airconStat"])

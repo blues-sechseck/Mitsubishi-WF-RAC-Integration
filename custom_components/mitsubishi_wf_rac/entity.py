@@ -57,7 +57,7 @@ class WfRacEntity(CoordinatorEntity[Device]):
         resolve a different offset for the same mode (see beta2: that
         divergence is what caused the target_temperature re-send loop).
         """
-        options = self._device.config_entry.options
+        options = self._device.options
         base_offset = options.get(CONF_TARGET_OFFSET, 0.0)
         if hvac_mode in (HVACMode.COOL, HVACMode.DRY):
             override = options.get(CONF_TARGET_OFFSET_COOL)
@@ -65,7 +65,7 @@ class WfRacEntity(CoordinatorEntity[Device]):
             override = options.get(CONF_TARGET_OFFSET_HEAT)
         else:
             override = None
-        return base_offset if override is None else override
+        return float(base_offset if override is None else override)
 
     @property
     def available(self) -> bool:
@@ -75,6 +75,12 @@ class WfRacEntity(CoordinatorEntity[Device]):
         # coordinator successful on purpose, so this is the only thing that
         # decides whether entities go unavailable.
         return self._device.available
+
+    def _update_state(self) -> None:
+        """Refresh entity state from the coordinator. Every concrete
+        subclass overrides this; never invoked through this base
+        implementation."""
+        raise NotImplementedError
 
     @callback
     def _handle_coordinator_update(self) -> None:

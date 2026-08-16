@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
+from decimal import Decimal
 import logging
 from typing import Any, Self
 
@@ -15,9 +16,11 @@ from homeassistant.components.sensor import (
     SensorExtraStoredData,
 )
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
@@ -73,7 +76,11 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
 
 
-async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: MitsubishiWfRacConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Setup sensor entries"""
 
     device: Device = entry.runtime_data.device
@@ -140,7 +147,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
     )
 
 
-async def _async_set_energy_total(entity: SensorEntity, call) -> None:
+async def _async_set_energy_total(entity: SensorEntity, call: ServiceCall) -> None:
     """Entity-service handler for SERVICE_SET_ENERGY_TOTAL.
 
     Registered as a callable rather than a method name so targeting any other
@@ -154,7 +161,7 @@ async def _async_set_energy_total(entity: SensorEntity, call) -> None:
     await entity.async_set_total(call.data["value"])
 
 
-def _async_remove_home_leave_mode_sensors(hass, device: Device) -> None:
+def _async_remove_home_leave_mode_sensors(hass: HomeAssistant, device: Device) -> None:
     """Drop the former Home Leave Mode diagnostic sensors from the entity
     registry.
 
@@ -182,7 +189,7 @@ class DiagnosticsSensor(WfRacEntity, SensorEntity):
     _attr_has_entity_name: bool = True
 
     def __init__(
-        self, device: Device, name: str, custom_type: str, enable=False
+        self, device: Device, name: str, custom_type: str, enable: bool = False
     ) -> None:
         """Initialize the sensor."""
         super().__init__(device)
@@ -254,7 +261,7 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_has_entity_name: bool = True
 
-    def __init__(self, device: Device, name: str, custom_type: str, enable=True) -> None:
+    def __init__(self, device: Device, name: str, custom_type: str, enable: bool = True) -> None:
         """Initialize the sensor."""
         super().__init__(device)
         self._custom_type = custom_type
@@ -273,10 +280,10 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
 
     def _update_state(self) -> None:
         if self._custom_type == ATTR_INSIDE_TEMPERATURE:
-            indoor_offset = self._device.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0)
+            indoor_offset = self._device.options.get(CONF_INDOOR_OFFSET, 0.0)
             self._attr_native_value = self._device.airco.IndoorTemp + indoor_offset
         elif self._custom_type == ATTR_OUTSIDE_TEMPERATURE:
-            outdoor_offset = self._device.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0)
+            outdoor_offset = self._device.options.get(CONF_OUTDOOR_OFFSET, 0.0)
             self._attr_native_value = self._device.airco.OutdoorTemp + outdoor_offset
         elif self._custom_type == ATTR_TARGET_TEMPERATURE:
             # Kept symmetric with climate.py's target_temperature by going
@@ -291,8 +298,8 @@ class EnergySensor(WfRacEntity, SensorEntity):
 
     _attr_translation_key = "energy_usage"
     _attr_native_unit_of_measurement: str | None = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_device_class: SensorDeviceClass | str | None = SensorDeviceClass.ENERGY
-    _attr_state_class: SensorStateClass | str | None = SensorStateClass.TOTAL_INCREASING
+    _attr_device_class: SensorDeviceClass | None = SensorDeviceClass.ENERGY
+    _attr_state_class: SensorStateClass | None = SensorStateClass.TOTAL_INCREASING
     _attr_has_entity_name: bool = True
 
     def __init__(self, device: Device) -> None:
@@ -346,8 +353,8 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
 
     _attr_translation_key = "energy_usage_total"
     _attr_native_unit_of_measurement: str | None = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_device_class: SensorDeviceClass | str | None = SensorDeviceClass.ENERGY
-    _attr_state_class: SensorStateClass | str | None = SensorStateClass.TOTAL_INCREASING
+    _attr_device_class: SensorDeviceClass | None = SensorDeviceClass.ENERGY
+    _attr_state_class: SensorStateClass | None = SensorStateClass.TOTAL_INCREASING
     _attr_has_entity_name: bool = True
     _attr_suggested_display_precision: int | None = 2
 
@@ -372,7 +379,13 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
 
         if (stored := await self.async_get_last_extra_data()) is not None:
             restored = EnergyTotalExtraStoredData.from_dict(stored.as_dict())
-            if restored is not None and restored.native_value is not None:
+            # native_value's declared type also allows date/datetime, which
+            # this sensor never stores but float() can't convert - restrict
+            # to what a restored total can actually be instead of crashing
+            # async_added_to_hass() on an unexpected stored type.
+            if restored is not None and isinstance(
+                restored.native_value, (int, float, str, Decimal)
+            ):
                 self._total = float(restored.native_value)
                 self._last_raw = restored.last_raw
                 self._attr_native_value = round(self._total, 2)

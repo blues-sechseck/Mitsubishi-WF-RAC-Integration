@@ -8,14 +8,21 @@ from . import MitsubishiWfRacConfigEntry
 import voluptuous as vol
 
 from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import HVACMode, HVACAction, FAN_AUTO
+from homeassistant.components.climate.const import (
+    ClimateEntityFeature,
+    HVACMode,
+    HVACAction,
+    FAN_AUTO,
+)
 from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, entity_platform
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .entity import WfRacEntity
 from .wfrac.device import Device
-from .wfrac.models.aircon import AirconCommands, HomeLeaveModeSetting
+from .wfrac.models.aircon import Aircon, AirconCommands, HomeLeaveModeSetting
 from .const import (
     DOMAIN,
     FAN_MODE_TRANSLATION,
@@ -41,7 +48,11 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
 
 
-async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: MitsubishiWfRacConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Setup climate entities"""
     device: Device = entry.runtime_data.device
     _LOGGER.info("Setup climate for: %s, %s", device.device_name, device.airco_id)
@@ -94,7 +105,7 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
 class AircoClimate(WfRacEntity, ClimateEntity):
     """Representation of a climate entity"""
 
-    _attr_supported_features: int = SUPPORT_FLAGS
+    _attr_supported_features: ClimateEntityFeature = SUPPORT_FLAGS
     _attr_temperature_unit: str = UnitOfTemperature.CELSIUS
     _attr_hvac_modes: list[HVACMode] = SUPPORTED_HVAC_MODES
     _attr_fan_modes: list[str] = SUPPORTED_FAN_MODES
@@ -154,7 +165,7 @@ class AircoClimate(WfRacEntity, ClimateEntity):
     def max_temp(self) -> float:
         return self._max_temp_for_mode(self._attr_hvac_mode)
 
-    async def async_set_temperature(self, **kwargs) -> None:
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         set_temp = kwargs.get(ATTR_TEMPERATURE)
         if set_temp is None:
@@ -185,7 +196,7 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         target_temp = set_temp - target_offset
         target_temp = max(min_temp, min(max_temp, target_temp))
 
-        opts: dict[str, Any] = {AirconCommands.PresetTemp: target_temp}
+        opts: dict[AirconCommands, Any] = {AirconCommands.PresetTemp: target_temp}
 
         if "hvac_mode" in kwargs:
             opts.update(
@@ -297,7 +308,7 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         airco = self._device.airco
 
         # Apply indoor offset
-        indoor_offset = self._device.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0)
+        indoor_offset = self._device.options.get(CONF_INDOOR_OFFSET, 0.0)
         # Both the displayed hvac_mode and the target_offset resolution need
         # the underlying cool/heat mode, so it's computed once here and shared
         # between them.
@@ -345,7 +356,7 @@ class AircoClimate(WfRacEntity, ClimateEntity):
             # Determine hvac_action based on operation mode and state
             self._attr_hvac_action = self._determine_hvac_action(airco)
 
-    def _determine_hvac_action(self, airco) -> HVACAction:
+    def _determine_hvac_action(self, airco: Aircon) -> HVACAction:
         """Determine the current HVAC action from operation mode and state.
 
         CoolHotJudge (content[8] & 8) reflects what the unit's own AUTO logic

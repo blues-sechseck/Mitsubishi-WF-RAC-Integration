@@ -7,7 +7,9 @@ import logging
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.const import UnitOfTemperature
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
 from .entity import WfRacEntity
@@ -25,7 +27,11 @@ HOME_LEAVE_TEMP_MAX = 50.0
 HOME_LEAVE_TEMP_STEP = 0.5
 
 
-async def async_setup_entry(_hass, entry: MitsubishiWfRacConfigEntry, async_add_entities):
+async def async_setup_entry(
+    _hass: HomeAssistant,
+    entry: MitsubishiWfRacConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Setup number entries"""
 
     device: Device = entry.runtime_data.device
@@ -109,10 +115,20 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
                 "entity's 'Request Home Leave Mode status' action once "
                 "first, the unit doesn't include them in a plain poll."
             )
-        if self._mode == "cooling":
-            cooling = replace(cooling, **{self._attribute: value})
+        # Named kwargs rather than replace(setting, **{self._attribute: value}):
+        # HomeLeaveModeSetting also has an AirFlow: int field, so a dynamic
+        # **{str: float} unpacking can't statically prove it only ever
+        # touches the two float fields this class is instantiated for.
+        if self._attribute == "TempRule":
+            if self._mode == "cooling":
+                cooling = replace(cooling, TempRule=value)
+            else:
+                heating = replace(heating, TempRule=value)
         else:
-            heating = replace(heating, **{self._attribute: value})
+            if self._mode == "cooling":
+                cooling = replace(cooling, TempSetting=value)
+            else:
+                heating = replace(heating, TempSetting=value)
         await self._device.async_set_home_leave_mode(cooling, heating)
         self._attr_native_value = value
         self.async_write_ha_state()
