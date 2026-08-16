@@ -581,8 +581,15 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
 
         _carry_forward_home_leave_mode() keeps the reading available on every
         following poll instead of it reverting to unknown.
+
+        Sent directly through set_airco() rather than async_queue_command():
+        the latter coalesces this with any command queued in the same
+        window, and since this request's own block carries no set-bits (see
+        RacParser.status_request_to_byte), a coalesced real command - e.g. a
+        setpoint change - would go out in that same block without its
+        set-bit and be silently ignored by the unit.
         """
-        await self.async_queue_command({AirconCommands.HomeLeaveModeStatusRequest: True})
+        await self.set_airco({AirconCommands.HomeLeaveModeStatusRequest: True})
 
     async def async_set_home_leave_mode(
         self, cooling: HomeLeaveModeSetting, heating: HomeLeaveModeSetting

@@ -403,6 +403,39 @@ async def test_async_queue_command_notifies_listeners_even_on_failure(device, mo
         unsubscribe()
 
 
+async def test_home_leave_mode_status_request_does_not_swallow_a_queued_command(
+    device, monkeypatch
+):
+    """Regression: async_request_home_leave_mode_status() used to go through
+    async_queue_command(), so if it landed in the same consolidation window as
+    a real command, both were merged into one AirconStat. to_base64() then
+    saw HomeLeaveModeStatusRequest set and picked status_request_to_byte(),
+    which carries no set-bits at all - so the real command (here: a setpoint
+    change) went out unset and was silently ignored by the unit. Sending the
+    status request directly through set_airco() keeps it out of that merge.
+    """
+    monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    sent = []
+
+    async def _capture_and_echo(airco_id, command):
+        sent.append(command)
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    await device.async_queue_command({AirconCommands.PresetTemp: 25.0})
+    await device.async_request_home_leave_mode_status()
+    await asyncio.sleep(0.05)
+
+    assert len(sent) == 2
+    # The setpoint change must have been sent in its own, separate command
+    # block with its set-bit (DB2[7]) intact.
+    blocks = [base64.b64decode(command)[:18] for command in sent]
+    assert any(block[4] & 0x80 for block in blocks)
+
+
 # --- misc: properties, delete_account(), availability retry, coordinator -
 
 
