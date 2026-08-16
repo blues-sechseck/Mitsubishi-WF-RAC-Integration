@@ -4,9 +4,16 @@ from __future__ import annotations
 
 import logging
 
+from homeassistant.components.climate.const import HVACMode
 from homeassistant.core import callback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import (
+    CONF_TARGET_OFFSET,
+    CONF_TARGET_OFFSET_COOL,
+    CONF_TARGET_OFFSET_HEAT,
+    HVAC_TRANSLATION,
+)
 from .wfrac.device import Device
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,6 +33,38 @@ class WfRacEntity(CoordinatorEntity[Device]):
         super().__init__(device)
         self._device = device
         self._attr_device_info = device.device_info
+
+    @property
+    def _hvac_mode_from_operation(self) -> HVACMode:
+        """The unit's underlying cool/heat mode.
+
+        airco.OperationMode keeps reporting it while the unit is off, which is
+        what the offset resolution below needs - the climate entity's own
+        hvac_mode is forced to OFF in that case.
+        """
+        return list(HVAC_TRANSLATION.keys())[self._device.airco.OperationMode]
+
+    def _resolve_target_offset(self, hvac_mode: HVACMode) -> float:
+        """Resolve the effective target_offset for a given hvac_mode.
+
+        COOL/DRY fall back to CONF_TARGET_OFFSET_COOL, HEAT to
+        CONF_TARGET_OFFSET_HEAT, everything else always uses the global
+        CONF_TARGET_OFFSET - and so does COOL/HEAT when its per-mode option
+        is unset (None), which is what keeps single-target_offset installs
+        unchanged. Lives on the base entity so the climate write path, the
+        climate read-back path and the target temperature sensor can never
+        resolve a different offset for the same mode (see beta2: that
+        divergence is what caused the target_temperature re-send loop).
+        """
+        options = self._device.config_entry.options
+        base_offset = options.get(CONF_TARGET_OFFSET, 0.0)
+        if hvac_mode in (HVACMode.COOL, HVACMode.DRY):
+            override = options.get(CONF_TARGET_OFFSET_COOL)
+        elif hvac_mode == HVACMode.HEAT:
+            override = options.get(CONF_TARGET_OFFSET_HEAT)
+        else:
+            override = None
+        return base_offset if override is None else override
 
     @property
     def available(self) -> bool:

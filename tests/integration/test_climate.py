@@ -1,8 +1,10 @@
-"""Tests for climate.py's target_offset symmetry between the write path
+"""Tests for target_offset symmetry between the write path
 (async_set_temperature) and the read-back path (_update_state). Without this,
 a non-zero CONF_TARGET_OFFSET makes target_temperature permanently disagree
 with what the user set, which trips automations' `state_attr(...) != desired`
-guards into a set_temperature re-send loop. Needs the `hass` fixture (Device
+guards into a set_temperature re-send loop. The "Target" temperature sensor
+displays the same setpoint and is covered here too, since it has to resolve
+the offset exactly like the climate entity. Needs the `hass` fixture (Device
 is a DataUpdateCoordinator), hence tests/integration/ rather than tests/unit/.
 """
 
@@ -14,7 +16,9 @@ import pytest
 from homeassistant.components.climate.const import HVACMode
 
 from custom_components.mitsubishi_wf_rac.climate import AircoClimate
+from custom_components.mitsubishi_wf_rac.sensor import TemperatureSensor
 from custom_components.mitsubishi_wf_rac.const import (
+    ATTR_TARGET_TEMPERATURE,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -182,3 +186,38 @@ async def test_round_trip_symmetry_survives_unit_being_off(device):
     entity._update_state()
 
     assert entity._attr_target_temperature == 21
+
+
+# --- the Target sensor agrees with the climate entity ---------------------
+#
+# TemperatureSensor("Target") shows the same setpoint as the climate entity,
+# derived from the same PresetTemp, so it has to resolve the offset the same
+# way. Adding only the global CONF_TARGET_OFFSET there made the two disagree
+# by the difference as soon as a per-mode override was configured.
+
+
+@pytest.mark.parametrize(
+    "hvac_mode,override_key,offset",
+    [
+        (HVACMode.COOL, CONF_TARGET_OFFSET_COOL, 1.5),
+        (HVACMode.DRY, CONF_TARGET_OFFSET_COOL, 1.5),
+        (HVACMode.HEAT, CONF_TARGET_OFFSET_HEAT, -1.5),
+        (HVACMode.AUTO, None, 0.5),
+    ],
+)
+async def test_target_sensor_matches_climate_entity(device, hvac_mode, override_key, offset):
+    device.config_entry.options[CONF_TARGET_OFFSET] = 1.0
+    if override_key is not None:
+        device.config_entry.options[override_key] = offset
+    else:
+        device.config_entry.options[CONF_TARGET_OFFSET] = offset
+    device.airco.PresetTemp = 22
+    device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
+
+    climate = AircoClimate(device)
+    sensor = TemperatureSensor(device, "Target", ATTR_TARGET_TEMPERATURE, False)
+    climate._update_state()
+    sensor._update_state()
+
+    assert sensor._attr_native_value == 22 + offset
+    assert sensor._attr_native_value == climate._attr_target_temperature
