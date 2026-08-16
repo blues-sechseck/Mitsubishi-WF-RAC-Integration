@@ -9,7 +9,8 @@
     },
     "abort": {
       "existing_instance_updated": "Updated existing configuration.",
-      "already_configured": "Airco is already configured"
+      "already_configured": "Airco is already configured",
+      "reconfigure_successful": "Re-configuration was successful"
     },
     "step": {
       "user": {
@@ -28,6 +29,15 @@
         "data": {
           "name": "Airco Name"
         }
+      },
+      "reconfigure": {
+        "data": {
+          "name": "Airco Name",
+          "host": "Host (IP) address",
+          "port": "Port"
+        },
+        "description": "Update the connection details for this Airco.",
+        "title": "Reconfigure WF-RAC AC connection"
       }
     }
   },
@@ -59,7 +69,6 @@
       "init": {
         "description": "Below are the options you can change for this airco.",
         "data": {
-          "host": "Host (IP) address",
           "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
           "indoor_offset": "Indoor Temp. Sensor Offset",

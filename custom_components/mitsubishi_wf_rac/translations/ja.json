@@ -9,7 +9,8 @@
     },
     "abort": {
       "existing_instance_updated": "既存の設定が更新されました。",
-      "already_configured": "エアコンは既に設定されています。"
+      "already_configured": "エアコンは既に設定されています。",
+      "reconfigure_successful": "再設定が完了しました"
     },
     "step": {
       "user": {
@@ -28,6 +29,15 @@
         "data": {
           "name": "エアコン名"
         }
+      },
+      "reconfigure": {
+        "data": {
+          "name": "エアコン名",
+          "host": "ホスト（IP）アドレス",
+          "port": "ポート"
+        },
+        "description": "このエアコンの接続情報を更新してください。",
+        "title": "WF-RACエアコン接続の再設定"
       }
     }
   },
@@ -59,7 +69,6 @@
       "init": {
         "description": "以下は、このエアコンの変更可能なオプションです。",
         "data": {
-          "host": "ホスト（IP）アドレス",
           "availability_retry_limit": "リトライ回数の上限（最小 3）",
           "firmware_update_check": "ファームウェア更新の確認 (オンライン)",
           "indoor_offset": "室内オフセット",

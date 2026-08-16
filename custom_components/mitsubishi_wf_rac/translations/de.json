@@ -9,7 +9,8 @@
     },
     "abort": {
       "existing_instance_updated": "Vorhandene Konfiguration aktualisiert.",
-      "already_configured": "Klima ist bereits konfiguriert"
+      "already_configured": "Klima ist bereits konfiguriert",
+      "reconfigure_successful": "Neukonfiguration erfolgreich"
     },
     "step": {
       "user": {
@@ -28,6 +29,15 @@
         "data": {
           "name": "Klima Name"
         }
+      },
+      "reconfigure": {
+        "data": {
+          "name": "Klima Name",
+          "host": "Host (IP) Adresse",
+          "port": "Port"
+        },
+        "description": "Aktualisieren Sie die Verbindungsdaten für diese Klimaanlage.",
+        "title": "WF-RAC-Verbindung neu konfigurieren"
       }
     }
   },
@@ -59,7 +69,6 @@
       "init": {
         "description": "Nachfolgend finden Sie die Optionen, die Sie für diese Klimaanlage ändern können.",
         "data": {
-          "host": "Host (IP) Adresse",
           "availability_retry_limit": "max. Anzahl Wiederholungen (mind. 3)",
           "firmware_update_check": "Firmware-Update-Prüfung (Online)",
           "indoor_offset": "Innentemperatur Sensor-Offset",

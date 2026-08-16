@@ -9,7 +9,8 @@
     },
     "abort": {
       "existing_instance_updated": "已更新現有配置。",
-      "already_configured": "空調已配置"
+      "already_configured": "空調已配置",
+      "reconfigure_successful": "重新配置成功"
     },
     "step": {
       "user": {
@@ -28,6 +29,15 @@
         "data": {
           "name": "空調名稱"
         }
+      },
+      "reconfigure": {
+        "data": {
+          "name": "空調名稱",
+          "host": "主機（IP）地址",
+          "port": "埠號"
+        },
+        "description": "更新此空調的連接資訊。",
+        "title": "重新配置 WF-RAC 空調連接"
       }
     }
   },
@@ -59,7 +69,6 @@
       "init": {
         "description": "以下是你可以為此空調更改的選項。",
         "data": {
-          "host": "主機（IP）地址",
           "availability_retry_limit": "重試次數上限（最少 3）",
           "firmware_update_check": "韌體更新檢查（線上）",
           "indoor_offset": "室內偏移",

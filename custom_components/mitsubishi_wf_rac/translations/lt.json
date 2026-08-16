@@ -9,7 +9,8 @@
     },
     "abort": {
       "existing_instance_updated": "Esami nustatymai atnaujinti.",
-      "already_configured": "Kondicionierius jau nustatytas"
+      "already_configured": "Kondicionierius jau nustatytas",
+      "reconfigure_successful": "Perkonfigūravimas sėkmingas"
     },
     "step": {
       "user": {
@@ -28,6 +29,15 @@
         "data": {
           "name": "Kondicionieriaus pavadinimas"
         }
+      },
+      "reconfigure": {
+        "data": {
+          "name": "Kondicionieriaus pavadinimas",
+          "host": "Host (IP) adresas",
+          "port": "Portas"
+        },
+        "description": "Atnaujinkite šio kondicionieriaus prisijungimo duomenis.",
+        "title": "Iš naujo konfigūruoti WF-RAC AC ryšį"
       }
     }
   },
@@ -59,7 +69,6 @@
       "init": {
         "description": "Žemiau pateikiamos parinktys, kurias galite keisti šiam oro kondicionieriui.",
         "data": {
-          "host": "Host (IP) adresas",
           "availability_retry_limit": "Pakartotinio bandymo limitas (min. 3)",
           "firmware_update_check": "Programinės įrangos atnaujinimų tikrinimas (internetu)",
           "indoor_offset": "Vidaus poslinkis",
