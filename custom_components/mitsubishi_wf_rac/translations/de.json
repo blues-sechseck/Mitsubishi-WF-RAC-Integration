@@ -227,19 +227,19 @@
         "name": "Kompressorfrequenz"
       },
       "compressor_frequency_raw": {
-        "name": "Kompressorfrequenz (roh)"
+        "name": "Kompressorfrequenz (Rohwert)"
       },
       "operating_current": {
         "name": "Betriebsstrom"
       },
       "operating_current_raw": {
-        "name": "Betriebsstrom (roh)"
+        "name": "Betriebsstrom (Rohwert)"
       },
       "hot_gas_temp": {
         "name": "Heißgastemperatur"
       },
       "hot_gas_temp_raw": {
-        "name": "Heißgastemperatur (roh)"
+        "name": "Heißgastemperatur (Rohwert)"
       },
       "eev_pulses": {
         "name": "EEV-Pulse"
@@ -254,19 +254,19 @@
         "name": "Innen-Wärmetauscher Austritt Temperatur"
       },
       "indoor_coil_raw": {
-        "name": "Innen-Wärmetauscher Temperatur (roh)"
+        "name": "Innen-Wärmetauscher Temperatur (Rohwert)"
       },
       "indoor_coil_outlet_raw": {
-        "name": "Innen-Wärmetauscher Austritt Temperatur (roh)"
+        "name": "Innen-Wärmetauscher Austritt Temperatur (Rohwert)"
       },
       "outdoor_coil_raw": {
-        "name": "Außen-Wärmetauscher Temperatur (roh)"
+        "name": "Außen-Wärmetauscher Temperatur (Rohwert)"
       },
       "discharge_superheat_raw": {
-        "name": "Druckgas-Überhitzung (roh)"
+        "name": "Druckgas-Überhitzung (Rohwert)"
       },
       "protection_raw": {
-        "name": "Schutznummer (roh)"
+        "name": "Schutznummer (Rohwert)"
       }
     },
     "binary_sensor": {
