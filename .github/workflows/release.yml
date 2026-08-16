@@ -1,18 +1,27 @@
 name: Release
 
-# Attaches the installable archive to a release. HACS reads `zip_release` in
-# hacs.json and installs that asset instead of GitHub's source zipball, which
-# is also the only way GitHub counts downloads at all - the zipball is not
-# counted.
+# Builds the installable archive and puts it on a DRAFT release, so the tag
+# push is the only thing needed to get a release ready.
 #
-# With `zip_release` set, a release WITHOUT this asset cannot be installed, so
-# this workflow is not cosmetic: every published release and pre-release needs
-# it to finish. workflow_dispatch re-attaches the asset to an existing tag if a
-# run ever fails.
+# Why a draft, and why this trigger: GitHub releases are immutable once
+# published, so an asset cannot be attached afterwards - a workflow running on
+# `release: published` is always too late. The archive therefore has to exist
+# before the release goes live.
+#
+# Releasing is two steps:
+#   1. git push origin <tag>          -> this workflow drafts the release
+#   2. gh release edit <tag> --notes-file notes.md --draft=false
+#
+# HACS reads `zip_release` in hacs.json and installs this asset instead of
+# GitHub's source zipball, which is also the only way GitHub counts downloads -
+# the zipball is not counted. With `zip_release` set, a release without the
+# asset cannot be installed, so step 1 must be green before step 2.
+#
+# workflow_dispatch rebuilds the archive for a tag whose run failed.
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -24,19 +33,19 @@ permissions:
 
 jobs:
   archive:
-    name: Build and attach
+    name: Build and draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.event.release.tag_name }}
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Check manifest version against the tag
         # The version in manifest.json is what Home Assistant and HACS report
         # to the user; a tag that disagrees with it produces an install that
         # claims the wrong version and never offers the update.
         run: |
-          tag="${{ inputs.tag || github.event.release.tag_name }}"
+          tag="${{ inputs.tag || github.ref_name }}"
           manifest=$(python3 -c "import json;print(json.load(open('custom_components/mitsubishi_wf_rac/manifest.json'))['version'])")
           if [ "$tag" != "$manifest" ]; then
             echo "::error::tag $tag does not match manifest.json version $manifest"
@@ -53,8 +62,12 @@ jobs:
           zip -r "$GITHUB_WORKSPACE/mitsubishi_wf_rac.zip" . \
             -x '__pycache__/*' '*/__pycache__/*'
 
-      - name: Attach it to the release
+      - name: Draft the release with the archive attached
+        # A tag carrying a suffix (-beta1, -dev2) is a pre-release. Notes and
+        # publishing stay manual, see the header.
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag || github.event.release.tag_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
           files: mitsubishi_wf_rac.zip
