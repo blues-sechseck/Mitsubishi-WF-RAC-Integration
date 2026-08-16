@@ -2,6 +2,8 @@
 options flow. Repository (the HTTP layer) is patched out - no real network.
 """
 
+import json
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -495,6 +497,30 @@ async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: Hom
     assert CONF_TARGET_OFFSET_HEAT not in result["data"]
     assert result["data"].get(CONF_TARGET_OFFSET_COOL) is None
     assert result["data"].get(CONF_TARGET_OFFSET_HEAT) is None
+
+
+async def test_options_form_fields_all_have_a_label(hass: HomeAssistant):
+    """A field without an entry in strings.json renders as its raw key.
+
+    That is not a crash and no test catches it downstream, so the form can
+    grow a field and show the user "availability_retry_limit" indefinitely.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    fields = {str(key.schema) for key in result["data_schema"].schema}
+
+    strings = json.loads(
+        Path("custom_components/mitsubishi_wf_rac/strings.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert set(strings["options"]["step"]["init"]["data"]) == fields
 
 
 # --- WfRacConfigFlow.is_matching() / _name ------------------------------
