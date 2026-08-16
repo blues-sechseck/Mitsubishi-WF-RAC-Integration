@@ -39,11 +39,10 @@ UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 # interval instead.
 FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
-# Service data is requested for active operation-data entities when the option
-# is enabled, and costs a second request per poll. It stays on the local
-# network and changes nothing on the unit (see RacParser.status_request_to_byte),
-# so there's no reason to throttle it below the regular poll cadence. See
-# Device._maybe_request_service_data().
+# Operation data is requested for active operation-data entities and costs a
+# second request per poll. It stays on the local network and changes nothing on
+# the unit (see RacParser.status_request_to_byte), so there's no reason to
+# throttle it below the regular poll cadence. See Device._maybe_request_service_data().
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
 # The rate limit is a guard against a second request inside the same cycle, not
@@ -151,7 +150,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
             create_swing_mode_select: bool,
             availability_failure_limit: int = AVAILABILITY_FAILURE_LIMIT_MIN,
             firmware_update_check_enabled: bool = False,
-            service_data_enabled: bool = False,
             connection_method: str | None = None,
     ) -> None:
         self._api = Repository(
@@ -181,7 +179,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self._firmware_update_available: bool | None = None
         self._last_firmware_check: datetime | None = None
         self._firmware_update_check_enabled = firmware_update_check_enabled
-        self._service_data_enabled = service_data_enabled
         self._last_service_data_request: datetime | None = None
         self._last_service_data_response: datetime | None = None
         self._service_data_expired = False
@@ -341,11 +338,9 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
         self.async_set_updated_data(self._airco)
 
     def _maybe_request_service_data(self) -> None:
-        """Kick off a background request for active service-data segments if
-        due and enabled (see SERVICE_DATA_MIN_SPACING).
+        """Kick off a background request for active operation-data segments
+        when due (see SERVICE_DATA_MIN_SPACING).
         """
-        if not self._service_data_enabled:
-            return
         service_data_codes = tuple(
             sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES))
         )
@@ -746,11 +741,6 @@ class Device(DataUpdateCoordinator):  # pylint: disable=too-many-instance-attrib
     def firmware_update_check_enabled(self) -> bool:
         """Return whether the (online, cloud) firmware update check is enabled"""
         return self._firmware_update_check_enabled
-
-    @property
-    def service_data_enabled(self) -> bool:
-        """Return whether the (local, opt-in) service data request is enabled"""
-        return self._service_data_enabled
 
     @property
     def device_id(self) -> str:

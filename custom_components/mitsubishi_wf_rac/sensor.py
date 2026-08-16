@@ -65,7 +65,6 @@ from .const import (
     ATTR_COOL_HOT_JUDGE,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
-    CONF_SERVICE_DATA,
     SERVICE_SET_ENERGY_TOTAL,
     SIGNAL_SET_ENERGY_TOTAL,
 )
@@ -109,31 +108,25 @@ async def async_setup_entry(hass, entry: MitsubishiWfRacConfigEntry, async_add_e
         entities.append(EnergySensor(device))
         entities.append(EnergyTotalSensor(device))
 
-    # Tied to CONF_SERVICE_DATA rather than merely disabled by default: it
-    # controls whether these entities exist. Their active coordinator contexts
-    # determine which operation-data segments Device requests. Changing the
-    # option reloads the entry (see async_update_options), so they appear and
-    # disappear with it.
-    if entry.options.get(CONF_SERVICE_DATA, False):
-        entities += [
-            ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
-            ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY_RAW),
-            ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
-            ServiceDataSensor(device, ATTR_OPERATING_CURRENT_RAW),
-            ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
-            ServiceDataSensor(device, ATTR_HOT_GAS_TEMP_RAW),
-            ServiceDataSensor(device, ATTR_EEV_PULSES),
-            ServiceDataSensor(device, ATTR_EEV_POSITION),
-            ServiceDataSensor(device, ATTR_INDOOR_COIL_TEMP),
-            ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
-            ServiceDataSensor(device, ATTR_INDOOR_COIL_RAW),
-            ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_RAW),
-            ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
-            ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
-            ServiceDataSensor(device, ATTR_PROTECTION_RAW),
-        ]
-    else:
-        _async_remove_service_data_sensors(hass, device)
+    # Active operation-data entities register their segment code with Device,
+    # which requests only the segments needed by enabled entities.
+    entities += [
+        ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
+        ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY_RAW),
+        ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
+        ServiceDataSensor(device, ATTR_OPERATING_CURRENT_RAW),
+        ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
+        ServiceDataSensor(device, ATTR_HOT_GAS_TEMP_RAW),
+        ServiceDataSensor(device, ATTR_EEV_PULSES),
+        ServiceDataSensor(device, ATTR_EEV_POSITION),
+        ServiceDataSensor(device, ATTR_INDOOR_COIL_TEMP),
+        ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
+        ServiceDataSensor(device, ATTR_INDOOR_COIL_RAW),
+        ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_RAW),
+        ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
+        ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
+        ServiceDataSensor(device, ATTR_PROTECTION_RAW),
+    ]
 
     _async_remove_home_leave_mode_sensors(hass, device)
 
@@ -158,38 +151,6 @@ async def _async_set_energy_total(entity: SensorEntity, call) -> None:
             f"{entity.entity_id} is not an Energy Usage Total sensor"
         )
     await entity.async_set_total(call.data["value"])
-
-
-def _async_remove_service_data_sensors(hass, device: Device) -> None:
-    """Drop the operation-data sensors once CONF_SERVICE_DATA is turned off.
-
-    Without this they would linger in the registry reading `unknown` forever,
-    since nothing requests their values any more.
-    """
-    registry = er.async_get(hass)
-    for custom_type in (
-        ATTR_COMPRESSOR_FREQUENCY,
-        ATTR_COMPRESSOR_FREQUENCY_RAW,
-        ATTR_OPERATING_CURRENT,
-        ATTR_OPERATING_CURRENT_RAW,
-        ATTR_HOT_GAS_TEMP,
-        ATTR_HOT_GAS_TEMP_RAW,
-        ATTR_EEV_PULSES,
-        ATTR_EEV_POSITION,
-        ATTR_INDOOR_COIL_TEMP,
-        ATTR_INDOOR_COIL_OUTLET_TEMP,
-        ATTR_INDOOR_COIL_RAW,
-        ATTR_INDOOR_COIL_OUTLET_RAW,
-        ATTR_OUTDOOR_COIL_RAW,
-        ATTR_DISCHARGE_SUPERHEAT_RAW,
-        ATTR_PROTECTION_RAW,
-    ):
-        entity_id = registry.async_get_entity_id(
-            "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-{custom_type}-sensor"
-        )
-        if entity_id:
-            _LOGGER.debug("Removing service data sensor %s", entity_id)
-            registry.async_remove(entity_id)
 
 
 def _async_remove_home_leave_mode_sensors(hass, device: Device) -> None:
@@ -449,16 +410,14 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
 
 class ServiceDataSensor(WfRacEntity, SensorEntity):
     """Operation-data sensors, including converted values and raw bytes.
-    Only created while CONF_SERVICE_DATA is on. Active sensors register their
-    segment code with Device, which requests only those segments.
-
-    Converted values are enabled once they exist. Raw bytes are disabled by
-    default because they are useful only for protocol analysis.
+    Active sensors register their segment code with Device, which requests
+    only those segments.
     """
 
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
 
     _FIELD_BY_TYPE = {
         ATTR_COMPRESSOR_FREQUENCY: "CompressorFrequency",
@@ -486,17 +445,6 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         )
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-{custom_type}-sensor"
         self._attr_translation_key = custom_type
-        if custom_type in (
-            ATTR_COMPRESSOR_FREQUENCY_RAW,
-            ATTR_OPERATING_CURRENT_RAW,
-            ATTR_HOT_GAS_TEMP_RAW,
-            ATTR_INDOOR_COIL_RAW,
-            ATTR_INDOOR_COIL_OUTLET_RAW,
-            ATTR_OUTDOOR_COIL_RAW,
-            ATTR_DISCHARGE_SUPERHEAT_RAW,
-            ATTR_PROTECTION_RAW,
-        ):
-            self._attr_entity_registry_enabled_default = False
         if custom_type == ATTR_COMPRESSOR_FREQUENCY:
             self._attr_device_class = SensorDeviceClass.FREQUENCY
             self._attr_native_unit_of_measurement = UnitOfFrequency.HERTZ

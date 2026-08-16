@@ -21,7 +21,6 @@ from .const import (
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CONNECTION_METHOD,
     CONF_FIRMWARE_UPDATE_CHECK,
-    CONF_SERVICE_DATA,
     CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
 )
 from .wfrac.device import AVAILABILITY_FAILURE_LIMIT_MIN, Device
@@ -151,10 +150,6 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     # the only outbound internet call in the integration (see
     # wfrac/device.py's _maybe_check_firmware_update()).
     firmware_update_check_enabled: bool = entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False)
-    # Off unless opted in, like the firmware check above: requesting these
-    # values costs an extra write to the unit on every poll. See
-    # wfrac/device.py's _maybe_request_service_data().
-    service_data_enabled: bool = entry.options.get(CONF_SERVICE_DATA, False)
     # Floored in Device itself, so an entry that predates the v4 -> v5
     # migration can't run with less tolerance than the module needs.
     availability_failure_limit: int = entry.options.get(
@@ -165,7 +160,6 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
                      create_swing_mode_select,
                      availability_failure_limit=availability_failure_limit,
                      firmware_update_check_enabled=firmware_update_check_enabled,
-                     service_data_enabled=service_data_enabled,
                      connection_method=connection_method)
     return _device
 

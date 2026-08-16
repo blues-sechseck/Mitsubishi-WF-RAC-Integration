@@ -661,16 +661,10 @@ async def test_update_firmware_check_failure_leaves_state_unknown(device, monkey
     assert device.latest_wireless_firmware_version is None
 
 
-# --- service data request (opt-in, rac_parser.SERVICE_DATA_CODES) ---------
+# --- operation-data request (rac_parser.SERVICE_DATA_CODES) ----------------
 
 
-async def test_update_does_not_request_service_data_when_disabled_by_default(device, monkeypatch):
-    # Unlike the firmware check, this stays on the local network - but it's
-    # still an extra setAirconStat write on top of the regular read-only
-    # poll, so it must stay off unless explicitly enabled via the
-    # service_data option (see const.py's CONF_SERVICE_DATA).
-    assert device.service_data_enabled is False
-    _activate_service_data_contexts(device, monkeypatch)
+async def test_update_does_not_request_service_data_without_active_entities(device, monkeypatch):
     monkeypatch.setattr(device_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5))
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
@@ -681,23 +675,7 @@ async def test_update_does_not_request_service_data_when_disabled_by_default(dev
     device._api.send_airco_command.assert_not_awaited()
 
 
-async def test_update_does_not_request_service_data_without_active_entities(
-    device, monkeypatch
-):
-    device._service_data_enabled = True
-    _shorten_service_data_timing(monkeypatch)
-    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
-
-    await device.update()
-    await asyncio.sleep(0.05)
-
-    device._api.send_airco_command.assert_not_awaited()
-    assert device._last_service_data_request is None
-
-
-async def test_update_requests_service_data_when_enabled(device, monkeypatch):
-    device._service_data_enabled = True
+async def test_update_requests_service_data_for_active_entities(device, monkeypatch):
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -710,7 +688,6 @@ async def test_update_requests_service_data_when_enabled(device, monkeypatch):
 
 
 async def test_service_data_request_uses_active_segment_codes(device, monkeypatch):
-    device._service_data_enabled = True
     _shorten_service_data_timing(monkeypatch)
     monkeypatch.setattr(
         device,
@@ -752,7 +729,6 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
     ),
 )
 async def test_raw_service_data_sensor_requests_its_segment_code(device, monkeypatch, field, code):
-    device._service_data_enabled = True
     _shorten_service_data_timing(monkeypatch)
     assert SERVICE_DATA_CODE_BY_FIELD[field] == code
     monkeypatch.setattr(device, "async_contexts", lambda: {code})
@@ -767,7 +743,6 @@ async def test_raw_service_data_sensor_requests_its_segment_code(device, monkeyp
 
 
 async def test_service_data_request_does_not_overlap_an_active_request(device, monkeypatch):
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     device._service_data_task = MagicMock()
     device._service_data_task.done.return_value = False
@@ -795,7 +770,6 @@ async def test_service_data_request_is_offset_from_the_poll(device, monkeypatch)
     """It must not ride straight off the back of the status poll - landing a
     second write that close is what the unit refuses with HTTP 501 (#230).
     """
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch, offset_ms=40)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -814,7 +788,6 @@ async def test_service_data_request_carries_no_set_bits(device, monkeypatch):
     and the unit applies none of it - that is what keeps a change made at the
     unit itself from being undone a minute later (#241/#250).
     """
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch, offset_ms=40)
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
@@ -850,7 +823,6 @@ async def test_service_data_request_does_not_re_read_before_sending(
     """One read per cycle. The refresh that used to sit in front of the write
     (#247) is unnecessary now that the write applies nothing.
     """
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch, offset_ms=40)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -869,7 +841,6 @@ async def test_service_data_request_runs_after_a_change_at_the_unit(
     """No cycle is skipped any more: there is nothing left to protect against,
     and skipping cost a cycle of every operation-data sensor.
     """
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     changed_at_the_unit = _stats_response(ON_COOL_PAYLOAD) | {"updatedBy": "aircon"}
@@ -883,7 +854,6 @@ async def test_service_data_request_runs_after_a_change_at_the_unit(
 
 
 async def test_service_data_request_is_retried_once_when_refused(device, monkeypatch):
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -904,7 +874,6 @@ async def test_service_data_request_is_retried_once_when_refused(device, monkeyp
 
 
 async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch, caplog):
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -925,7 +894,6 @@ async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch
 
 
 async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -946,7 +914,6 @@ async def test_service_data_survives_a_poll_that_answered_early(device, monkeypa
     limit against the full interval dropped those cycles (#230, 6 of 36 on the
     reporting unit).
     """
-    device._service_data_enabled = True
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
