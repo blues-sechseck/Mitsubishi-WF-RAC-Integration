@@ -684,10 +684,16 @@ Notes on the shape of the answers `[HW]`:
 
 Codes that MHI-AC-Ctrl uses but that are **absent** from the bridge's list, and
 therefore doubtful over this path: `0x7C` (protection number), `0x0C` (defrost).
-`[FW]` `0x7C` is now requested alongside the rest — it sits in the same
-operation-data address space, and a code the module does not serve simply
-leaves its value empty, which costs nothing. Whether any unit answers it is
-still open. `0x0C` is not requested.
+`[FW]` `0x7C` is now requested alongside the rest, as `Protection Number (raw)`
+— it sits in the same operation-data address space, and a code the module does
+not serve simply leaves its value empty, which costs nothing. It does answer,
+confirmed on three units across single- and multi-split `[HW]`, but it only
+ever reads `0`: a controlled test that reproduced a real overload clamp (see
+§5.7) left it unmoved. Read together with the stop-code table
+(`error_codes.py`), which describes its non-zero values as escalated faults or
+stops rather than the speed-limit clamps in §5.7, the code appears to track
+protective *stops* only — it is not a general-purpose "unit is protecting
+itself" flag. `0x0C` is not requested.
 
 ### 5.5 Code `248` — the one the app does use
 
@@ -721,6 +727,49 @@ path is open on the WF-RAC interface `[FW]`, but **it is untested `[INF]`**, and
 it is a real control command, not a query. This is the single most requested
 reason for replacing the module with an ESP32, and it may not require replacing
 anything.
+
+### 5.7 Compressor overload protection (speed-limit clamps)
+
+Separate from the stop codes in §4.4/`error_codes.py`, and from `Protection
+Number (raw)` in §5.4: this control never stops the compressor or reports a
+code, it only raises its **lower** speed limit for as long as the trigger
+condition holds. A controlled test — an outdoor unit's air-temperature sensor
+heated past the documented cooling threshold — reproduced the expected
+speed-floor rise while `Protection Number (raw)` stayed `0` throughout,
+confirming the code does not cover it `[HW]`. The only outside signal is the
+effect itself, on the Compressor Frequency sensor: the reading holds at or
+above the floor instead of modulating down.
+
+The mechanism is documented in the SRK service manuals for each indoor series,
+keyed to outdoor air temperature with per-step hysteresis, and the numbers
+differ by series and — within a series — by indoor unit size `[EXT]`:
+
+| Series | Step (outdoor air) | Resets below | Lower limit, SRK20-35 | Lower limit, SRK50 |
+| --- | --- | --- | --- | --- |
+| ZS-WF, ZT-WF | ≥ 41 °C | 40 °C | 30 rps | 27 rps |
+| ZS-WF, ZT-WF | ≥ 47 °C | 46 °C | 45 rps | 35 rps |
+| ZSX-WF, ZR-WF | ≥ 38 °C | 37 °C | 25 rps | — |
+| ZSX-WF, ZR-WF | ≥ 41 °C | 40 °C | 30 rps | — |
+| ZSX-WF, ZR-WF | ≥ 47 °C | 46 °C | 40 rps | — |
+
+(`—`: not yet transcribed for SRK50/60 on the ZSX-WF/ZR-WF side.)
+
+Heating has its own, separate table with more steps, and starts from a
+noticeably lower outdoor temperature per series — 22 °C for ZS-WF against
+17 °C (indoor fan) / 13 °C (outdoor unit) for ZSX-WF `[EXT]` — but the exact
+speed floors for that direction have not been transcribed here yet.
+
+**Deliberately not a sensor.** A client cannot tell from the wire which of
+these rows applies — the protocol carries a capability group, not the SRK
+series or size class `[FW]` `[INF]` — so an automatic binary sensor built on
+outdoor temperature would have to ask the user to pick their model and trust
+the answer, silently wrong for anyone who picks the wrong line. Multi-split
+adds a third case on top: the outdoor unit runs its own overload control there,
+so even a correctly-picked indoor table does not necessarily govern.
+
+Where the series and size are known, a plain template sensor with hysteresis
+on the raw outdoor-temperature entity, comparing against the relevant row,
+covers this without needing it built in.
 
 ---
 
