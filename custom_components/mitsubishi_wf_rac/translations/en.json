@@ -64,6 +64,12 @@
       "message": "{entity_id} is not an Energy Usage Total sensor."
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "Too many devices registered on {device_name}",
+      "description": "Home Assistant could not register itself with this Airco because the module's account table is full. Open the Smart M-Air app and remove another registered device, or do a factory reset of the module, then reload this integration."
+    }
+  },
   "options": {
     "step": {
       "init": {

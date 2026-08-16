@@ -64,6 +64,12 @@
       "message": "{entity_id} 不是累计用电量传感器。"
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "{device_name} 上注册的设备过多",
+      "description": "由于模块的账户表已满，Home Assistant 无法在此空调上注册。请在 Smart M-Air 应用中删除另一个已注册的设备，或对模块进行出厂重置，然后重新加载此集成。"
+    }
+  },
   "options": {
     "step": {
       "init": {

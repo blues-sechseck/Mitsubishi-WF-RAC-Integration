@@ -64,6 +64,12 @@
       "message": "{entity_id} nėra bendro energijos suvartojimo jutiklis."
     }
   },
+  "issues": {
+    "too_many_devices": {
+      "title": "Prie {device_name} užregistruota per daug įrenginių",
+      "description": "\"Home Assistant\" negalėjo užsiregistruoti šiame kondicionieriuje, nes modulio paskyrų lentelė pilna. Atidarykite \"Smart M-Air\" programėlę ir pašalinkite kitą užregistruotą įrenginį, arba atstatykite modulį į gamyklinę būseną, tada iš naujo įkelkite šią integraciją."
+    }
+  },
   "options": {
     "step": {
       "init": {

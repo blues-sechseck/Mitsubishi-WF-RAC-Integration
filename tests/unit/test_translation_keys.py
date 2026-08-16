@@ -28,11 +28,15 @@ def test_exception_keys_match_english_translation():
     assert set(STRINGS["exceptions"]) == set(ENGLISH["exceptions"])
 
 
+def test_issue_keys_match_english_translation():
+    assert set(STRINGS["issues"]) == set(ENGLISH["issues"])
+
+
 def test_raised_translation_keys_exist_in_strings():
     """Every `translation_key="..."` passed to a HomeAssistantError subclass
-    must resolve somewhere - a typo here fails silently at runtime (HA falls
-    back to the plain message arg) rather than raising, so nothing else would
-    catch it.
+    or to ir.async_create_issue() must resolve somewhere - a typo here fails
+    silently at runtime (HA falls back to the plain message arg, or the issue
+    just never shows up) rather than raising, so nothing else would catch it.
     """
     used_keys = set()
     for path in COMPONENT.rglob("*.py"):
@@ -40,7 +44,7 @@ def test_raised_translation_keys_exist_in_strings():
         used_keys.update(re.findall(r'translation_key="([a-z_]+)"', text))
 
     assert used_keys, "expected to find at least one translation_key in the source"
-    assert used_keys <= set(STRINGS["exceptions"])
+    assert used_keys <= set(STRINGS["exceptions"]) | set(STRINGS["issues"])
 
 
 def test_step_data_keys_match_english_translation():
