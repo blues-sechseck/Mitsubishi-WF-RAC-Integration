@@ -240,14 +240,16 @@ device before saving it.
 
 ### Target Temp. Offset sign convention
 
-The unit's internal temperature sensor is a **return-air sensor built into the indoor unit**, not a sensor sitting where you actually care about the temperature. Its reading is therefore biased towards whatever the unit itself just blew out:
+The unit's internal temperature sensor is a **return-air sensor built into the indoor unit**, not a sensor sitting where you actually care about the temperature. It reads a biased version of the room - but which direction, and by how much, depends on your installation, not on cooling vs. heating alone:
 
-- **Cooling**: the sensor sits in the cold air the unit produces, so it reads *below* the true room temperature.
-- **Heating**: the sensor sits in the warm air the unit produces, so it reads *above* the true room temperature.
+- **Short-circuited airflow**: the unit's own outflow gets pulled straight back into the return before it mixes into the room. In cooling this reads *below* the true room temperature.
+- **Stratification**: a high wall mount and a low fan speed let conditioned air pool near the ceiling instead of mixing down to where you live. In cooling this reads *above* the true room temperature - the opposite of the case above, and just as real. Fan speed matters here: on one multi-split installation, the unit capped at a low night-time fan speed showed a markedly larger bias than a sibling unit running medium/high in the same house.
 
-Target Temp. Offset corrects for this bias: `true_room ≈ PresetTemp + offset`. To land the *room* on the temperature you actually requested, the setpoint sent to the unit is `commanded PresetTemp = requested − offset`.
+There's no way to predict which case applies to your unit from its mode alone - you have to measure.
 
-Concretely: **a negative offset raises the setpoint actually sent to the unit** (a positive offset lowers it). Because the bias flips sign between cooling and heating, no single value is correct for both at once - this is exactly why Target Temp. Offset (Cooling) / (Heating) exist as separate overrides. The offset calibrates the unit's *operating regime* (the return-air bias above), not a fixed mounting/calibration error of the sensor - don't expect one number to be "the correct" offset independent of mode.
+Target Temp. Offset corrects for this bias: `true_room ≈ PresetTemp + offset`. To land the *room* on the temperature you actually requested, the setpoint sent to the unit is `commanded PresetTemp = requested − offset`. Concretely: **a negative offset raises the setpoint actually sent to the unit** (a positive offset lowers it).
+
+**Measuring it:** place a reference sensor away from the unit's own airflow, then average `current_temperature` (the Indoor Temperature sensor) minus that reference, split by the climate entity's `hvac_action`. Use the average while `cooling` (or `heating`) as your starting point for Target Temp. Offset (Cooling) / (Heating) - that's the state the thermostat loop actually regulates in, and it's not interchangeable with `idle` or `off`: on the installation above, the same unit's average bias moved by more than a kelvin between `cooling` and `off`. This is also why no single value is correct for both cool and heat at once, and why the offset isn't a fixed mounting/calibration error you can look up - it calibrates your installation's operating regime, and only a measurement of *your* unit, in the state it's actually controlling in, gets it right.
 
 # Known limitations
 
