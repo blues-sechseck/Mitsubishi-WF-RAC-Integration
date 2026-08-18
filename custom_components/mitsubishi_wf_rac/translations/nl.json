@@ -24,10 +24,11 @@
         "title": "WF-RAC AC verbinding info"
       },
       "discovery_confirm": {
-        "description": "De airco met id: {id}, IP: {host} en poort: {port} is ontdekt. Hoe heet deze airco?",
+        "description": "De airco met id: {id}, IP: {host} en poort: {port} is ontdekt. Dit is normaal gesproken 51443 — corrigeer het hieronder als het afwijkt. Hoe heet deze airco?",
         "title": " WF-RAC Airco ontdekt ",
         "data": {
-          "name": "Airco naam"
+          "name": "Airco naam",
+          "port": "Poort"
         }
       },
       "reconfigure": {

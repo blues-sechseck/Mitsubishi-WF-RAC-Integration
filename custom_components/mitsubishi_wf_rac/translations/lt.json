@@ -24,10 +24,11 @@
         "title": "WF-RAC AC susijungimo informacija"
       },
       "discovery_confirm": {
-        "description": "Rastas kondicionierius, kurio id: {id}, IP: {host} ir portas: {port}. Suteikite jam pavadinimą.",
+        "description": "Rastas kondicionierius, kurio id: {id}, IP: {host} ir portas: {port}. Paprastai šis portas yra 51443 — jei kitoks, pataisykite žemiau. Suteikite jam pavadinimą.",
         "title": "Atrastas WF-RAC kondicionierius",
         "data": {
-          "name": "Kondicionieriaus pavadinimas"
+          "name": "Kondicionieriaus pavadinimas",
+          "port": "Portas"
         }
       },
       "reconfigure": {
