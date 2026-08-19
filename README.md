@@ -48,6 +48,10 @@ See [Github To Do & Bug List](https://github.com/blues-sechseck/Mitsubishi-WF-RA
 This integration is part of the HACS default list — no custom repository needed. In HACS, go to
 **Integrations**, search for **"Mitsubishi WF-RAC"**, and install it from there.
 
+Already installed? Jump straight to setup:
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=mitsubishi_wf_rac)
+
 ### Install manually
 
 Clone or copy this repository and copy the folder `custom_components/mitsubishi_wf_rac` into
