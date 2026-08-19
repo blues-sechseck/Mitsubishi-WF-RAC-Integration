@@ -24,10 +24,11 @@
         "title": "WF-RAC AC Verbindungs-Info"
       },
       "discovery_confirm": {
-        "description": "Die Klima mit der ID: {id}, IP: {host} und Port: {port} wurde gefunden. Bitte vergeben Sie einen Namen.",
+        "description": "Die Klima mit der ID: {id}, IP: {host} und Port: {port} wurde gefunden. Der Port ist normalerweise 51443 — bei Abweichung unten korrigieren. Bitte vergeben Sie einen Namen.",
         "title": "WF-RAC Klima gefunden",
         "data": {
-          "name": "Klima Name"
+          "name": "Klima Name",
+          "port": "Port"
         }
       },
       "reconfigure": {

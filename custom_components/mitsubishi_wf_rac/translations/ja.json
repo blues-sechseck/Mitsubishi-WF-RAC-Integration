@@ -24,10 +24,11 @@
         "title": "WF-RACエアコン接続情報"
       },
       "discovery_confirm": {
-        "description": "ID: {id}、IP: {host}、ポート: {port} のエアコンが見つかりました。名前を付けてください。",
+        "description": "ID: {id}、IP: {host}、ポート: {port} のエアコンが見つかりました。通常このポートは51443です。異なる場合は下で修正してください。名前を付けてください。",
         "title": "検出されたWF-RACエアコン",
         "data": {
-          "name": "エアコン名"
+          "name": "エアコン名",
+          "port": "ポート"
         }
       },
       "reconfigure": {

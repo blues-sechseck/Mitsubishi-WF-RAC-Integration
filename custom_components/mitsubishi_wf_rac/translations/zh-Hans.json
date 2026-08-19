@@ -24,10 +24,11 @@
         "title": "WF-RAC 空调连接信息"
       },
       "discovery_confirm": {
-        "description": "发现了空调，ID: {id}，IP: {host}，端口: {port}。请为其命名。",
+        "description": "发现了空调，ID: {id}，IP: {host}，端口: {port}。通常应为 51443——如不同请在下方更正。请为其命名。",
         "title": "发现的 WF-RAC 空调",
         "data": {
-          "name": "空调名称"
+          "name": "空调名称",
+          "port": "端口"
         }
       },
       "reconfigure": {

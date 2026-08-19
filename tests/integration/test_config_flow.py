@@ -422,6 +422,27 @@ async def test_zeroconf_discovery_confirm_creates_entry(hass: HomeAssistant):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["options"]["host"] == "192.168.1.50"
+    assert result["data"]["port"] == 51443
+
+
+async def test_zeroconf_discovery_confirm_port_can_be_overridden(hass: HomeAssistant):
+    """A bad mDNS advertisement (see #290: port 5353, the mDNS port itself,
+    instead of the fixed 51443) must be correctable in the confirm step
+    rather than silently trusted.
+    """
+    repo = _mock_repository()
+    with _patch_repository(repo):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(port=5353),
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"name": "Living Room AC", "port": 51443}
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["port"] == 51443
 
 
 # --- options flow --------------------------------------------------------

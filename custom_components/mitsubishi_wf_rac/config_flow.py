@@ -227,8 +227,8 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
         if user_input:
-            for key in [CONF_HOST, CONF_PORT]:
-                user_input[key] = self._discovery_info[key]
+            user_input[CONF_HOST] = self._discovery_info[CONF_HOST]
+            user_input.setdefault(CONF_PORT, self._discovery_info[CONF_PORT])
 
         field = partial(self._field, user_input)
         data_schema = vol.Schema(
@@ -236,6 +236,9 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 field(
                     CONF_NAME, vol.Required, f"Airco {self._discovery_info[CONF_NAME]}"
                 ): str,
+                field(
+                    CONF_PORT, vol.Optional, self._discovery_info[CONF_PORT]
+                ): cv.port,
             }
         )
 

@@ -24,10 +24,11 @@
         "title": "WF-RAC 空調連接資訊"
       },
       "discovery_confirm": {
-        "description": "發現了空調，ID: {id}，IP: {host}，埠號: {port}。請為其命名。",
+        "description": "發現了空調，ID: {id}，IP: {host}，埠號: {port}。通常應為 51443——如不同請在下方更正。請為其命名。",
         "title": "發現的 WF-RAC 空調",
         "data": {
-          "name": "空調名稱"
+          "name": "空調名稱",
+          "port": "埠號"
         }
       },
       "reconfigure": {
