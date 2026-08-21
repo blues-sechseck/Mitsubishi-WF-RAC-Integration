@@ -91,6 +91,19 @@ class AirconCommandError(AirconApiError):
     """
 
 
+class AirconRegistrationError(AirconCommandError):
+    """Raised when setAirconStat is refused because our operator id isn't (or
+    no longer is) registered in the airco's account table (result 1/2).
+
+    A distinct subtype so callers can tell this apart from an ordinary
+    refusal and re-register before giving up: the account table has only
+    four slots, and opening the Smart M-Air app or adding a phone can evict
+    an existing registration from it (#294). getAirconStat's own eviction
+    already self-heals via Device.update()'s add_account() retry; this gives
+    the write path the same recovery instead of silently losing the command.
+    """
+
+
 class AirconConnectionError(AirconApiError):
     """Raised when the unit could not be reached at all.
 
@@ -381,4 +394,13 @@ class Repository:
         """send command to the Airco"""
         contents = {"airconId": airco_id, "airconStat": command}
         result = await self._post("setAirconStat", contents)
+        try:
+            code = int(result.get("result", 0))
+        except (TypeError, ValueError):
+            code = 0
+        if code in (1, 2):
+            raise AirconRegistrationError(
+                f"Aircon refused setAirconStat with result {code} "
+                f"({RESULT_CODES.get(code, 'meaning unknown')})"
+            )
         return cast(str, result["contents"]["airconStat"])

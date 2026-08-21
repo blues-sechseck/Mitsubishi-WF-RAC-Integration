@@ -20,6 +20,7 @@ from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     REQUEST_TIMEOUT,
     AirconCommandError,
     AirconConnectionError,
+    AirconRegistrationError,
     Repository,
 )
 
@@ -232,6 +233,33 @@ async def test_refusal_in_the_result_field_is_reported_once(repository, caplog):
     await repo.get_aircon_stats("airco-id")
 
     assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 2
+
+
+@pytest.mark.parametrize("code", [1, 2])
+async def test_send_airco_command_raises_on_registration_result_codes(
+    repository, code
+):
+    """Unlike getAirconStat (asserted above), setAirconStat refusing because
+    our account isn't registered (result 1/2) must be visible to the caller
+    rather than swallowed - Device.set_airco() relies on this to re-register
+    and retry instead of losing the command (#294).
+    """
+    refused = json.dumps({"result": code, "contents": {"airconStat": "AAA="}})
+    repo, _ = repository([_FakeResponse(200, refused)])
+
+    with pytest.raises(AirconRegistrationError):
+        await repo.send_airco_command("airco-id", "cmd")
+
+
+async def test_send_airco_command_does_not_raise_on_unrelated_result_code(repository):
+    """Result 12 ("operation prohibited") isn't a registration problem, so it
+    must not trigger the re-register-and-retry path - just the existing
+    logged-but-not-acted-on refusal.
+    """
+    refused = json.dumps({"result": 12, "contents": {"airconStat": "AAA="}})
+    repo, _ = repository([_FakeResponse(200, refused)])
+
+    assert await repo.send_airco_command("airco-id", "cmd") == "AAA="
 
 
 async def test_unknown_result_code_is_still_reported(repository, caplog):

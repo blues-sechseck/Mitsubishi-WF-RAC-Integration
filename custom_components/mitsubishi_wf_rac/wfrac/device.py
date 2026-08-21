@@ -22,6 +22,7 @@ from .repository import (
     AirconApiError,
     AirconCommandError,
     AirconConnectionError,
+    AirconRegistrationError,
     Repository,
 )
 
@@ -589,7 +590,23 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
             try:
                 command = self._parser.to_base64(airco_stat)
-                response = await self._api.send_airco_command(self._airco_id, command)
+                try:
+                    response = await self._api.send_airco_command(
+                        self._airco_id, command
+                    )
+                except AirconRegistrationError:
+                    # Our operator id fell out of the airco's small account
+                    # table - most likely evicted by the Smart M-Air app or
+                    # another client registering around the same time (#294).
+                    # getAirconStat's own eviction already self-heals via
+                    # update()'s add_account() retry; do the same here instead
+                    # of losing the command outright. One retry only - if the
+                    # table is genuinely full rather than just evicted,
+                    # add_account() has already raised the repair issue for it.
+                    await self.add_account()
+                    response = await self._api.send_airco_command(
+                        self._airco_id, command
+                    )
                 new_airco = self._parser.translate_bytes(response)
                 self._carry_forward_home_leave_mode(new_airco)
                 self._carry_forward_service_data(new_airco)
