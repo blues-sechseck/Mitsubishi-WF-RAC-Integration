@@ -21,7 +21,7 @@ silently upgrade them.
 | --- | --- |
 | `[HW]` | Observed on real hardware (SRK35ZS-WF, firmware `WF-RAC-HTTPS 025/200`) |
 | `[FW]` | Read out of a firmware image (module or bridge MCU), static analysis |
-| `[APP]` | Read out of the official Smart M-Air app (1.4.009, unobfuscated) |
+| `[APP]` | Read out of the official Smart M-Air app (version 1.4.009) |
 | `[EXT]` | External project documentation, chiefly [MHI-AC-Trace](https://github.com/absalom-muc/MHI-AC-Trace) / [MHI-AC-Ctrl](https://github.com/absalom-muc/MHI-AC-Ctrl) |
 | `[INF]` | Inference from the above. Plausible, **not** tested |
 
@@ -217,9 +217,9 @@ others `[FW]`. **This is closed for that branch only.** The `WF-RAC` and
 `WF-RAC-HTTPS 025` device returns two fields that are *not* in this list,
 `ledStat` (integer) and `mcu` (object, `{"firmVer": "200"}`) `[HW]`.
 `ledStat` is the unit's own "LED ON" display-light toggle from the app's
-Option Settings screen (`OptionSettingViewModel.java`, gated by the
-`led_light` capability), not a Wi-Fi module status flag — a constant `1`
-just means the setting has never been switched off `[APP]`. Expect
+Option Settings screen (gated by the `led_light` capability), not a Wi-Fi
+module status flag — a constant `1` just means the setting has never been
+switched off `[APP]`. Expect
 per-branch additions:
 
 `command`, `apiVer`, `operatorId`, `deviceId`, `timestamp`, `contents`,
@@ -973,7 +973,7 @@ Static analysis only.
 | --- | --- |
 | `WCBN4612L_M_029.bin` (unencrypted Realtek image, log macros keep file names, line numbers and function names in clear text) | HTTP handlers, MQTT, reset paths, rate limiting, `airconId`/`operatorId` validation |
 | `WF-RAC-HTTPS_C_200.bin` (64 KiB RL78 image) | everything in §4, §5, §6.1, §6.2, Appendix A |
-| Smart M-Air Android app 1.4.009 (`AirconStatCoder`, `ModelNoType`, `OptionSettingViewModel`, `WifiInterfaceUseCase`) | blob layout, CRC, code `248`, capabilities, thermistor tables |
+| Smart M-Air Android app 1.4.009 | blob layout, CRC, code `248`, capabilities, thermistor tables |
 | [MHI-AC-Trace `SPI.md`](https://github.com/absalom-muc/MHI-AC-Trace/blob/main/SPI.md), [MHI-AC-Ctrl](https://github.com/absalom-muc/MHI-AC-Ctrl) | SPI frame layout, set-bit semantics, operation-data codes and formulas |
 | Live captures against SRK35ZS-WF units on `WF-RAC-HTTPS 025/200` | every `[HW]` claim |
 
