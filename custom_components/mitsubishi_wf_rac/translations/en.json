@@ -67,8 +67,8 @@
   },
   "issues": {
     "too_many_devices": {
-      "title": "Too many devices registered on {device_name}",
-      "description": "Home Assistant could not register itself with this Airco because the module's account table is full. Open the Smart M-Air app and remove another registered device, or do a factory reset of the module, then reload this integration."
+      "title": "Too many accounts registered on {device_name}",
+      "description": "This unit has room for four registered accounts and all four are taken, so Home Assistant cannot register itself. The module never frees a slot by itself: registrations do not expire, and a new one is refused rather than replacing an older one. In the Smart M-Air app, remove this unit from a phone that no longer needs it - each account can only remove itself, and several phones sharing one Smart M-Air account take up a single slot between them. Then reload this integration. If nobody can free a slot - a phone that is long gone still holds one - the module has to be set up again from scratch."
     }
   },
   "options": {

@@ -67,8 +67,8 @@
   },
   "issues": {
     "too_many_devices": {
-      "title": "Zu viele Geräte an {device_name} registriert",
-      "description": "Home Assistant konnte sich bei dieser Klimaanlage nicht registrieren, weil die Konten-Tabelle des Moduls voll ist. Öffnen Sie die Smart-M-Air-App und entfernen Sie ein anderes registriertes Gerät, oder setzen Sie das Modul auf Werkseinstellungen zurück, und laden Sie diese Integration anschließend neu."
+      "title": "Zu viele Konten an {device_name} registriert",
+      "description": "Diese Klimaanlage hat Platz für vier registrierte Konten, und alle vier sind belegt - Home Assistant kann sich deshalb nicht registrieren. Das Modul gibt von sich aus keinen Platz frei: Registrierungen laufen nicht ab, und eine neue wird abgewiesen, statt eine ältere zu ersetzen. Entfernen Sie das Gerät in der Smart-M-Air-App auf einem Telefon, das es nicht mehr braucht - jedes Konto kann nur sich selbst entfernen, und mehrere Telefone mit demselben Smart-M-Air-Konto belegen zusammen nur einen Platz. Laden Sie danach diese Integration neu. Wenn niemand einen Platz freigeben kann - etwa weil ein längst abgegebenes Telefon einen belegt -, muss das Modul neu eingerichtet werden."
     }
   },
   "options": {

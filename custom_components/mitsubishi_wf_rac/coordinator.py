@@ -685,14 +685,19 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             _LOGGER.warning("Could not add account from airco %s", self._airco_id)
             return None
 
-        # result:2 means the airco's fixed-size account table is genuinely
-        # full (see the retry this backs in update() above) - re-registering
-        # cannot succeed on its own until a slot frees up elsewhere (the
-        # official app, or another integration instance), which is nothing
-        # HA can do for the user. That is a standing condition worth a repair
-        # issue rather than a warning that scrolls out of the log every
-        # cycle; a normal-looking response means whatever caused it is gone,
-        # so the issue (if any) clears itself.
+        # On updateAccountInfo specifically, result:2 does mean the account
+        # table is full: the module answers it when no slot matches our id and
+        # none is free. (The same code means other things on setAirconStat -
+        # see RESULT_CODES - but this endpoint never talks to the indoor unit,
+        # so those paths cannot reach it here.)
+        #
+        # Nothing frees a slot on its own: registrations do not expire and are
+        # never evicted, so re-registering cannot succeed until someone
+        # removes one from the official app - or the module is set up afresh.
+        # That is a standing condition worth a repair issue rather than a
+        # warning that scrolls out of the log every cycle; a normal-looking
+        # response means whatever caused it is gone, so the issue (if any)
+        # clears itself.
         if result and int(result.get("result", 0)) == 2:
             self._report_registration_full()
         else:
