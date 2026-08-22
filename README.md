@@ -60,6 +60,18 @@ Already installed? Jump straight to setup:
 Clone or copy this repository and copy the folder `custom_components/mitsubishi_wf_rac` into
 `/custom_components/mitsubishi_wf_rac`.
 
+### Removing the integration
+
+This integration follows standard integration removal — no extra steps (like disabling a cloud
+account) are required.
+
+1. Go to **Settings** > **Devices & Services**.
+2. Find the **Mitsubishi WF-RAC** integration and select it.
+3. Select the three-dot menu next to the entry, then **Delete**.
+
+If you installed manually rather than through HACS, also delete the
+`custom_components/mitsubishi_wf_rac` folder and restart Home Assistant.
+
 # Entities
 
 This integration creates one device per airco with the following entities.
