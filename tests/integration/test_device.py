@@ -44,6 +44,7 @@ from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     AirconApiError,
     AirconCommandError,
     AirconConnectionError,
+    AirconRegistrationError,
 )
 
 from ..unit.live_captures import LIVE_CAPTURES
@@ -304,6 +305,53 @@ async def test_set_airco_raises_and_logs_on_send_failure(device):
 
     with pytest.raises(AirconApiError):
         await device.set_airco({AirconCommands.Operation: True})
+
+
+async def test_set_airco_reregisters_and_retries_once_on_registration_error(device):
+    """A write refused because our account fell out of the airco's table
+    (#294 - most likely evicted by the Smart M-Air app registering around the
+    same time) should self-heal like the read path already does, instead of
+    losing the command outright.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._api.update_account_info = AsyncMock(return_value={"result": 0})
+
+    calls = {"n": 0}
+
+    async def _fail_once_then_echo(airco_id, command):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise AirconRegistrationError("result 1")
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_fail_once_then_echo)
+
+    await device.set_airco({AirconCommands.Operation: True})
+
+    device._api.update_account_info.assert_awaited_once()
+    assert device._api.send_airco_command.await_count == 2
+    assert device.airco.Operation is True
+
+
+async def test_set_airco_gives_up_after_one_retry_if_still_refused(device):
+    """The table can be genuinely full rather than just evicted - retrying
+    forever would just hammer the unit. add_account() already raises the
+    repair issue for that case (#287); this should still fail (and log) like
+    any other refused write, not loop.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._api.update_account_info = AsyncMock(return_value={"result": 2})
+    device._api.send_airco_command = AsyncMock(
+        side_effect=AirconRegistrationError("result 2")
+    )
+
+    with pytest.raises(AirconRegistrationError):
+        await device.set_airco({AirconCommands.Operation: True})
+
+    device._api.update_account_info.assert_awaited_once()
+    assert device._api.send_airco_command.await_count == 2
 
 
 async def test_set_airco_fetches_state_first_if_unset(device):
