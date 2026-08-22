@@ -844,6 +844,98 @@ async def test_unchanged_expires_is_not_foreign_activity(device):
     assert device.foreign_activity is False
 
 
+async def test_operation_data_lets_go_of_the_write_lock_every_second_poll(
+    device, monkeypatch
+):
+    """The request renews the module's 60s write lock, so one per 60s poll
+    never lets go of it and locks every other client out for good (#294).
+    Skipping every second poll is what leaves a window wide enough for
+    someone else to get a write in - and only a write that got through is one
+    we can notice at all.
+    """
+    _activate_service_data_contexts(device, monkeypatch)
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+    one_poll = coordinator_module.MIN_TIME_BETWEEN_UPDATES
+
+    device._last_service_data_request = datetime.now() - one_poll
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_not_awaited()
+
+    device._last_service_data_request = datetime.now() - 2 * one_poll
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_awaited_once()
+
+
+async def test_a_refused_write_waits_out_the_lock_that_refused_it(device):
+    """A retry at a fixed delay lands inside the same lock as often as not,
+    and a request spent on a refusal that was certain is a request wasted.
+    The unit reports when the lock lapses, against a clock our own request
+    just set (the module has no RTC), so the retry can be placed right after
+    it.
+    """
+    # Someone else took the lock 40 seconds ago: 20 of its 60 are left.
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, int(datetime.now().timestamp()) - 40 + 60
+    )
+
+    delay = await device._async_write_lock_delay()
+
+    assert 20 <= delay <= 22
+
+
+async def test_a_refused_write_is_never_held_longer_than_a_lock_can_run(device):
+    """The lock runs 60 seconds, so a deadline further out than that came
+    from a client whose clock is off, not from a lock that is really still
+    running. No reason to leave a service call hanging on it.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, int(datetime.now().timestamp()) + 3_600
+    )
+
+    delay = await device._async_write_lock_delay()
+
+    assert delay == coordinator_module.WRITE_LOCK_MAX_WAIT.total_seconds()
+
+
+async def test_a_refused_write_retries_at_once_when_the_lock_has_lapsed(device):
+    """A lock that has already run out means the refusal came from something
+    else - the MCU, most likely - and nothing is gained by waiting.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, int(datetime.now().timestamp()) - 30
+    )
+
+    assert await device._async_write_lock_delay() == 0.0
+
+
+async def test_a_refused_write_falls_back_when_the_unit_reports_no_deadline(device):
+    """Older firmware may not report `expires` at all. A short retry is still
+    worth more than none.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+
+    assert (
+        await device._async_write_lock_delay()
+        == coordinator_module.WRITE_LOCK_RETRY_DELAY.total_seconds()
+    )
+
+
+async def test_a_refused_write_falls_back_when_the_unit_stops_answering(device):
+    """The probe is an extra request and can fail on its own."""
+    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+
+    assert (
+        await device._async_write_lock_delay()
+        == coordinator_module.WRITE_LOCK_RETRY_DELAY.total_seconds()
+    )
+
+
 async def test_missing_expires_field_is_not_foreign_activity(device):
     """Older firmware may not report it at all; absence must not be read as
     a stranger writing every single poll.

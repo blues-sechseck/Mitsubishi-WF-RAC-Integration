@@ -45,19 +45,29 @@ FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
 # Operation data is requested for active operation-data entities and costs a
 # second request per poll. It stays on the local network and changes nothing on
-# the unit (see RacParser.status_request_to_byte), so there's no reason to
-# throttle it below the regular poll cadence. See Device._maybe_request_service_data().
-SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
+# the unit (see RacParser.status_request_to_byte) - but it is a setAirconStat,
+# so it takes the module's 60-second write lock all the same, and while we hold
+# that lock no one else can control the unit at all.
+#
+# One request per 60s poll against a 60s lock therefore means we never let go:
+# every request renews the lock about as it lapses, and an enabled
+# operation-data entity leaves the Smart M-Air app permanently unable to
+# control the unit (#294). Requesting on every second poll is what breaks that
+# grip - it leaves a full lock duration free in every cycle, which is the
+# window another client needs to get a write in. Detecting the other client
+# cannot substitute for the window: a refused write changes nothing the module
+# reports back, so a client we never let through is a client we never see (see
+# _detect_foreign_activity).
+SERVICE_DATA_REQUEST_INTERVAL = 2 * MIN_TIME_BETWEEN_UPDATES
 
-# The rate limit is a guard against a second request inside the same cycle, not
-# a cadence of its own: the request is scheduled once per poll anyway. It has to
-# stay clear of the poll interval it is measured against, because the stamp is
-# taken when a poll finishes, not when it was due. Polls arrive exactly
-# MIN_TIME_BETWEEN_UPDATES apart, so a poll answering a few milliseconds faster
-# than the one before it leaves marginally less than that between the two
-# stamps - and with the full interval as the limit, that dropped the cycle: one
-# affected unit lost 6 of 36 operation-data cycles this way, each short by
-# under 100ms.
+# The rate limit is what actually skips every second poll, so it has to sit
+# between one and two poll intervals. It cannot be the full interval either,
+# because the stamp is taken when a poll finishes, not when it was due: polls
+# arrive exactly MIN_TIME_BETWEEN_UPDATES apart, so a poll answering a few
+# milliseconds faster than the one before it leaves marginally less than that
+# between the two stamps - and with the full interval as the limit, that
+# dropped the cycle: one affected unit lost 6 of 36 operation-data cycles this
+# way, each short by under 100ms.
 SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
 
 # ...but it does matter *where* in the cycle it lands. Issued straight off the
@@ -67,34 +77,39 @@ SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
 # often enough to lose whole cycles of operation data - roughly one poll in
 # seven on an affected unit, sometimes several minutes in a row. Offsetting it
 # into the quiet middle of the cycle keeps the cadence but stops it from
-# crowding the poll.
-SERVICE_DATA_REQUEST_OFFSET = SERVICE_DATA_REQUEST_INTERVAL / 2
+# crowding the poll. Measured against the poll interval, not the request
+# interval: what has to stay clear is the poll, and the polls in between are
+# just as much in the way as the one the request was scheduled from.
+SERVICE_DATA_REQUEST_OFFSET = MIN_TIME_BETWEEN_UPDATES / 2
 
 # A refused request costs a full cycle of every operation-data sensor, and
 # these refusals are transient, so one retry is worth the extra request.
 SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
 
 # How long another client's last write keeps us from sending operation-data
-# requests. Every successful setAirconStat grants its sender 60 seconds of
-# exclusive write access and locks everyone else out, and the operation-data
-# request is a setAirconStat - it changes nothing on the unit, but it renews
-# that lock all the same. At one request per 60s poll against a 60s lock, an
-# enabled operation-data entity holds the lock permanently and leaves the
-# Smart M-Air app unable to control the unit at all (#294).
-#
-# So when someone else writes, we stand down. Three minutes covers a typical
-# app session. The operation-data sensors hold their last values throughout -
-# a pause we chose is not the stale-data case SERVICE_DATA_MAX_AGE guards
-# against, and External Control says plainly that it is happening. See
-# _settle_service_data_pause().
+# requests at all. Someone who has just taken the lock is someone using the
+# unit right now, and the free window SERVICE_DATA_REQUEST_INTERVAL leaves is
+# only wide enough for one write - not for a session of them. Three minutes
+# covers a typical app session. The operation-data sensors hold their last
+# values throughout - a pause we chose is not the stale-data case
+# SERVICE_DATA_MAX_AGE guards against, and External Control says plainly that
+# it is happening. See _settle_service_data_pause().
 FOREIGN_ACTIVITY_BACKOFF = timedelta(minutes=3)
 
-# One retry for a user command refused because someone else holds the lock.
-# Short on purpose: a service call should not sit there for the full lock
-# duration, and the common case is an app action that is already most of the
-# way through its 60s. A retry that still fails is reported rather than
-# repeated - two clients are genuinely fighting over the unit at that point.
+# One retry for a user command refused because someone else holds the lock,
+# timed to land just after the lock lapses (see _async_write_lock_delay). Used
+# as-is only when the remaining lock time cannot be established, where a short
+# retry is still worth more than none: the common case is an app action already
+# most of the way through its 60s. A retry that still fails is reported rather
+# than repeated - two clients are genuinely fighting over the unit at that
+# point.
 WRITE_LOCK_RETRY_DELAY = timedelta(seconds=10)
+
+# The lock runs 60 seconds, so a longer wait than that means the deadline was
+# stamped by a client whose clock is off rather than that the lock is really
+# still running - cap it instead of leaving a service call hanging on someone
+# else's clock. See _async_write_lock_delay().
+WRITE_LOCK_MAX_WAIT = timedelta(seconds=61)
 
 # The unit answers these segments only when asked, so they are carried across
 # the polls in between (see Device._carry_forward_service_data()) - but not
@@ -422,6 +437,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         M-Air app registers the same way. Both therefore show up as "local"
         and cannot be told apart.
 
+        A write the module refused is a write that never happened as far as
+        it is concerned: it reports neither the attempt nor who made it. So a
+        client we lock out permanently is a client we never learn about, and
+        this detector only works on top of a lock we let go of regularly -
+        see SERVICE_DATA_REQUEST_INTERVAL.
+
         Known blind spot: someone else writing in the same gap in which we
         did hides behind our own write, and this poll says nothing. The next
         one catches them as soon as they act again, which for anyone actually
@@ -446,6 +467,36 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 expires,
             )
         self._report_foreign_activity()
+
+    async def _async_write_lock_delay(self) -> float:
+        """Seconds to wait before retrying a write the unit just refused.
+
+        The refusal carries no deadline with it, and the `expires` from the
+        last poll is our own stale one - the lock in the way was taken after
+        that poll, which is why we did not see it coming. So ask: a
+        getAirconStat is cheap and takes no lock of its own, and it reports
+        when the lock currently held lapses.
+
+        That deadline can be read against our own clock directly, because the
+        module has none: it takes its time from the `timestamp` field of every
+        request it receives, so the request asking the question sets the clock
+        the answer is measured against. What that cannot fix is a deadline
+        stamped by a client whose own clock was off - hence the cap.
+
+        Falls back to WRITE_LOCK_RETRY_DELAY when the unit does not answer or
+        reports no `expires` at all.
+        """
+        try:
+            response = await self._api.get_aircon_stats(self._airco_id)
+            expires = response["expires"]
+        except (AirconApiError, KeyError, TypeError, ValueError):
+            return WRITE_LOCK_RETRY_DELAY.total_seconds()
+        if not isinstance(expires, int):
+            return WRITE_LOCK_RETRY_DELAY.total_seconds()
+        # The module compares whole seconds and refuses while `expires` still
+        # equals the current one, so land on the far side of the lapse.
+        remaining = expires - datetime.now().timestamp() + 1
+        return max(0.0, min(remaining, WRITE_LOCK_MAX_WAIT.total_seconds()))
 
     def _report_foreign_activity(self) -> None:
         """Say so, once, when we start and stop holding back.
@@ -760,11 +811,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     )
                 except AirconWriteRefusedError:
                     # Most likely another client's 60-second write lock - the
-                    # Smart M-Air app was used moments ago (#294). Waiting is
-                    # the only thing that helps: our registration is fine, so
-                    # re-registering would just cost a request. One retry, see
-                    # WRITE_LOCK_RETRY_DELAY.
-                    await asyncio.sleep(WRITE_LOCK_RETRY_DELAY.total_seconds())
+                    # Smart M-Air app was used moments ago (#294). Waiting it
+                    # out is the only thing that helps: our registration is
+                    # fine, so re-registering would just cost a request. One
+                    # retry, placed where the lock lapses rather than at a
+                    # guessed interval - a retry that lands inside the same
+                    # lock is a request spent on a refusal that was certain.
+                    await asyncio.sleep(await self._async_write_lock_delay())
                     response = await self._api.send_airco_command(
                         self._airco_id, command
                     )
