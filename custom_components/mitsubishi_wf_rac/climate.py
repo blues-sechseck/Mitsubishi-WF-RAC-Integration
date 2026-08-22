@@ -21,7 +21,7 @@ from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .entity import WfRacEntity
-from .wfrac.device import Device
+from .coordinator import Device
 from .wfrac.models.aircon import Aircon, AirconCommands, HomeLeaveModeSetting
 from .const import (
     DOMAIN,

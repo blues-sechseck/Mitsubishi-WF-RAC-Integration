@@ -1,0 +1,93 @@
+rules:
+  # Bronze
+  action-setup: done
+  appropriate-polling: done
+  brands:
+    status: todo
+    comment: >-
+      Needs an entry in home-assistant/brands moved from custom_integrations/
+      to core_integrations/ - relevant only for a Home Assistant Core
+      submission.
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency: done
+  docs-actions:
+    status: todo
+    comment: >-
+      Three of five entity services (request_home_leave_mode_status,
+      set_home_leave_mode, set_energy_total) are documented with what they do
+      and linked from the README; set_horizontal_swing_mode and
+      set_vertical_swing_mode are only named in a migration note, not
+      described.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters:
+    status: todo
+    comment: >-
+      The Installation section doesn't describe what the initial config-flow
+      form (host, port, name) asks for.
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow:
+    status: exempt
+    comment: >-
+      No credentials to renew - the operatorId registration is a device-side
+      account slot, not a login.
+  test-coverage: done
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery: done
+  discovery-update-info: done
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: One device per config entry; no dynamically appearing sub-devices.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: done
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow: done
+  repair-issues: done
+  stale-devices:
+    status: exempt
+    comment: One device per config entry; nothing goes stale independently of it.
+
+  # Platinum
+  async-dependency:
+    status: exempt
+    comment: >-
+      No third-party library yet - repository.py talks to aiohttp directly.
+      Becomes applicable once the protocol code moves into its own library.
+  inject-websession:
+    status: exempt
+    comment: >-
+      Not applicable for the same reason as async-dependency, but already done
+      right in practice: async_get_clientsession(hass) is used rather than an
+      owned session. Moves to done once pywfrac exists.
+  strict-typing: done

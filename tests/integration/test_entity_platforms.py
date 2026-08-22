@@ -1,6 +1,7 @@
 """Current entity-platform behaviour pinned to parsed live device state."""
 
 from dataclasses import replace
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -29,7 +30,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     SWING_HORIZONTAL_MODE_TRANSLATION,
     SWING_MODE_TRANSLATION,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.device import Device
+from custom_components.mitsubishi_wf_rac.coordinator import Device
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands, HomeLeaveModeSetting
 
 from ..unit.live_captures import LIVE_CAPTURES
@@ -96,6 +97,7 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device, m
     assert details[f"{DOMAIN}-airco-id-problem"] == (True, EntityCategory.DIAGNOSTIC)
     assert details[f"{DOMAIN}-airco-id-compressor"] == (True, None)
     assert details[f"{DOMAIN}-airco-id-occupancy"] == (True, None)
+    assert details[f"{DOMAIN}-airco-id-external-control"] == (True, EntityCategory.DIAGNOSTIC)
     assert details[f"{DOMAIN}-airco-id-home-leave-cooling-temp_rule-number"] == (False, None)
     assert details[f"{DOMAIN}-airco-id-home-leave-heating-air-flow-select"] == (False, None)
     operation_data_sensors = [entity for entity in entities if isinstance(entity, sensor.ServiceDataSensor)]
@@ -163,6 +165,22 @@ async def test_registry_cleanup_removes_only_named_entities(hass, platform_devic
     helper(hass, platform_device)
     assert all(registry.async_get(entity_id) is None for entity_id in expected)
     assert registry.async_get(survivor) is not None
+
+
+async def test_external_control_sensor_follows_the_backoff(platform_device):
+    """The only thing a user would otherwise see while we hold back is the
+    operation-data sensors going unknown, with no stated reason (#294).
+    """
+    entity = binary_sensor.ExternalControlBinarySensor(platform_device)
+    assert entity.is_on is False
+
+    platform_device._foreign_activity_until = datetime.now() + timedelta(minutes=3)
+    entity._update_state()
+    assert entity.is_on is True
+
+    platform_device._foreign_activity_until = datetime.now() - timedelta(seconds=1)
+    entity._update_state()
+    assert entity.is_on is False
 
 
 @pytest.mark.parametrize("capture, mode, action", [

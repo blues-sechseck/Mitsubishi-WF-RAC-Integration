@@ -25,7 +25,7 @@ from .const import (
     CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
     DOMAIN,
 )
-from .wfrac.device import AVAILABILITY_FAILURE_LIMIT_MIN, Device, registration_full_issue_id
+from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN, Device, registration_full_issue_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
 
     await _device.update()  # initial update to get fresh values
     # update() catches its own errors and reflects them via .available instead
-    # of raising (see wfrac/device.py) - check that instead of try/except so a
+    # of raising (see coordinator.py) - check that instead of try/except so a
     # device that's unreachable at startup gets HA's automatic retry-with-backoff
     # rather than a silently "loaded" entry with no working entities.
     if not _device.available:
@@ -155,7 +155,7 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     swing_selects_enabled_default: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
     # Off unless the user explicitly opted in via the options flow - this is
     # the only outbound internet call in the integration (see
-    # wfrac/device.py's _maybe_check_firmware_update()).
+    # coordinator.py's _maybe_check_firmware_update()).
     firmware_update_check_enabled: bool = entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False)
     # Floored in Device itself, so an entry that predates the v4 -> v5
     # migration can't run with less tolerance than the module needs.
@@ -200,7 +200,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
 
     temp_device = await create_device_from_entry(entry, hass)
     # delete_account() catches its own errors and returns None on failure (see
-    # wfrac/device.py) rather than raising, so check the result instead of
+    # coordinator.py) rather than raising, so check the result instead of
     # try/except - the previous try/except here could never actually trigger,
     # and the "Deleted" log below used to fire unconditionally even on failure.
     result = await temp_device.delete_account()

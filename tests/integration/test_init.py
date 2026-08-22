@@ -22,7 +22,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_AVAILABILITY_RETRY_LIMIT,
     DOMAIN,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.device import registration_full_issue_id
+from custom_components.mitsubishi_wf_rac.coordinator import registration_full_issue_id
 
 _DATA = {
     "name": "Living Room AC",
@@ -138,7 +138,7 @@ async def test_remove_entry_clears_the_registration_full_repair_issue(hass: Home
     )
 
     with patch(
-        "custom_components.mitsubishi_wf_rac.wfrac.device.Repository",
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
         return_value=AsyncMock(),
     ):
         await async_remove_entry(hass, entry)

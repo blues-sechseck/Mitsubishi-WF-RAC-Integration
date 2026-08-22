@@ -317,6 +317,9 @@
       },
       "compressor": {
         "name": "Kompresoriaus poreikis"
+      },
+      "external_control": {
+        "name": "Išorinis valdymas"
       }
     },
     "update": {

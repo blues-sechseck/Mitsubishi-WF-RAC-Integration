@@ -36,25 +36,33 @@ REQUEST_TIMEOUT = timedelta(seconds=25)
 
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT.total_seconds())
 
-# The `result` field every response carries, as the official app reads it.
-# Anything not listed is reported by number alone.
+# The `result` field every response carries. Anything not listed is reported by
+# number alone.
 #
-# The app reads these on updateAccountInfo, and that is where their wording
-# comes from; the meanings need not be as narrow elsewhere. Code 2 is the one
-# seen so far on setAirconStat, three seconds before the account's own
-# `expires` ran out - the same refusal, but an expired registration rather
-# than a full table, so the message names both.
+# The wording the official app uses for these comes from updateAccountInfo,
+# where the codes really are about the account. On setAirconStat they are not,
+# and taking the app's labels at face value sent us chasing the wrong cause for
+# a while: there, 1/11/12 all mean "the unit declined to apply this", either
+# because another client holds the 60s write lock or because the indoor unit's
+# MCU answered with an error nibble - the two are indistinguishable from
+# outside. Only 2 is still about the account, and it doubles as the module's
+# catch-all for a request its handler rejected for any other reason.
 RESULT_CODES: dict[int, str] = {
     0: "ok",
-    1: "operator id not registered with the unit",
-    2: "the unit refused the account - its table is full, or the registration expired",
+    1: "refused - another client holds the write lock, or the indoor unit declined",
+    2: "refused - operator id not registered with the unit, or the request was rejected",
     10: "internal error in the air conditioner",
-    11: "internal error in the air conditioner",
-    12: "operation prohibited",
+    11: "refused - another client holds the write lock, or the indoor unit declined",
+    12: "refused - another client holds the write lock, or the indoor unit declined",
     20: "firmware update required",
     99: "the unit did not confirm the command within 30s",
     429: "too many requests",
 }
+
+# setAirconStat codes that mean "declined, try again shortly" rather than
+# "your account is not known here". See RESULT_CODES above and
+# AirconWriteRefusedError.
+WRITE_REFUSED_CODES = frozenset({1, 11, 12})
 
 
 def _create_permissive_ssl_context() -> ssl.SSLContext:
@@ -88,6 +96,31 @@ class AirconCommandError(AirconApiError):
     protocol in use is the right one, it just declined this request (e.g.
     HTTP 501 for an optional command). Callers use that difference to decide
     whether the connection state is worth invalidating.
+    """
+
+
+class AirconRegistrationError(AirconCommandError):
+    """Raised when setAirconStat answers result 2.
+
+    The account table has four slots and the module never evicts from it, so
+    an operator id that was accepted once stays accepted; this is mostly seen
+    when a slot was never taken, or when the module rejected the request for
+    an unrelated reason (result 2 is also its catch-all - see RESULT_CODES).
+    Re-registering is cheap and fixes the first case, so callers do that once
+    before giving up.
+    """
+
+
+class AirconWriteRefusedError(AirconCommandError):
+    """Raised when setAirconStat answers result 1, 11 or 12.
+
+    The unit accepted the request and declined to carry it out. The usual
+    cause is the module's 60-second write lock: every successful
+    setAirconStat grants the sending deviceId exclusive write access for 60s
+    and refuses everyone else until it lapses, which is what happens when a
+    command is sent moments after someone used the Smart M-Air app (#294).
+    Re-registering cannot help here - the registration is fine, the lock just
+    belongs to someone else - so callers wait and retry instead.
     """
 
 
@@ -381,4 +414,18 @@ class Repository:
         """send command to the Airco"""
         contents = {"airconId": airco_id, "airconStat": command}
         result = await self._post("setAirconStat", contents)
+        try:
+            code = int(result.get("result", 0))
+        except (TypeError, ValueError):
+            code = 0
+        if code in WRITE_REFUSED_CODES:
+            raise AirconWriteRefusedError(
+                f"Aircon refused setAirconStat with result {code} "
+                f"({RESULT_CODES.get(code, 'meaning unknown')})"
+            )
+        if code == 2:
+            raise AirconRegistrationError(
+                f"Aircon refused setAirconStat with result {code} "
+                f"({RESULT_CODES.get(code, 'meaning unknown')})"
+            )
         return cast(str, result["contents"]["airconStat"])

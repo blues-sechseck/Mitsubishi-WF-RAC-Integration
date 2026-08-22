@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mitsubishi_wf_rac.button import EnergyTotalResetButton
 from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from custom_components.mitsubishi_wf_rac.entity import WfRacEntity
-from custom_components.mitsubishi_wf_rac.wfrac.device import Device
+from custom_components.mitsubishi_wf_rac.coordinator import Device
 
 
 @pytest.fixture

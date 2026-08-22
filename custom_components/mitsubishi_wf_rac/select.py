@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .entity import WfRacEntity
 from .wfrac.models.aircon import AirconCommands, HomeLeaveModeSetting
-from .wfrac.device import Device
+from .coordinator import Device
 from .const import (
     DOMAIN,
     SWING_HORIZONTAL_MODE_TRANSLATION,

@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
 from .entity import WfRacEntity
-from .wfrac.device import Device
+from .coordinator import Device
 from .wfrac.error_codes import describe_error_code
 from .const import DOMAIN
 
@@ -34,6 +34,7 @@ async def async_setup_entry(
     entities = [
         ProblemBinarySensor(device),
         CompressorBinarySensor(device),
+        ExternalControlBinarySensor(device),
     ]
     # Occupancy ("vacant") detection is only reported by units whose capability
     # table has VacantProperty=true - includes ZT-2025 (raw=3), which the
@@ -92,6 +93,31 @@ class CompressorBinarySensor(WfRacEntity, BinarySensorEntity):
 
     def _update_state(self) -> None:
         self._attr_is_on = self._device.airco.CompressorRunning
+
+
+class ExternalControlBinarySensor(WfRacEntity, BinarySensorEntity):
+    """On while another client is using the unit and this integration is
+    holding back because of it.
+
+    The unit grants whoever wrote last 60 seconds of exclusive write access,
+    so the operation-data request - itself a write - is paused while someone
+    else is active (see Device.foreign_activity). Without this entity the
+    only visible effect would be the operation-data sensors going unknown,
+    with nothing to explain why.
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = "external_control"
+
+    def __init__(self, device: Device) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(device)
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-external-control"
+        self._update_state()
+
+    def _update_state(self) -> None:
+        self._attr_is_on = self._device.foreign_activity
 
 
 class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):

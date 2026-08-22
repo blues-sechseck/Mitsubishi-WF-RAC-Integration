@@ -34,7 +34,7 @@ from homeassistant.const import (
 from homeassistant.helpers import entity_registry as er
 
 from .entity import WfRacEntity
-from .wfrac.device import Device
+from .coordinator import Device
 from .wfrac.rac_parser import SERVICE_DATA_CODE_BY_FIELD
 from .const import (
     ATTR_TARGET_TEMPERATURE,

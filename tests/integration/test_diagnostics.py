@@ -13,7 +13,7 @@ from custom_components.mitsubishi_wf_rac.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.mitsubishi_wf_rac.wfrac.capabilities import ModelCapabilities
-from custom_components.mitsubishi_wf_rac.wfrac.device import Device
+from custom_components.mitsubishi_wf_rac.coordinator import Device
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
     Aircon,
     HomeLeaveModeSetting,
