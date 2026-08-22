@@ -1035,6 +1035,15 @@ Static analysis only.
 | [MHI-AC-Trace `SPI.md`](https://github.com/absalom-muc/MHI-AC-Trace/blob/main/SPI.md), [MHI-AC-Ctrl](https://github.com/absalom-muc/MHI-AC-Ctrl) | SPI frame layout, set-bit semantics, operation-data codes and formulas |
 | Live captures against SRK35ZS-WF units on `WF-RAC-HTTPS 025/200` | every `[HW]` claim |
 
+**On the reach of the `[FW]` claims about the module.** They all come from that
+one `WCBN4612L` image, because it is the only module firmware published in the
+clear — the `WF-RAC` and `WF-RAC-HTTPS` branches ship theirs encrypted end to
+end (uniform 8.00 bits/byte, no readable region anywhere in either file). So
+none of it can be re-derived on another branch by reading, only confirmed by
+observation. Where a `[FW]` claim about the module carries an `[HW]` claim
+beside it, that observation was made on `WF-RAC-HTTPS 025/200` and the two
+branches agreed.
+
 Independent client implementations worth reading: `homebridge-mhi-wfrac`,
 `mqtt2mhi-wf-rac`, `ioBroker.woso_mitsu_aircon_rac`, `node-red-aircon-rac-wf`,
 and this project's own `custom_components/mitsubishi_wf_rac/wfrac/rac_parser.py`.
