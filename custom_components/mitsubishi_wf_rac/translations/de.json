@@ -317,6 +317,9 @@
       },
       "compressor": {
         "name": "Kompressoranforderung"
+      },
+      "external_control": {
+        "name": "Externe Steuerung"
       }
     },
     "update": {

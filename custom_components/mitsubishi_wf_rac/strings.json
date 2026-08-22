@@ -322,6 +322,9 @@
       },
       "compressor": {
         "name": "Compressor Demand"
+      },
+      "external_control": {
+        "name": "External Control"
       }
     },
     "button": {

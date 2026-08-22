@@ -317,6 +317,9 @@
       },
       "compressor": {
         "name": "Compressorvraag"
+      },
+      "external_control": {
+        "name": "Externe bediening"
       }
     },
     "update": {

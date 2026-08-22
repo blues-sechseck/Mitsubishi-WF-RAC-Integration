@@ -317,6 +317,9 @@
       },
       "compressor": {
         "name": "圧縮機要求"
+      },
+      "external_control": {
+        "name": "外部からの操作"
       }
     },
     "update": {

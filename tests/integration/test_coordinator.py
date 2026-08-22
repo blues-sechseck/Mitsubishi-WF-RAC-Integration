@@ -20,6 +20,7 @@ from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from custom_components.mitsubishi_wf_rac import coordinator as coordinator_module
 from custom_components.mitsubishi_wf_rac.coordinator import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
+    SERVICE_DATA_MAX_AGE,
     Device,
 )
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
@@ -45,6 +46,7 @@ from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     AirconCommandError,
     AirconConnectionError,
     AirconRegistrationError,
+    AirconWriteRefusedError,
 )
 
 from ..unit.live_captures import LIVE_CAPTURES
@@ -308,10 +310,9 @@ async def test_set_airco_raises_and_logs_on_send_failure(device):
 
 
 async def test_set_airco_reregisters_and_retries_once_on_registration_error(device):
-    """A write refused because our account fell out of the airco's table
-    (#294 - most likely evicted by the Smart M-Air app registering around the
-    same time) should self-heal like the read path already does, instead of
-    losing the command outright.
+    """A write refused with result 2 - our operator id is not in the airco's
+    account table - should self-heal like the read path already does, instead
+    of losing the command outright.
     """
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -322,7 +323,7 @@ async def test_set_airco_reregisters_and_retries_once_on_registration_error(devi
     async def _fail_once_then_echo(airco_id, command):
         calls["n"] += 1
         if calls["n"] == 1:
-            raise AirconRegistrationError("result 1")
+            raise AirconRegistrationError("result 2")
         return await _echo_send_airco_command(airco_id, command)
 
     device._api.send_airco_command = AsyncMock(side_effect=_fail_once_then_echo)
@@ -789,6 +790,186 @@ async def test_raw_service_data_sensor_requests_its_segment_code(device, monkeyp
     set_airco.assert_awaited_once_with(
         {AirconCommands.ServiceDataStatusRequest: (code,)}, log_failure=False
     )
+
+
+def _stats_response_with_expires(payload: str, expires: int) -> dict:
+    return _stats_response(payload) | {"expires": expires}
+
+
+async def test_rising_expires_without_our_own_write_is_foreign_activity(device):
+    """The module's `expires` only moves when a setAirconStat succeeds, so a
+    rise we did not cause means another client wrote (#294).
+    """
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_000
+    )
+    await device.update()
+    assert device.foreign_activity is False
+
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_060
+    )
+    await device.update()
+
+    assert device.foreign_activity is True
+
+
+async def test_rising_expires_after_our_own_write_is_not_foreign_activity(device):
+    """Our own writes move `expires` too - attributing those to a stranger
+    would pause operation data permanently.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_000
+    )
+    await device.update()
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.set_airco({AirconCommands.Operation: True})
+
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_060
+    )
+    await device.update()
+
+    assert device.foreign_activity is False
+
+
+async def test_unchanged_expires_is_not_foreign_activity(device):
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_000
+    )
+    await device.update()
+    await device.update()
+
+    assert device.foreign_activity is False
+
+
+async def test_missing_expires_field_is_not_foreign_activity(device):
+    """Older firmware may not report it at all; absence must not be read as
+    a stranger writing every single poll.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    await device.update()
+
+    assert device.foreign_activity is False
+
+
+async def test_no_service_data_request_while_another_client_is_active(device, monkeypatch):
+    """The operation-data request is a setAirconStat and renews the 60s write
+    lock for another minute. While someone else is using the unit, that lock
+    is exactly what must not be taken (#294).
+    """
+    _shorten_service_data_timing(monkeypatch)
+    _activate_service_data_contexts(device, monkeypatch)
+    device.set_airco = set_airco = AsyncMock()
+    device._foreign_activity_until = datetime.now() + timedelta(minutes=3)
+
+    device._maybe_request_service_data()
+    await asyncio.sleep(0.05)
+
+    set_airco.assert_not_awaited()
+    assert device._last_service_data_request is None
+
+
+async def test_operation_data_survives_the_pause_instead_of_expiring(device):
+    """A pause we chose is not the same as a unit that stopped answering:
+    SERVICE_DATA_MAX_AGE must not run while we are deliberately not asking,
+    and the readings must not expire the moment it ends either.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._airco.CompressorFrequency = 42
+    device._last_service_data_response = datetime.now()
+
+    # Well past MAX_AGE, but the whole time was spent standing down - the
+    # state _detect_foreign_activity() leaves behind when it trips.
+    device._foreign_activity_since = datetime.now() - 2 * SERVICE_DATA_MAX_AGE
+    device._foreign_activity_until = datetime.now() + timedelta(minutes=3)
+    device._last_service_data_response = datetime.now() - 2 * SERVICE_DATA_MAX_AGE
+    await device.update()
+    assert device.airco.CompressorFrequency == 42
+    assert device._service_data_expired is False
+
+    # ...and once it lapses, the age restarts from the resume rather than
+    # expiring the readings on the very next poll.
+    device._foreign_activity_until = datetime.now() - timedelta(seconds=1)
+    await device.update()
+    assert device.airco.CompressorFrequency == 42
+    assert device._service_data_expired is False
+
+
+async def test_operation_data_still_expires_when_the_unit_goes_quiet(device):
+    """The pause exemption must not disarm the guard it is carved out of."""
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._airco.CompressorFrequency = 42
+    device._last_service_data_response = datetime.now() - 2 * SERVICE_DATA_MAX_AGE
+
+    await device.update()
+
+    assert device.airco.CompressorFrequency is None
+    assert device._service_data_expired is True
+
+
+async def test_service_data_resumes_once_the_backoff_lapses(device, monkeypatch):
+    _shorten_service_data_timing(monkeypatch)
+    _activate_service_data_contexts(device, monkeypatch)
+    device.set_airco = set_airco = AsyncMock()
+    device._foreign_activity_until = datetime.now() - timedelta(seconds=1)
+
+    device._maybe_request_service_data()
+    await asyncio.sleep(0.05)
+
+    set_airco.assert_awaited_once()
+
+
+async def test_service_data_request_gives_up_immediately_when_refused_as_a_write(
+    device, monkeypatch
+):
+    """A declined write is not worth contesting for an optional sensor read -
+    winning the retry would only mean holding the lock ourselves.
+    """
+    _shorten_service_data_timing(monkeypatch)
+    _activate_service_data_contexts(device, monkeypatch)
+    device.set_airco = set_airco = AsyncMock(
+        side_effect=AirconWriteRefusedError("result 1")
+    )
+
+    device._maybe_request_service_data()
+    await asyncio.sleep(0.05)
+
+    set_airco.assert_awaited_once()
+
+
+async def test_set_airco_waits_and_retries_once_when_the_write_lock_is_held(
+    device, monkeypatch
+):
+    """A user command refused because someone else holds the lock should wait
+    it out and retry - re-registering cannot help, the registration is fine.
+    """
+    monkeypatch.setattr(
+        coordinator_module, "WRITE_LOCK_RETRY_DELAY", timedelta(milliseconds=5)
+    )
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._api.update_account_info = AsyncMock(return_value={"result": 0})
+
+    calls = {"n": 0}
+
+    async def _fail_once_then_echo(airco_id, command):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise AirconWriteRefusedError("result 1")
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_fail_once_then_echo)
+
+    await device.set_airco({AirconCommands.Operation: True})
+
+    device._api.update_account_info.assert_not_awaited()
+    assert device._api.send_airco_command.await_count == 2
+    assert device.airco.Operation is True
 
 
 async def test_service_data_request_does_not_overlap_an_active_request(device, monkeypatch):

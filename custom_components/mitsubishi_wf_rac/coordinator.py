@@ -23,6 +23,7 @@ from .wfrac.repository import (
     AirconCommandError,
     AirconConnectionError,
     AirconRegistrationError,
+    AirconWriteRefusedError,
     Repository,
 )
 
@@ -72,6 +73,28 @@ SERVICE_DATA_REQUEST_OFFSET = SERVICE_DATA_REQUEST_INTERVAL / 2
 # A refused request costs a full cycle of every operation-data sensor, and
 # these refusals are transient, so one retry is worth the extra request.
 SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
+
+# How long another client's last write keeps us from sending operation-data
+# requests. Every successful setAirconStat grants its sender 60 seconds of
+# exclusive write access and locks everyone else out, and the operation-data
+# request is a setAirconStat - it changes nothing on the unit, but it renews
+# that lock all the same. At one request per 60s poll against a 60s lock, an
+# enabled operation-data entity holds the lock permanently and leaves the
+# Smart M-Air app unable to control the unit at all (#294).
+#
+# So when someone else writes, we stand down. Three minutes covers a typical
+# app session. The operation-data sensors hold their last values throughout -
+# a pause we chose is not the stale-data case SERVICE_DATA_MAX_AGE guards
+# against, and External Control says plainly that it is happening. See
+# _settle_service_data_pause().
+FOREIGN_ACTIVITY_BACKOFF = timedelta(minutes=3)
+
+# One retry for a user command refused because someone else holds the lock.
+# Short on purpose: a service call should not sit there for the full lock
+# duration, and the common case is an app action that is already most of the
+# way through its 60s. A retry that still fails is reported rather than
+# repeated - two clients are genuinely fighting over the unit at that point.
+WRITE_LOCK_RETRY_DELAY = timedelta(seconds=10)
 
 # The unit answers these segments only when asked, so they are carried across
 # the polls in between (see Device._carry_forward_service_data()) - but not
@@ -195,6 +218,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._last_service_data_request: datetime | None = None
         self._last_service_data_response: datetime | None = None
         self._service_data_expired = False
+        # Foreign-write detection, see _detect_foreign_activity(). The flag is
+        # set by our own successful writes and consumed by the next poll, so a
+        # rise in `expires` can be attributed to us or to someone else.
+        self._wrote_since_last_poll = False
+        self._foreign_activity_until: datetime | None = None
+        self._foreign_activity_reported = False
+        self._foreign_activity_since: datetime | None = None
         self._service_data_task: asyncio.Task[None] | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
@@ -293,6 +323,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # response. Tolerate absence (.get()) since it's undocumented and
             # could be missing on older firmware.
             self._updated_by = response.get("updatedBy")
+            self._detect_foreign_activity(response.get("expires"))
             self._account_expires = response.get("expires")
             self._led_status = response.get("ledStat")
             self._auto_heating = response.get("autoHeating")
@@ -373,6 +404,107 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firmware_update_available = update_available
         self.async_set_updated_data(self._airco)
 
+    def _detect_foreign_activity(self, expires: Any) -> None:
+        """Notice when someone else has written to the unit, from `expires`.
+
+        The module reports the moment its 60-second write lock lapses, and
+        that moment only moves when a setAirconStat succeeds. So a higher
+        `expires` than the previous poll saw means a write happened in
+        between - ours if we sent one, somebody else's if we did not. That is
+        the whole detector: no extra request, and no dependence on the
+        module's clock agreeing with ours, because only the difference is
+        read.
+
+        `updatedBy` cannot do this job. It reports the literal "local" for
+        any account registered with remote=0, which is how this integration
+        registers (remote=1 is what makes the module open its cloud
+        connection, so it is not an option) - and a locally paired Smart
+        M-Air app registers the same way. Both therefore show up as "local"
+        and cannot be told apart.
+
+        Known blind spot: someone else writing in the same gap in which we
+        did hides behind our own write, and this poll says nothing. The next
+        one catches them as soon as they act again, which for anyone actually
+        using the app is seconds away.
+        """
+        wrote = self._wrote_since_last_poll
+        self._wrote_since_last_poll = False
+
+        if (
+            isinstance(expires, int)
+            and isinstance(self._account_expires, int)
+            and expires > self._account_expires
+            and not wrote
+        ):
+            if self._foreign_activity_since is None:
+                self._foreign_activity_since = datetime.now()
+            self._foreign_activity_until = datetime.now() + FOREIGN_ACTIVITY_BACKOFF
+            _LOGGER.debug(
+                "Another client wrote to [%s]: expires moved %s -> %s",
+                self.device_name,
+                self._account_expires,
+                expires,
+            )
+        self._report_foreign_activity()
+
+    def _report_foreign_activity(self) -> None:
+        """Say so, once, when we start and stop holding back.
+
+        Worth a log line rather than only the binary sensor: while this is on,
+        the operation-data sensors report unknown, and someone reading the log
+        to find out why deserves to find the reason there.
+        """
+        active = self.foreign_activity
+        if active == self._foreign_activity_reported:
+            return
+        self._foreign_activity_reported = active
+        if active:
+            _LOGGER.info(
+                "Another client is controlling [%s]; pausing operation-data "
+                "requests for up to %.0fs so it keeps working. Its sensors "
+                "hold their last values meanwhile.",
+                self.device_name,
+                FOREIGN_ACTIVITY_BACKOFF.total_seconds(),
+            )
+        else:
+            _LOGGER.info(
+                "No other client active on [%s]; resuming operation-data requests",
+                self.device_name,
+            )
+
+    def _settle_service_data_pause(self) -> None:
+        """Once a stand-down ends, move the operation-data age anchor forward
+        by however long it lasted.
+
+        Without this the readings would expire on the very first poll after
+        resuming: the gap is one we chose, so counting it against
+        SERVICE_DATA_MAX_AGE would throw away values that are perfectly good
+        and about to be refreshed anyway.
+
+        Kept out of _report_foreign_activity() on purpose - that one only
+        logs, and runs after _carry_forward_service_data() has already
+        decided. This has to have happened before that decision.
+        """
+        if self._foreign_activity_since is None or self.foreign_activity:
+            return
+        if (
+            self._last_service_data_response is not None
+            and self._foreign_activity_until is not None
+        ):
+            self._last_service_data_response += (
+                self._foreign_activity_until - self._foreign_activity_since
+            )
+        self._foreign_activity_since = None
+
+    @property
+    def foreign_activity(self) -> bool:
+        """Whether another client wrote to the unit recently enough that we
+        are still standing down - see FOREIGN_ACTIVITY_BACKOFF."""
+        return (
+            self._foreign_activity_until is not None
+            and datetime.now() < self._foreign_activity_until
+        )
+
     def _maybe_request_service_data(self) -> None:
         """Kick off a background request for active operation-data segments
         when due (see SERVICE_DATA_MIN_SPACING).
@@ -381,6 +513,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES))
         )
         if not service_data_codes:
+            return
+        if self.foreign_activity:
+            # Skipped entirely rather than deferred: this request would take
+            # the write lock for another 60s and is worth far less than
+            # leaving the unit controllable from whatever is using it.
             return
         if self._service_data_task is not None and not self._service_data_task.done():
             # A retry from the previous cycle is still in flight; piling a
@@ -424,6 +561,18 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
                 return
+            except AirconWriteRefusedError as ex:
+                # Someone else may hold the write lock. Unlike a user command
+                # this is not worth contesting: give the cycle up immediately
+                # rather than retrying into a lock we would only be renewing
+                # for ourselves if we won it.
+                _LOGGER.debug(
+                    "Service data request declined for [%s], skipping this "
+                    "cycle: %s",
+                    self.device_name,
+                    ex,
+                )
+                return
             except AirconCommandError as ex:
                 if attempt == 1:
                     _LOGGER.debug("Service data request refused (%s); retrying", ex)
@@ -453,10 +602,18 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         sensors would flash the real value for one update cycle and then
         revert to unknown.
 
-        Unlike home/leave mode this expires: see SERVICE_DATA_MAX_AGE.
+        Unlike home/leave mode this expires: see SERVICE_DATA_MAX_AGE. Time
+        spent standing down for another client is not counted against that
+        age, though - see foreign_activity. SERVICE_DATA_MAX_AGE guards
+        against a value frozen by a unit that stopped answering, which is
+        indistinguishable from a live one; a pause we chose ourselves is
+        neither indistinguishable nor a fault, and External Control says so
+        while it lasts. Dropping perfectly good readings for it would be a
+        worse answer than carrying them a few minutes longer.
         """
         if self._airco is None:
             return
+        self._settle_service_data_pause()
         now = datetime.now()
         if any(getattr(new_airco, name) is not None for name in SERVICE_DATA_FIELDS):
             self._last_service_data_response = now
@@ -466,6 +623,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     "Operation data from [%s] is being reported again",
                     self.device_name,
                 )
+        elif self.foreign_activity:
+            pass  # Not stale, just paused - carry the values below.
         elif (
             self._last_service_data_response is None
             or now - self._last_service_data_response > SERVICE_DATA_MAX_AGE
@@ -594,19 +753,28 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     response = await self._api.send_airco_command(
                         self._airco_id, command
                     )
+                except AirconWriteRefusedError:
+                    # Most likely another client's 60-second write lock - the
+                    # Smart M-Air app was used moments ago (#294). Waiting is
+                    # the only thing that helps: our registration is fine, so
+                    # re-registering would just cost a request. One retry, see
+                    # WRITE_LOCK_RETRY_DELAY.
+                    await asyncio.sleep(WRITE_LOCK_RETRY_DELAY.total_seconds())
+                    response = await self._api.send_airco_command(
+                        self._airco_id, command
+                    )
                 except AirconRegistrationError:
-                    # Our operator id fell out of the airco's small account
-                    # table - most likely evicted by the Smart M-Air app or
-                    # another client registering around the same time (#294).
-                    # getAirconStat's own eviction already self-heals via
-                    # update()'s add_account() retry; do the same here instead
-                    # of losing the command outright. One retry only - if the
-                    # table is genuinely full rather than just evicted,
-                    # add_account() has already raised the repair issue for it.
+                    # Our operator id is not in the airco's account table.
+                    # Re-register and try once more rather than losing the
+                    # command outright. If the table is full instead,
+                    # add_account() has already raised the repair issue.
                     await self.add_account()
                     response = await self._api.send_airco_command(
                         self._airco_id, command
                     )
+                # Only a successful write moves the module's `expires`, so
+                # only a successful write may claim the next rise in it.
+                self._wrote_since_last_poll = True
                 new_airco = self._parser.translate_bytes(response)
                 self._carry_forward_home_leave_mode(new_airco)
                 self._carry_forward_service_data(new_airco)

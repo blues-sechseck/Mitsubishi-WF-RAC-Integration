@@ -317,6 +317,9 @@
       },
       "compressor": {
         "name": "壓縮機需求"
+      },
+      "external_control": {
+        "name": "外部控制"
       }
     },
     "update": {
