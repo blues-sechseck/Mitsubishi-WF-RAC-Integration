@@ -959,9 +959,7 @@ segment.
 | `0x9A44` | pack RECEIVE state + trailer + CRC16 into the Wi-Fi buffer |
 | `0x54B7` | translate the COMMAND state into a MISO frame (`command[i] → MISO byte i+1`) |
 
-Reproduce the image with `mcu-fetch.py`; disassemble with `mcu-disasm.py`
-(`vectors`, `d <addr> [n]`, `str`, `occupied`). The module image is handled by
-`wcbn-disasm.py` (Capstone, Thumb-2).
+The Realtek module image was worked through with a Capstone Thumb-2 pass.
 
 **Do not flash the bridge MCU.** The update path has no rollback, no progress
 reporting and no second bank, and the official app does not even offer the file.
