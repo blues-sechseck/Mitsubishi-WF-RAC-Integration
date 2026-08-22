@@ -14,7 +14,7 @@ import pytest
 from aiohttp import ClientConnectionError
 
 from custom_components.mitsubishi_wf_rac.const import MIN_TIME_BETWEEN_UPDATES
-from custom_components.mitsubishi_wf_rac.wfrac.device import POLL_TIMEOUT
+from custom_components.mitsubishi_wf_rac.coordinator import POLL_TIMEOUT
 from custom_components.mitsubishi_wf_rac.wfrac.repository import (
     MIN_TIME_BETWEEN_REQUESTS,
     REQUEST_TIMEOUT,

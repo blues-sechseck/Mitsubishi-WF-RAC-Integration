@@ -25,7 +25,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     DOMAIN,
     HVAC_TRANSLATION,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.device import Device
+from custom_components.mitsubishi_wf_rac.coordinator import Device
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
 
 

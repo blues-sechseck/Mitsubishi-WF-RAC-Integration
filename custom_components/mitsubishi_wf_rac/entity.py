@@ -15,7 +15,7 @@ from .const import (
     CONF_TARGET_OFFSET_HEAT,
     HVAC_TRANSLATION,
 )
-from .wfrac.device import Device
+from .coordinator import Device
 
 _LOGGER = logging.getLogger(__name__)
 

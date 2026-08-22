@@ -12,11 +12,11 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from ..const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
-from .firmware_check import fetch_latest_firmware
-from .models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
-from .rac_parser import RacParser, SERVICE_DATA_CODES
-from .repository import (
+from .const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
+from .wfrac.firmware_check import fetch_latest_firmware
+from .wfrac.models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
+from .wfrac.rac_parser import RacParser, SERVICE_DATA_CODES
+from .wfrac.repository import (
     MIN_TIME_BETWEEN_REQUESTS,
     REQUEST_TIMEOUT,
     AirconApiError,

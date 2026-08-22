@@ -35,7 +35,7 @@ from .const import (
     CONF_TARGET_OFFSET_HEAT,
     DOMAIN,
 )
-from .wfrac.device import AVAILABILITY_FAILURE_LIMIT_MIN
+from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN
 from .wfrac.repository import AirconApiError, Repository
 
 _LOGGER = logging.getLogger(__name__)

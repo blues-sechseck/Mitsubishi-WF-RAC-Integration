@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
 from .entity import WfRacEntity
-from .wfrac.device import Device
+from .coordinator import Device
 from .wfrac.models.aircon import HomeLeaveModeSetting
 from .const import DOMAIN
 

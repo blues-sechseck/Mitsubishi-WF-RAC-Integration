@@ -10,7 +10,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
-from .wfrac.device import Device
+from .coordinator import Device
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
