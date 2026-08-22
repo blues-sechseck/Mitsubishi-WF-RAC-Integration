@@ -171,10 +171,20 @@ them wrong.
    register properly for anything permanent.
 
    `remoteList` does **not** let you discover the registered ids: a device with
-   `numOfAccount: 2` returned `["", "", "", ""]`. `[HW]`
+   `numOfAccount: 2` returned `["", "", "", ""]`. `[HW]` It lists only accounts
+   registered with `remote: 1`, and emits a single `null` when none qualify;
+   `numOfAccount` counts every occupied slot. `[FW]` A list that looks empty next
+   to a non-zero count is therefore normal, not a fault.
 
-   Four account slots exist. A device that has been paired with several phones
-   can be full; `deleteAccountInfo` frees a slot.
+   Four account slots exist, and a device paired with several phones can be
+   full. `[FW]` Nothing about them is automatic: entries never expire, and a
+   full table refuses the **new** client rather than displacing an existing
+   one, so registering cannot push anyone out. The only way a slot is ever
+   freed is `deleteAccountInfo`. Re-registering an id you already hold costs
+   nothing and takes no second slot — it updates the entry in place.
+
+   A fifth client can still read everything; it is writing that a full table
+   denies it.
 
 ### 2.6 Rate limiting
 
@@ -186,7 +196,51 @@ contains `429 Too Many Requests`, `Connection rate exceeded`,
 **1 second** between requests, per device. `[HW]` Violating it produces dropouts
 that look like a flaky network.
 
-### 2.7 Response fields (`getAirconStat` / `setAirconStat`)
+### 2.7 The 60-second write lock — the one that catches everyone
+
+An applied `setAirconStat` grants its sender **60 seconds of exclusive write
+access**. Everyone else is refused for the duration. `[FW]` The check sits at the
+head of the handler:
+
+```
+if (last_writer && expires >= now && strcmp(deviceId, last_writer) != 0)
+        abort;                          /* answers result 1 or 12 */
+...                                     /* otherwise apply, then: */
+expires     = now + 60;
+last_writer = deviceId;
+```
+
+Four things follow, and each of them has bitten a client:
+
+- **It keys on `deviceId`, not on `operatorId`.** Two phones sharing one
+  Smart M-Air account lock each other out exactly as an unrelated client would.
+- **Reads are free.** `getAirconStat` neither takes nor tests the lock.
+- **A read-only `setAirconStat` still takes it.** A status request for
+  operation data (§5.3) applies nothing, and renews the lock all the same. Poll
+  it once a minute and you own the unit permanently — the official app included
+  will be unable to control it. Leave at least one full lock duration free in
+  every cycle.
+- **A refused write is invisible afterwards.** Neither `expires` nor
+  `updatedBy` moves on the collision path, so there is no way to find out that
+  somebody was locked out — only that somebody got through.
+
+`expires` in the status response is that deadline, and it can be compared
+against your own clock directly: the module has no RTC and takes its time from
+the `timestamp` of every request it receives (§2.3), so your own request sets
+the clock its answer is measured against. A rise in `expires` between two polls
+means a write happened in between — yours if you sent one, someone else's if
+you did not. That is the only reliable way to notice another client, and it
+only works while you let the lock lapse often enough for them to get a write
+in.
+
+**The result codes do not identify this case.** `[FW]` The handler's internal
+return value is mapped to the JSON `result` through one small table
+(`-1 → 2`, `0 → 0`, `1 → 1`, `2 → 12`, `3 → 11`), and a bridge-MCU error on the
+normal path arrives at the very same values as the collision path does. So
+`1`/`11`/`12` mean "refused", not "refused by someone else's lock". Treat them
+as a reason to check `expires` and retry once, not as a diagnosis.
+
+### 2.8 Response fields (`getAirconStat` / `setAirconStat`)
 
 In the order the firmware emits them: `[FW]`
 
@@ -195,8 +249,8 @@ In the order the firmware emits them: `[FW]`
 | `airconId` | MAC-derived device id |
 | `airconStat` | **base64 state blob — the actual payload, see §3** |
 | `logStat` | bit 2 of an internal flag byte |
-| `updatedBy` | `local` if the last change came from the local API, otherwise the account id |
-| `expires` | account expiry |
+| `updatedBy` | `deviceId` of the last successful writer — but reported as the literal `local` whenever that writer's account carries `remote: 0`, which every locally paired client does `[FW]` |
+| `expires` | when the last writer's 60-second exclusive write access lapses (§2.7) — **not** an account expiry |
 | `autoHeating` | frost-protection flag (see §6.3) |
 | `firmType` | hard-coded in the image, e.g. `WCBN4612L` |
 | `timezone` | |
@@ -209,7 +263,7 @@ In the order the firmware emits them: `[FW]`
 `updatedBy` does **not** distinguish IR remote from Wi-Fi changes — it is
 constant `local` in all recordings. `[HW]`
 
-### 2.8 The complete field inventory
+### 2.9 The complete field inventory
 
 The `WCBN4612L` module image contains exactly these JSON key strings and no
 others `[FW]`. **This is closed for that branch only.** The `WF-RAC` and
@@ -922,6 +976,8 @@ things are worth knowing before anyone goes looking:
 | Why does the energy counter keep dropping to zero? | It is a per-run counter, not a lifetime one (§5.2). Nothing is broken. |
 | How do I tell "unit is on" from "compressor is actually running"? | `state[9] & 0x02` (§4.6), free in every poll. On a multi-split it answers per indoor unit, unlike compressor frequency. |
 | Why does my client work on one unit and fail on another? | Almost always `airconId` missing (§2.5), TLS too modern (§2.2), or the four account slots being full. |
+| Why do my commands get refused right after someone used the app? | The 60-second write lock (§2.7). Wait for `expires` and send again. |
+| Why can nobody else control the unit while my client runs? | Same lock, from the other side: you are renewing it. Anything you send on a cadence — a status request for operation data included — has to leave it lapse. |
 
 ---
 
