@@ -402,6 +402,12 @@ class RacParser:
             if content[2] & 192 == 64
             else find_match(240 & content[3], 0, 16, 32, 48) + 1
         )
+        # content[12] is only a device state on units that speak the extended
+        # WF-RAC bus protocol. On the legacy one the module overwrites the byte
+        # with a constant 1, so both reads below are pinned: no left/right vane
+        # position and no 3D auto is ever reported back there. Writing is
+        # unaffected - do not confirm a horizontal-vane command by re-reading
+        # it. See docs/wf-rac-module-reference.md section 6.7.
         ac_device.WindDirectionLR = (
             0
             if content[12] & 3 == 1

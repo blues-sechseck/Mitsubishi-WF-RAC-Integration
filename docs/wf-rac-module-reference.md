@@ -322,7 +322,7 @@ Since the MHI frame is `SB0 SB1 SB2 DB0 DB1 …`, that gives:
 | `9` | `DB7` | bit `0x02` = **compressor running** (see §4.6) | `[HW]` |
 | `10` | raw 20 | `bit0` occupancy/`Vacant`, `bit2` self-clean reset | `[HW]` |
 | `11` | raw 21 | left-right vane position (low 5 bits) | `[HW]` |
-| `12` | raw 22 | 3D-auto/`Entrust`, LR-vane enable, self-clean flags | `[HW]` |
+| `12` | raw 22 | 3D-auto/`Entrust`, LR-vane enable, self-clean flags — **forced to `1` on legacy-signature units, see §6.7** | `[HW]` `[FW]` |
 | `13`–`14` | raw 23–24 | unknown | — |
 | `15` | raw 25 | `bit0` self-clean operation (see §6.4) | `[HW]` |
 | `16`–`17` | raw 26–27 | unknown | — |
@@ -344,7 +344,7 @@ IndoorTemp_raw = state[5]                            # see §4.5 — but prefer 
 ErrorCode      = state[6]                            # see §4.4
 CoolHotJudge   = (state[8] & 0x08) == 0
 Vacant         = (state[10] & 0x01) != 0
-VaneLR         = (state[11] & 0x1F) + 1              # ignored if (state[12] & 0x03) == 1
+VaneLR         = (state[11] & 0x1F) + 1              # not reported if (state[12] & 0x03) == 1, see §6.7
 Entrust3D      = (state[12] & 0x0C) == 0x04
 ```
 
@@ -841,6 +841,49 @@ constant exists in the application area. `[FW]` So the periodic reset seen in
 the field is commanded from below, not by the Wi-Fi stack. Blocking the module's
 WAN access does not stop it. `[HW]`
 
+### 6.7 Left/right vanes and 3D-auto, on units with the legacy bus signature
+
+The bridge MCU implements **two** CNS protocols and picks one from the first
+MOSI signature byte the indoor unit sends. `[FW]` The choice is made once per
+frame and switches the whole receive/transmit path, not a single branch:
+
+| MOSI `SB0` | MISO `SB0` | Frame builder |
+| --- | --- | --- |
+| `0xC7` | `0x9B` | `0x5C7F` |
+| `0x6C` | `0xA9` | `0x54B7` |
+| anything else | `0xAA` | `0x54B7` |
+
+`0x6C` with a `0xA9` MISO signature is the classic MHI bus as documented by
+MHI-AC-Trace. `[EXT]` And on exactly that path, after the §6.1 mask is applied,
+the module overwrites the byte unconditionally: `[FW]`
+
+```
+if (MOSI[0] == 0x6C) state[12] = 1;
+```
+
+So on a legacy-signature unit `state[12]` is **not a device state at all**. It
+is always `1`, whatever raw byte 22 contained, which means:
+
+- `(state[12] & 0x03) == 1` always holds → the left/right vane position in
+  `state[11]` is never reported. A client following §4.2 will read "auto"
+  forever, no matter what position the unit is actually in.
+- `(state[12] & 0x0C) == 0x04` can never hold → `Entrust` (3D auto) always
+  reads as off.
+
+Writing still works — the command path is untouched. Only the read-back is
+gone, so a client must not confirm a horizontal-vane command by re-reading it.
+
+**How to tell which kind of unit you have:** `SB0` itself is not visible over
+the network, so test the symptom. Any reading of `state[12]` other than `1`
+proves the extended variant — the reference unit for this document reports
+`0x00` throughout `[HW]`. If it does read `1`, move the horizontal vane from
+the infrared remote and poll again: on the extended variant `state[12]` and the
+position in `state[11]` follow, on the legacy one `state[12]` stays `1`.
+
+Do **not** use the app's per-model capability tables to decide this. Their
+`windDirectionLR` flag is set for four of the five model classes `[APP]`, which
+says what the model line supports, not what this bus variant reports back.
+
 ---
 
 ## 7. Worked flows
@@ -942,7 +985,8 @@ segment.
 | `0xE2F5` | 18-byte RECEIVE state (what §4 calls `state[0..17]`) |
 | `0xE307` | RECEIVE segment count; segments from `0xE308` |
 | `0xE3BA` | raw 18 bytes lifted out of the MOSI stream, pre-mask |
-| `0xE3CF` | MOSI frame (`SB0` at +0, `DB0` at +3, `DB9..DB12` = `0xE3DB..0xE3DE`) |
+| `0xE3CF` | MOSI frame, 33 bytes (`SB0` at +0, `DB0` at +3, `DB9..DB12` = `0xE3DB..0xE3DE`) |
+| `0xE3F0` | live MOSI receive buffer, 33 bytes; `0x52DB` promotes it into `0xE3CF` |
 | `0xE411` | MISO frame (`DB6` = `0xE41A`, `DB9..DB12` = `0xE41D..0xE420`) |
 | `0xE3B7` | request state machine, 0…5 |
 | `0x3034` | 18-byte ROM mask (§6.1) |
@@ -955,9 +999,11 @@ segment.
 | `0x53BB` | copy MOSI frame → raw state `0xE3BA`, then call the two below |
 | `0x58B1` | handle one received segment: push-cache check, then match against the request queue; all matched ⇒ state 4 |
 | `0x5B27` | build the RECEIVE trailer from push cache + response cache |
-| `0x680F` | build the RECEIVE state: `state[i] = raw[i] & ~mask[i]` |
+| `0x680F` | build the RECEIVE state: `state[i] = raw[i] & ~mask[i]`, then force `state[12] = 1` on the legacy signature (§6.7) |
+| `0x58A2` | pick the MISO signature byte from the MOSI one — the protocol-variant switch (§6.7) |
+| `0x5C7F` | the other frame builder, used on the `0xC7` variant |
 | `0x9A44` | pack RECEIVE state + trailer + CRC16 into the Wi-Fi buffer |
-| `0x54B7` | translate the COMMAND state into a MISO frame (`command[i] → MISO byte i+1`) |
+| `0x54B7` | translate the COMMAND state into a MISO frame (`command[i] → MISO byte i+1`), legacy variant |
 
 The Realtek module image was worked through with a Capstone Thumb-2 pass.
 
