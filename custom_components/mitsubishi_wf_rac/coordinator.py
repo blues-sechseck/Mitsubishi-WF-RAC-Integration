@@ -49,25 +49,35 @@ FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 # so it takes the module's 60-second write lock all the same, and while we hold
 # that lock no one else can control the unit at all.
 #
-# One request per 60s poll against a 60s lock therefore means we never let go:
-# every request renews the lock about as it lapses, and an enabled
-# operation-data entity leaves the Smart M-Air app permanently unable to
-# control the unit (#294). Requesting on every second poll is what breaks that
-# grip - it leaves a full lock duration free in every cycle, which is the
-# window another client needs to get a write in. Detecting the other client
-# cannot substitute for the window: a refused write changes nothing the module
-# reports back, so a client we never let through is a client we never see (see
-# _detect_foreign_activity).
-SERVICE_DATA_REQUEST_INTERVAL = 2 * MIN_TIME_BETWEEN_UPDATES
+# The lock's deadline is `now + 60`, where `now` is the `timestamp` field of
+# the request that took it - the module has no RTC and reads its clock from
+# whatever the asking client stamps (see _async_write_lock_delay). Stamping the
+# request SERVICE_DATA_STAMP_BACKDATE in the past therefore makes it take a lock
+# that expires SERVICE_DATA_STAMP_BACKDATE sooner: at 30s back the lock runs 30
+# of its 60 seconds, leaving the other 30 of every poll free for the app or the
+# IR remote to get a write in. That is what keeps an enabled operation-data
+# entity from locking the Smart M-Air app out for good (#294) while still asking
+# on every poll. Confirmed against a real module. Detecting the other client
+# cannot substitute for the free window:
+# a refused write changes nothing the module reports back, so a client we never
+# let through is a client we never see (see _detect_foreign_activity).
+SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
-# The rate limit is what actually skips every second poll, so it has to sit
-# between one and two poll intervals. It cannot be the full interval either,
-# because the stamp is taken when a poll finishes, not when it was due: polls
-# arrive exactly MIN_TIME_BETWEEN_UPDATES apart, so a poll answering a few
-# milliseconds faster than the one before it leaves marginally less than that
-# between the two stamps - and with the full interval as the limit, that
-# dropped the cycle: one affected unit lost 6 of 36 operation-data cycles this
-# way, each short by under 100ms.
+# How far into the past the operation-data request is stamped, and so how much
+# of the 60s lock it gives up. Half the lock: a 30s grip is short enough that
+# the app always finds a free window within a poll, long enough that the value
+# still round-trips before it lapses. NOT applied right after one of our own
+# real commands - see _async_request_service_data, where backdating would cut
+# that command's own protection window instead of someone else's lock (same
+# deviceId bypasses the lock check, so the request overwrites our own lease).
+SERVICE_DATA_STAMP_BACKDATE = timedelta(seconds=30)
+
+# A guard against a second request landing in the same poll, not a skip of
+# alternate polls (the backdate above is what frees the window now). Kept below
+# one poll interval so every poll still asks, but far enough under it that a
+# poll answering a few milliseconds faster than the one before it - polls are
+# stamped when they finish, not when they were due - does not read as too soon
+# and drop the cycle.
 SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
 
 # ...but it does matter *where* in the cycle it lands. Issued straight off the
@@ -237,6 +247,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # set by our own successful writes and consumed by the next poll, so a
         # rise in `expires` can be attributed to us or to someone else.
         self._wrote_since_last_poll = False
+        # When we last sent a real (set-bit) command, so an operation-data
+        # request within one lock's span of it stamps honestly instead of
+        # trimming that command's lease - see _service_data_stamp_backdate().
+        self._last_command_at: datetime | None = None
         self._foreign_activity_until: datetime | None = None
         self._foreign_activity_reported = False
         self._foreign_activity_since: datetime | None = None
@@ -592,6 +606,26 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             name=f"{DOMAIN} service data request {self._airco_id}",
         )
 
+    def _service_data_stamp_backdate(self) -> timedelta:
+        """How far to backdate the next operation-data request's timestamp.
+
+        Normally SERVICE_DATA_STAMP_BACKDATE, so the request's write lock runs
+        short and leaves the app a window. But an operation-data request shares
+        our deviceId with our real commands, and the module never blocks a
+        writer from its own lease (the deviceId check passes) - so a backdated
+        request sent just after a real command would overwrite that command's
+        full 60s lock with a short one, cutting the very protection the command
+        needs against being reverted. Within one lock's span of a real command,
+        stamp the request honestly instead: it renews the command's lease
+        rather than trimming it, at the cost of holding the lock for that one
+        cycle.
+        """
+        if self._last_command_at is not None and (
+            datetime.now() - self._last_command_at < MIN_TIME_BETWEEN_UPDATES
+        ):
+            return timedelta(0)
+        return SERVICE_DATA_STAMP_BACKDATE
+
     async def _async_request_service_data(self, service_data_codes: tuple[int, ...]) -> None:
         """Ask the unit for operation-data segments, offset from the poll and
         retried once if the unit refuses it (see SERVICE_DATA_REQUEST_OFFSET).
@@ -606,9 +640,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # about spacing requests, not about what they contain - a second
         # request too soon after the poll is what the module refuses.
         params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
+        timestamp_offset = -round(self._service_data_stamp_backdate().total_seconds())
         for attempt in (1, 2):
             try:
-                await self.set_airco(params, log_failure=False)
+                await self.set_airco(
+                    params, log_failure=False, timestamp_offset=timestamp_offset
+                )
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
                 return
@@ -772,13 +809,22 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         )
 
     async def set_airco(
-        self, params: dict[AirconCommands, Any], *, log_failure: bool = True
+        self,
+        params: dict[AirconCommands, Any],
+        *,
+        log_failure: bool = True,
+        timestamp_offset: int = 0,
     ) -> None:
         """Method to send airco command.
 
         log_failure=False leaves the reporting to the caller, for requests that
         have their own retry and a quieter failure story than a user command
         that never reached the unit - see _async_request_service_data().
+
+        timestamp_offset shifts the `timestamp` this request stamps, and so the
+        write lock it takes (deadline is timestamp + 60, the module has no RTC).
+        Negative for operation-data requests, to give up part of the lock - see
+        SERVICE_DATA_STAMP_BACKDATE. Left at 0 for real commands.
         """
         _LOGGER.debug("Setting airco: %s", params)
         # Held for the whole read-modify-send-update sequence, not just the
@@ -807,7 +853,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 command = self._parser.to_base64(airco_stat)
                 try:
                     response = await self._api.send_airco_command(
-                        self._airco_id, command
+                        self._airco_id, command, timestamp_offset=timestamp_offset
                     )
                 except AirconWriteRefusedError:
                     # Most likely another client's 60-second write lock - the
@@ -819,7 +865,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     # lock is a request spent on a refusal that was certain.
                     await asyncio.sleep(await self._async_write_lock_delay())
                     response = await self._api.send_airco_command(
-                        self._airco_id, command
+                        self._airco_id, command, timestamp_offset=timestamp_offset
                     )
                 except AirconRegistrationError:
                     # Our operator id is not in the airco's account table.
@@ -828,7 +874,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     # add_account() has already raised the repair issue.
                     await self.add_account()
                     response = await self._api.send_airco_command(
-                        self._airco_id, command
+                        self._airco_id, command, timestamp_offset=timestamp_offset
                     )
                 # Only a successful write moves the module's `expires`, so
                 # only a successful write may claim the next rise in it.
@@ -920,6 +966,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         params = self._consolidated_params.copy()
         self._consolidated_params.clear()
         self._consolidation_task = None
+        # A real, set-bit command: mark it so the next operation-data request
+        # stamps honestly and renews this command's lock rather than trimming
+        # it (see _service_data_stamp_backdate).
+        self._last_command_at = datetime.now()
         try:
             await self.set_airco(params)
         except (AirconApiError, KeyError, TypeError, ValueError):

@@ -286,3 +286,31 @@ async def test_unknown_result_code_is_still_reported(repository, caplog):
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert len(warnings) == 1
     assert "result 77 (meaning unknown)" in warnings[0].message
+
+
+async def test_timestamp_offset_backdates_the_request_stamp(repository):
+    """The module reads its clock from the request's `timestamp` and locks
+    until timestamp + 60. send_airco_command(timestamp_offset=...) shifts that
+    field so an operation-data request can give up part of the lock (see
+    Device.SERVICE_DATA_STAMP_BACKDATE); every other request leaves it at 0.
+    """
+    ok = json.dumps({"result": 0, "contents": {"airconStat": "AAA="}})
+    repo, session = repository([_FakeResponse(200, ok), _FakeResponse(200, ok)])
+    session.bodies = []
+    original_post = session.post
+
+    def _recording_post(url, **kwargs):
+        session.bodies.append(kwargs.get("json"))
+        return original_post(url, **kwargs)
+
+    session.post = _recording_post
+
+    with patch(
+        "custom_components.mitsubishi_wf_rac.wfrac.repository.time.time",
+        return_value=1_000_000.0,
+    ):
+        await repo.send_airco_command("airco-id", "cmd")
+        await repo.send_airco_command("airco-id", "cmd", timestamp_offset=-30)
+
+    assert session.bodies[0]["timestamp"] == 1_000_000
+    assert session.bodies[1]["timestamp"] == 1_000_000 - 30
