@@ -175,8 +175,16 @@ The integration polls the WF-RAC module directly over the local network every 60
 is no cloud, push, or webhook involved. A single poll reads the unit's full state in one request
 (mode, setpoint, temperatures, energy counter, and so on). The diagnostic operation-data sensors
 described above (compressor frequency, coil temperatures, EEV position, etc.) cost one additional
-request per poll, made only for the segments an enabled sensor actually needs, and not at all if
-none of them are enabled.
+request every second poll, made only for the segments an enabled sensor actually needs, and not at
+all if none of them are enabled.
+
+That second request is why those sensors update every two minutes rather than every minute: the
+module grants whoever last sent it a command 60 seconds of exclusive control, and asking for
+operation data counts as one. Requesting it every minute would hold that grip permanently and leave
+the Smart M-Air app unable to control the unit at all. On the same principle the integration stops
+asking for a few minutes when it notices another client controlling the unit — the External Control
+sensor shows while that is happening, and the operation-data sensors hold their last values
+meanwhile.
 
 The only outbound *internet* request this integration ever makes is the optional firmware-version
 check ("Check for firmware updates" under Options, off by default) — everything else, including

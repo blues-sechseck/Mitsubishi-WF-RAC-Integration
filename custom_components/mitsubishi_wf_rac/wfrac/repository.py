@@ -209,7 +209,11 @@ class Repository:
         return self._ssl_context
 
     async def _post(
-        self, command: str, contents: dict[str, Any] | None = None
+        self,
+        command: str,
+        contents: dict[str, Any] | None = None,
+        *,
+        timestamp_offset: int = 0,
     ) -> dict[str, Any]:
         async def _execute_request(protocol: str) -> dict[str, Any]:
             """Executes a single POST request and returns the JSON response."""
@@ -250,7 +254,12 @@ class Repository:
             "command": command,
             "deviceId": self._device_id,  # is unique device ID (on android it is called android_id)
             "operatorId": self._operator_id,  # is generated UUID
-            "timestamp": round(time.time()),
+            # The module has no RTC: it reads its clock from this field, and the
+            # write lock a setAirconStat takes runs until timestamp + 60. A
+            # negative offset backdates it to give up part of that lock (see
+            # send_airco_command / Device.SERVICE_DATA_STAMP_BACKDATE); 0 for
+            # every other request.
+            "timestamp": round(time.time()) + timestamp_offset,
         }
         if contents is not None:
             data["contents"] = contents
@@ -410,10 +419,20 @@ class Repository:
         result = await self._post("getAirconStat", contents)
         return result if raw else cast(dict[str, Any], result["contents"])
 
-    async def send_airco_command(self, airco_id: str, command: str) -> str:
-        """send command to the Airco"""
+    async def send_airco_command(
+        self, airco_id: str, command: str, *, timestamp_offset: int = 0
+    ) -> str:
+        """send command to the Airco
+
+        timestamp_offset shifts the request's `timestamp` field (see _post):
+        negative backdates it, so the write lock this command takes expires
+        that many seconds sooner. Used to give up part of the lock on
+        operation-data requests - see Device.SERVICE_DATA_STAMP_BACKDATE.
+        """
         contents = {"airconId": airco_id, "airconStat": command}
-        result = await self._post("setAirconStat", contents)
+        result = await self._post(
+            "setAirconStat", contents, timestamp_offset=timestamp_offset
+        )
         try:
             code = int(result.get("result", 0))
         except (TypeError, ValueError):

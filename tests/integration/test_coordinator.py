@@ -75,7 +75,7 @@ def _build_stat_response(content: list[int]) -> str:
     return base64.b64encode(raw).decode()
 
 
-async def _echo_send_airco_command(_airco_id, command):
+async def _echo_send_airco_command(_airco_id, command, **_kwargs):
     """Fake device: decode the sent command's receive-segment (the same
     layout _parse_basic_settings expects) and echo it back as the new
     reported state - models how the real device echoes the state it just
@@ -275,7 +275,7 @@ async def test_set_airco_merges_params_with_current_state(device):
 
     captured = {}
 
-    async def _capture_and_echo(airco_id, command):
+    async def _capture_and_echo(airco_id, command, **_kwargs):
         captured["command"] = command
         return await _echo_send_airco_command(airco_id, command)
 
@@ -320,7 +320,7 @@ async def test_set_airco_reregisters_and_retries_once_on_registration_error(devi
 
     calls = {"n": 0}
 
-    async def _fail_once_then_echo(airco_id, command):
+    async def _fail_once_then_echo(airco_id, command, **_kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             raise AirconRegistrationError("result 2")
@@ -380,7 +380,7 @@ async def test_set_airco_lock_prevents_stale_snapshot_race(device):
     release_first_call = asyncio.Event()
     call_order = []
 
-    async def _slow_first_then_fast(airco_id, command):
+    async def _slow_first_then_fast(airco_id, command, **_kwargs):
         if not call_order:
             call_order.append("first_started")
             await release_first_call.wait()
@@ -490,7 +490,7 @@ async def test_home_leave_mode_status_request_does_not_swallow_a_queued_command(
     await device.update()
     sent = []
 
-    async def _capture_and_echo(airco_id, command):
+    async def _capture_and_echo(airco_id, command, **_kwargs):
         sent.append(command)
         return await _echo_send_airco_command(airco_id, command)
 
@@ -762,6 +762,9 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
             )
         },
         log_failure=False,
+        timestamp_offset=-round(
+            coordinator_module.SERVICE_DATA_STAMP_BACKDATE.total_seconds()
+        ),
     )
 
 
@@ -788,7 +791,11 @@ async def test_raw_service_data_sensor_requests_its_segment_code(device, monkeyp
     await asyncio.sleep(0.05)
 
     set_airco.assert_awaited_once_with(
-        {AirconCommands.ServiceDataStatusRequest: (code,)}, log_failure=False
+        {AirconCommands.ServiceDataStatusRequest: (code,)},
+        log_failure=False,
+        timestamp_offset=-round(
+            coordinator_module.SERVICE_DATA_STAMP_BACKDATE.total_seconds()
+        ),
     )
 
 
@@ -842,6 +849,142 @@ async def test_unchanged_expires_is_not_foreign_activity(device):
     await device.update()
 
     assert device.foreign_activity is False
+
+
+async def test_operation_data_backdates_its_timestamp_to_shorten_the_lock(
+    device, monkeypatch
+):
+    """The request renews the module's 60s write lock, so one per 60s poll
+    never lets go of it and locks every other client out for good (#294).
+    Backdating the request's timestamp by SERVICE_DATA_STAMP_BACKDATE makes the
+    lock it takes expire that much sooner, leaving a free window in every poll -
+    so the request goes out on every poll now, carrying the negative offset.
+    """
+    _activate_service_data_contexts(device, monkeypatch)
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+    one_poll = coordinator_module.MIN_TIME_BETWEEN_UPDATES
+    expected_offset = -round(
+        coordinator_module.SERVICE_DATA_STAMP_BACKDATE.total_seconds()
+    )
+
+    device._last_service_data_request = datetime.now() - one_poll
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    device._api.send_airco_command.assert_awaited_once()
+    assert (
+        device._api.send_airco_command.await_args.kwargs["timestamp_offset"]
+        == expected_offset
+    )
+
+    device._last_service_data_request = datetime.now() - one_poll
+    await device.update()
+    await asyncio.sleep(0.05)
+
+    assert device._api.send_airco_command.await_count == 2
+
+
+async def test_service_data_stamps_honestly_right_after_our_own_command(device):
+    """Backdating an operation-data request within one lock's span of a real
+    command would overwrite that command's own 60s lock with a short one (same
+    deviceId bypasses the lock check). Within the window it must stamp honestly
+    (offset 0) instead; before and after, it backdates."""
+    device._last_command_at = None
+    assert (
+        device._service_data_stamp_backdate()
+        == coordinator_module.SERVICE_DATA_STAMP_BACKDATE
+    )
+
+    device._last_command_at = datetime.now()
+    assert device._service_data_stamp_backdate() == timedelta(0)
+
+    device._last_command_at = datetime.now() - 2 * coordinator_module.MIN_TIME_BETWEEN_UPDATES
+    assert (
+        device._service_data_stamp_backdate()
+        == coordinator_module.SERVICE_DATA_STAMP_BACKDATE
+    )
+
+
+async def test_a_real_command_records_its_time_for_the_backdate_guard(device, monkeypatch):
+    """A flushed user command marks _last_command_at so the guard above can
+    see it - a bare status request (no set-bits) must not."""
+    monkeypatch.setattr(
+        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+    )
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+    assert device._last_command_at is None
+
+    await device.async_queue_command({AirconCommands.PresetTemp: 22.0})
+    await asyncio.sleep(0.05)
+
+    assert device._last_command_at is not None
+
+
+async def test_a_refused_write_waits_out_the_lock_that_refused_it(device):
+    """A retry at a fixed delay lands inside the same lock as often as not,
+    and a request spent on a refusal that was certain is a request wasted.
+    The unit reports when the lock lapses, against a clock our own request
+    just set (the module has no RTC), so the retry can be placed right after
+    it.
+    """
+    # Someone else took the lock 40 seconds ago: 20 of its 60 are left.
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, int(datetime.now().timestamp()) - 40 + 60
+    )
+
+    delay = await device._async_write_lock_delay()
+
+    assert 20 <= delay <= 22
+
+
+async def test_a_refused_write_is_never_held_longer_than_a_lock_can_run(device):
+    """The lock runs 60 seconds, so a deadline further out than that came
+    from a client whose clock is off, not from a lock that is really still
+    running. No reason to leave a service call hanging on it.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, int(datetime.now().timestamp()) + 3_600
+    )
+
+    delay = await device._async_write_lock_delay()
+
+    assert delay == coordinator_module.WRITE_LOCK_MAX_WAIT.total_seconds()
+
+
+async def test_a_refused_write_retries_at_once_when_the_lock_has_lapsed(device):
+    """A lock that has already run out means the refusal came from something
+    else - the MCU, most likely - and nothing is gained by waiting.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, int(datetime.now().timestamp()) - 30
+    )
+
+    assert await device._async_write_lock_delay() == 0.0
+
+
+async def test_a_refused_write_falls_back_when_the_unit_reports_no_deadline(device):
+    """Older firmware may not report `expires` at all. A short retry is still
+    worth more than none.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+
+    assert (
+        await device._async_write_lock_delay()
+        == coordinator_module.WRITE_LOCK_RETRY_DELAY.total_seconds()
+    )
+
+
+async def test_a_refused_write_falls_back_when_the_unit_stops_answering(device):
+    """The probe is an extra request and can fail on its own."""
+    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+
+    assert (
+        await device._async_write_lock_delay()
+        == coordinator_module.WRITE_LOCK_RETRY_DELAY.total_seconds()
+    )
 
 
 async def test_missing_expires_field_is_not_foreign_activity(device):
@@ -957,7 +1100,7 @@ async def test_set_airco_waits_and_retries_once_when_the_write_lock_is_held(
 
     calls = {"n": 0}
 
-    async def _fail_once_then_echo(airco_id, command):
+    async def _fail_once_then_echo(airco_id, command, **_kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             raise AirconWriteRefusedError("result 1")
@@ -1068,7 +1211,7 @@ async def test_service_data_request_carries_no_set_bits(device, monkeypatch):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     sent = []
 
-    async def _capture(airco_id, command):
+    async def _capture(airco_id, command, **_kwargs):
         sent.append(command)
         return _stats_response(OFF_PAYLOAD)
 
@@ -1134,7 +1277,7 @@ async def test_service_data_request_is_retried_once_when_refused(device, monkeyp
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     calls = []
 
-    async def _refuse_then_answer(airco_id, command):
+    async def _refuse_then_answer(airco_id, command, **_kwargs):
         calls.append(command)
         if len(calls) == 1:
             raise AirconCommandError("HTTP 501: Not supported this command")
