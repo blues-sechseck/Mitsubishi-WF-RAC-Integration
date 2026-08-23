@@ -86,6 +86,11 @@ _TABLE_BY_RAW: Final = {
 }
 
 
+# `wind_direction_lr` says what the model line supports, not what the unit
+# reports back: on the legacy bus protocol the module pins the left/right vane
+# and 3D-auto bits regardless of model (rac_parser.py, and section 6.7 of
+# docs/wf-rac-module-reference.md). Gate a horizontal-swing entity on the
+# observed state byte, not on this flag alone.
 def get_capabilities(model_nr_raw: int) -> ModelCapabilities:
     """Return the capability table for a device's raw ModelNr byte
     (`content[0] & 127`, see rac_parser.py's `ModelNrRaw`)."""
