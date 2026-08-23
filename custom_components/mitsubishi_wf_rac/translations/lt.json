@@ -67,8 +67,8 @@
   },
   "issues": {
     "too_many_devices": {
-      "title": "Prie {device_name} užregistruota per daug įrenginių",
-      "description": "\"Home Assistant\" negalėjo užsiregistruoti šiame kondicionieriuje, nes modulio paskyrų lentelė pilna. Atidarykite \"Smart M-Air\" programėlę ir pašalinkite kitą užregistruotą įrenginį, arba atstatykite modulį į gamyklinę būseną, tada iš naujo įkelkite šią integraciją."
+      "title": "Per daug paskyrų užregistruota įrenginyje {device_name}",
+      "description": "Šis įrenginys turi vietos keturioms paskyroms, ir visos keturios užimtos, todėl „Home Assistant“ negali užsiregistruoti. Modulis pats vietos niekada neatlaisvina: registracijos nenustoja galioti, o nauja yra atmetama, o ne pakeičia senesnę. „Smart M-Air“ programėlėje pašalinkite šį įrenginį iš telefono, kuriam jo nebereikia - kiekviena paskyra gali pašalinti tik save, o keli telefonai su ta pačia „Smart M-Air“ paskyra kartu užima vieną vietą. Tada iš naujo įkelkite šią integraciją. Jei niekas negali atlaisvinti vietos - pavyzdžiui, ją laiko seniai atiduotas telefonas - modulį reikia sukonfigūruoti iš naujo."
     }
   },
   "options": {

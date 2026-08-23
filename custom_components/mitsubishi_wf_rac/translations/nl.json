@@ -67,8 +67,8 @@
   },
   "issues": {
     "too_many_devices": {
-      "title": "Te veel apparaten geregistreerd op {device_name}",
-      "description": "Home Assistant kon zich niet registreren bij deze airco omdat de accounttabel van de module vol is. Open de Smart M-Air-app en verwijder een ander geregistreerd apparaat, of reset de module naar de fabrieksinstellingen, en herlaad daarna deze integratie."
+      "title": "Te veel accounts geregistreerd op {device_name}",
+      "description": "Deze unit heeft ruimte voor vier geregistreerde accounts en alle vier zijn bezet, dus Home Assistant kan zichzelf niet registreren. De module maakt zelf nooit een plek vrij: registraties verlopen niet, en een nieuwe wordt geweigerd in plaats van een oudere te vervangen. Verwijder deze unit in de Smart M-Air-app op een telefoon die hem niet meer nodig heeft - elk account kan alleen zichzelf verwijderen, en meerdere telefoons met hetzelfde Smart M-Air-account gebruiken samen één plek. Laad daarna deze integratie opnieuw. Kan niemand een plek vrijmaken - bijvoorbeeld doordat een allang weggegeven telefoon er een bezet houdt - dan moet de module opnieuw worden ingesteld."
     }
   },
   "options": {
