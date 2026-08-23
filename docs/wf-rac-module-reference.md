@@ -584,7 +584,7 @@ operating points are not a calibration, so the formulas stay `[INF]`.
 | `0x11` | Compressor frequency [Hz] | `(sel − 0x10) × 25.6 + 0.1 × OP2` | idle `00` ⇒ 0.0 Hz · load `e6` ⇒ **23.0 Hz** |
 | `0x90` | Current [A] | `OP2 × 14 / 51` | idle `00` ⇒ 0.0 A · load `04` ⇒ **1.10 A** (≈250 W) |
 | `0xB1` | TDSH [°C] | `OP2 / 2` | `00` in both — never moved |
-| `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32` | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
+| `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32`, **only for `OP2 >= 0x12`** | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
 | `0x13` | Outdoor EEV [pulses] | `OP2` | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
 | `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
 | `0x81` | THI-R1 [°C] | thermistor curve, see §5.4 | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
@@ -625,6 +625,18 @@ Notes on the shape of the answers `[HW]`:
   it as a calibrated valve opening.
 - `0x13` reads 0 on an indoor unit whose compressor is not running, and a
   normal value on an active one at the same moment. `[HW]`
+- **`0x85` below `OP2 = 0x12` is not a temperature.** MHI-AC-Trace states the
+  conversion as two branches: below that byte the sensor only reports "30 °C or
+  colder", above it the value is `OP2 / 2 + 32`. `[EXT]` Applying the second
+  branch everywhere turns an idle outdoor unit's bytes 8–16 into a steady
+  36–40 °C, which looks like a running crankcase heater and was read as one
+  ([#288](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/288)).
+  Confirmed against 24 h of own data: compressor frequency 0 and current 0.00
+  throughout, `0x85` between bytes 8 and 15 while outdoor air swung 29.7 → 11.0 °C,
+  on an outdoor unit with no crankcase heater. `[HW]` Both of the calibration
+  points above sit above the threshold, so the low branch rests on that source
+  alone — treat a byte under `0x12` as "no reading", not as a cold pipe.
+
 - **The two indoor coil sensors are per indoor unit; `0x82` is shared.** Over a
   night with one indoor unit cycling and the other cooling continuously, both
   units' `0x81` collapsed when their *own* compressor demand was on, while

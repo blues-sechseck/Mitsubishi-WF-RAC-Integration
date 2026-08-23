@@ -121,6 +121,12 @@ COIL_SERIES_RESISTOR: Final = 1912.0
 # did not trigger. Kept as a documented limit rather than a silent one.
 COIL_TEMP_VERIFIED_MAX: Final = 170
 
+# Lowest byte the discharge-pipe conversion covers. MHI-AC-Trace states it as
+# a two-branch rule: below this byte the sensor only says "30 C or colder",
+# above it the value is byte/2 + 32. Both of our own calibration points sit
+# well above it, so the low branch is taken on trust from that source.
+HOT_GAS_MIN_BYTE: Final = 0x12
+
 # Bit masks
 OPERATION_MASK: Final = 3
 # Not in any vendor doc - correlated live against operation-data code 0x11
@@ -511,7 +517,7 @@ class RacParser:
             ac_device.OperatingCurrent = op2 * 14 / 51
             ac_device.OperatingCurrentRaw = op2
         elif code == SERVICE_DATA_HOT_GAS_TEMP:
-            ac_device.HotGasTemp = op2 / 2 + 32
+            ac_device.HotGasTemp = RacParser._hot_gas_temp(op2)
             ac_device.HotGasTempRaw = op2
         elif code == SERVICE_DATA_EEV_PULSES:
             ac_device.EevPulses = op2
@@ -528,6 +534,26 @@ class RacParser:
             ac_device.DischargeSuperheatRaw = op2
         elif code == SERVICE_DATA_PROTECTION_RAW:
             ac_device.ProtectionRaw = op2
+
+    @staticmethod
+    def _hot_gas_temp(op2: int) -> float | None:
+        """Convert the discharge pipe byte to deg C.
+
+        The conversion only holds from HOT_GAS_MIN_BYTE upwards. Below it the
+        byte carries no resolution - it means "30 C or colder" - so applying
+        the formula there reports a pipe temperature the protocol never sent.
+        An idle outdoor unit sits in that range for hours at a time, which is
+        exactly when a made-up number is most likely to be believed, so it
+        yields None and the raw byte carries the distinction.
+        """
+        if op2 < HOT_GAS_MIN_BYTE:
+            _LOGGER.debug(
+                "Discharge pipe byte %d is below the conversion's range "
+                "(the sensor means 30 C or colder)",
+                op2,
+            )
+            return None
+        return op2 / 2 + 32
 
     @staticmethod
     def _coil_temp(op2: int, code: int) -> float | None:

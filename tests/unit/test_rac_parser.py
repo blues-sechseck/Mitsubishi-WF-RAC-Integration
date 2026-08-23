@@ -391,6 +391,26 @@ def test_coil_temp_rejects_a_zero_byte(parser):
     assert ac.IndoorCoilRaw == 0
 
 
+@pytest.mark.parametrize("raw", [0, 8, 15, 16, 17])
+def test_hot_gas_temp_below_the_conversion_range_reports_nothing(parser, raw):
+    # An idle outdoor unit parks here for hours. byte/2 + 32 turns those bytes
+    # into a steady 32-40 C, which reads like a running crankcase heater on a
+    # unit that has none (#288) - the source states the conversion only from
+    # byte 0x12 upwards, below it the sensor means "30 C or colder".
+    ac = Aircon()
+    parser._parse_temperatures(ac, [0x85 - 256, 0x10, raw, 0])
+    assert ac.HotGasTemp is None
+    # The byte still goes out, so the distinction stays available.
+    assert ac.HotGasTempRaw == raw
+
+
+@pytest.mark.parametrize(("raw", "expected"), [(0x12, 41.0), (0x15, 42.5)])
+def test_hot_gas_temp_converts_from_the_threshold_upwards(parser, raw, expected):
+    ac = Aircon()
+    parser._parse_temperatures(ac, [0x85 - 256, 0x10, raw, 0])
+    assert ac.HotGasTemp == pytest.approx(expected)
+
+
 def test_to_base64_default_length_unchanged_by_home_leave_mode(parser):
     from base64 import b64decode
 
