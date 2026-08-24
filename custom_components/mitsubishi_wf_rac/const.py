@@ -12,6 +12,12 @@ from homeassistant.components.climate.const import (
 )
 
 DOMAIN = "mitsubishi_wf_rac"
+
+# The module serves its API here on every firmware branch, and the port cannot
+# be changed on the device - only the scheme differs (plain http on the older
+# WF-RAC branch). Used as the manual-setup default and as the fallback when a
+# discovery announcement carries something else.
+DEFAULT_PORT = 51443
 DEVICES = "wf-rac-devices"
 
 MIN_TIME_BETWEEN_UPDATES=timedelta(seconds=60)

@@ -1153,6 +1153,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """Return the discovered/persisted communication method (http/https), if known."""
         return self._api.method
 
+    @property
+    def result_codes(self) -> dict[str, dict[str, int]]:
+        """How often the unit refused each command, per `result` code.
+
+        Refusals themselves are a debug-level event: the common ones clear on
+        the next request and there is nothing for a user to do. Surfacing the
+        tally here keeps them available to whoever is actually investigating.
+        """
+        return self._api.result_codes
+
     async def _async_update_data(self) -> Aircon:
         """Update data via library.
 

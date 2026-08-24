@@ -425,6 +425,50 @@ async def test_zeroconf_discovery_confirm_creates_entry(hass: HomeAssistant):
     assert result["data"]["port"] == 51443
 
 
+async def test_zeroconf_announced_port_falls_back_to_the_fixed_one(hass: HomeAssistant):
+    """The module serves a port fixed in firmware, so an announcement carrying
+    something else (#290) is the announcement being wrong, not the device. Try
+    the real port rather than failing setup on a value it cannot have meant.
+    """
+    repo = _mock_repository()
+    repo.get_airco_id.side_effect = [AirconApiError("no answer"), "airco-1"]
+    with _patch_repository(repo) as repository_cls:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(port=5353),
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"name": "Living Room AC"}
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    # The entry keeps the port that answered, not the one that was announced.
+    assert result["data"]["port"] == 51443
+    assert [call.args[2] for call in repository_cls.call_args_list] == [5353, 51443]
+
+
+async def test_manual_port_is_not_second_guessed(hass: HomeAssistant):
+    """Only an announced port is retried on the default. A port the user typed
+    is taken at face value, so a genuinely unusual setup still fails visibly
+    instead of being silently redirected.
+    """
+    repo = _mock_repository()
+    repo.get_airco_id.side_effect = AirconApiError("no answer")
+    with _patch_repository(repo) as repository_cls:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"name": "Living Room AC", "host": "192.168.1.50", "port": 8443},
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"]
+    assert [call.args[2] for call in repository_cls.call_args_list] == [8443]
+
+
 async def test_zeroconf_discovery_confirm_port_can_be_overridden(hass: HomeAssistant):
     """A bad mDNS advertisement (see #290: port 5353, the mDNS port itself,
     instead of the fixed 51443) must be correctable in the confirm step

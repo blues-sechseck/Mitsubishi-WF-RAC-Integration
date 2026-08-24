@@ -24,6 +24,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
+    DEFAULT_PORT,
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_FIRMWARE_UPDATE_CHECK,
@@ -80,8 +81,13 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             hass: HomeAssistant,
             data: dict[str, Any],
             exclude_entry_id: str | None = None,
+            allow_port_fallback: bool = False,
     ) -> dict[str, Any]:
-        """Validate the user input allows us to connect, and register with the airco device"""
+        """Validate the user input allows us to connect, and register with the airco device.
+
+        allow_port_fallback belongs to discovery only: a port the module
+        announced may be wrong (#290), a port a person typed is their decision.
+        """
         if len(data[CONF_HOST]) < 3:
             raise InvalidHost
 
@@ -109,7 +115,34 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             airco_id = await repository.get_airco_id()
         except (AirconApiError, KeyError, TypeError) as query_failed:
-            raise CannotConnect(reason=str(query_failed)) from query_failed
+            # A discovery announcement has been seen carrying a port the module
+            # does not serve (#290). The port is fixed in the firmware and not
+            # user-settable, so rather than failing on a value the device
+            # cannot have meant, try the one it always listens on. Only the
+            # announced value is second-guessed - a port the user typed is
+            # taken at face value.
+            if not allow_port_fallback or data[CONF_PORT] == DEFAULT_PORT:
+                raise CannotConnect(reason=str(query_failed)) from query_failed
+            _LOGGER.warning(
+                "No answer on announced port %s, retrying on %s. Please report "
+                "this with the discovery details - the announced port is "
+                "supposed to be %s on every firmware branch",
+                data[CONF_PORT],
+                DEFAULT_PORT,
+                DEFAULT_PORT,
+            )
+            repository = Repository(
+                hass,
+                data[CONF_HOST],
+                DEFAULT_PORT,
+                data[CONF_OPERATOR_ID],
+                data[CONF_DEVICE_ID],
+            )
+            try:
+                airco_id = await repository.get_airco_id()
+            except (AirconApiError, KeyError, TypeError) as retry_failed:
+                raise CannotConnect(reason=str(retry_failed)) from retry_failed
+            data[CONF_PORT] = DEFAULT_PORT
 
         data[CONF_AIRCO_ID] = airco_id
         if not airco_id:
@@ -148,6 +181,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema: vol.Schema,
             user_input: dict[str, Any] | None = None,
             description_placeholders: dict[str, str] | None = None,
+            allow_port_fallback: bool = False,
     ) -> ConfigFlowResult:
         """Create a new entry"""
         errors: dict[str, str] = {}
@@ -159,7 +193,9 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input[CONF_OPERATOR_ID] = await self._async_fetch_operator_id()
                 user_input[CONF_DEVICE_ID] = await self._async_fetch_device_id()
 
-                info = await self._async_register_airco(self.hass, user_input)
+                info = await self._async_register_airco(
+                    self.hass, user_input, allow_port_fallback=allow_port_fallback
+                )
 
                 data_input = user_input.copy()
                 options_input = {
@@ -247,6 +283,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=data_schema,
             user_input=user_input,
             description_placeholders=description_placeholders,
+            allow_port_fallback=True,
         )
 
     @staticmethod
@@ -267,7 +304,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 field(CONF_NAME, vol.Required, "Airco unknown"): cv.string,
                 field(CONF_HOST, vol.Required): cv.string,
-                field(CONF_PORT, vol.Optional, 51443): cv.port,
+                field(CONF_PORT, vol.Optional, DEFAULT_PORT): cv.port,
                 field(CONF_FORCE_UPDATE, vol.Optional, False): cv.boolean,
             }
         )
@@ -292,7 +329,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 field(CONF_NAME, vol.Required): cv.string,
                 field(CONF_HOST, vol.Required): cv.string,
-                field(CONF_PORT, vol.Optional, 51443): cv.port,
+                field(CONF_PORT, vol.Optional, DEFAULT_PORT): cv.port,
             }
         )
 
