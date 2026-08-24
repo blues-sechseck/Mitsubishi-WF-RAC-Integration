@@ -53,8 +53,8 @@ FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 # the request that took it - the module has no RTC and reads its clock from
 # whatever the asking client stamps (see _async_write_lock_delay). Stamping the
 # request SERVICE_DATA_STAMP_BACKDATE in the past therefore makes it take a lock
-# that expires SERVICE_DATA_STAMP_BACKDATE sooner: at 30s back the lock runs 30
-# of its 60 seconds, leaving the other 30 of every poll free for the app or the
+# that expires SERVICE_DATA_STAMP_BACKDATE sooner: at 55s back the lock runs 5
+# of its 60 seconds, leaving the other 55 of every poll free for the app or the
 # IR remote to get a write in. That is what keeps an enabled operation-data
 # entity from locking the Smart M-Air app out for good (#294) while still asking
 # on every poll. Confirmed against a real module. Detecting the other client
@@ -64,13 +64,21 @@ FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
 # How far into the past the operation-data request is stamped, and so how much
-# of the 60s lock it gives up. Half the lock: a 30s grip is short enough that
-# the app always finds a free window within a poll, long enough that the value
-# still round-trips before it lapses. NOT applied right after one of our own
+# of the 60s lock it gives up. Nearly all of it, because the freed window is
+# not how long the app stays usable - one write getting through is enough to
+# trigger FOREIGN_ACTIVITY_BACKOFF, which then hands the unit over for minutes.
+# It only decides how long someone waits for their *first* tap to land. Half
+# the lock made that a coin flip per attempt (#294); a 5s grip per minute makes
+# it land first try almost every time. Not the full 60s: the stamp is whole
+# seconds and the deadline is compared as timestamp >= expires, so a little
+# margin keeps the request holding a lock it can call its own rather than one
+# that has already lapsed as it arrives. NOT applied right after one of our own
 # real commands - see _async_request_service_data, where backdating would cut
 # that command's own protection window instead of someone else's lock (same
 # deviceId bypasses the lock check, so the request overwrites our own lease).
-SERVICE_DATA_STAMP_BACKDATE = timedelta(seconds=30)
+# That guard matters more at this setting than it did at 30s: a request that
+# slipped past it would leave the command 5 seconds of protection, not 30.
+SERVICE_DATA_STAMP_BACKDATE = timedelta(seconds=55)
 
 # A guard against a second request landing in the same poll, not a skip of
 # alternate polls (the backdate above is what frees the window now). Kept below
