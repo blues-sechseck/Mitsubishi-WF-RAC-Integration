@@ -8,12 +8,13 @@ the offset exactly like the climate entity. Needs the `hass` fixture (Device
 is a DataUpdateCoordinator), hence tests/integration/ rather than tests/unit/.
 """
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
 from homeassistant.components.climate.const import HVACMode
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers.restore_state import RestoredExtraData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.climate import AircoClimate
@@ -29,6 +30,9 @@ from custom_components.mitsubishi_wf_rac.const import (
 )
 from custom_components.mitsubishi_wf_rac.coordinator import Device
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
+from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
+    SERVICE_DATA_COMPRESSOR_FREQ,
+)
 
 
 def _set_options(device: Device, options: dict[str, float]) -> None:
@@ -243,15 +247,75 @@ async def test_target_sensor_matches_climate_entity(device, hvac_mode, override_
     assert sensor._attr_native_value == climate._attr_target_temperature
 
 
-async def test_set_external_temperature_forwards_to_device_in_cool_mode(device):
+@pytest.fixture
+def carrier(device):
+    """An enabled operation-data sensor, which arming an override requires.
+
+    Subscribed the way the sensor platform does it - through the coordinator's
+    context - rather than by patching, so the test exercises the same lookup
+    the request path uses.
+    """
+    remove = device.async_add_listener(lambda: None, SERVICE_DATA_COMPRESSOR_FREQ)
+    yield
+    remove()
+
+
+def _service_entity(device) -> AircoClimate:
+    """A climate entity wired up enough to write its own state.
+
+    The override actions refresh the entity right away rather than waiting for
+    the next poll, so unlike the read-path tests these need hass and an
+    entity_id on the entity.
+    """
+    entity = AircoClimate(device)
+    entity.hass = device.hass
+    entity.entity_id = "climate.test_ac"
+    return entity
+
+
+def _mark_reached_the_unit(device) -> None:
+    """Stand in for a frame that carried the override, without sending one.
+    The write path's own bookkeeping is covered in test_coordinator.py."""
+    device._external_temperature_applied = True
+
+
+async def test_set_external_temperature_forwards_to_device_in_cool_mode(device, carrier):
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
     device.async_set_external_temperature = AsyncMock()
-    entity = AircoClimate(device)
+    entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=18.7)
 
     device.async_set_external_temperature.assert_awaited_once_with(18.7)
+
+
+async def test_set_external_temperature_needs_an_operation_data_sensor(device):
+    # No carrier fixture: nothing subscribes to an operation-data code, so
+    # there is no periodic request to keep the override alive on the unit.
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    device.async_set_external_temperature = AsyncMock()
+    entity = _service_entity(device)
+
+    with pytest.raises(ServiceValidationError):
+        await entity.async_set_external_temperature(temperature=18.7)
+
+    assert entity._external_temperature_override is None
+    device.async_set_external_temperature.assert_not_awaited()
+
+
+async def test_clearing_external_temperature_needs_no_operation_data_sensor(device):
+    # Reverting to the internal sensor is what happens by default, so it must
+    # stay possible even once the carrier is gone.
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    device.async_set_external_temperature = AsyncMock()
+    entity = _service_entity(device)
+
+    await entity.async_set_external_temperature(temperature=None)
+
+    device.async_set_external_temperature.assert_awaited_once_with(None)
 
 
 async def test_update_state_uses_indoor_temp_without_override(device):
@@ -264,25 +328,47 @@ async def test_update_state_uses_indoor_temp_without_override(device):
     assert entity._attr_current_temperature == 23.5
 
 
-async def test_update_state_uses_override_when_set(device):
+async def test_update_state_uses_override_once_the_unit_has_it(device, carrier):
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
-    entity = AircoClimate(device)
+    device.async_set_external_temperature = AsyncMock()
+    entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=20.0)
+    _mark_reached_the_unit(device)
     entity._update_state()
 
     assert entity._attr_current_temperature == 20.0
 
 
-async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
+async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device, carrier):
+    # Armed but not yet carried by any frame - the case after a restart. The
+    # unit is still regulating on its own sensor, so that is what is shown.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
-    entity = AircoClimate(device)
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    device.async_set_external_temperature = AsyncMock()
+    entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=20.0)
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 23.5
+
+
+async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device, carrier):
+    _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
+    device.airco.IndoorTemp = 22.0
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    device.async_set_external_temperature = AsyncMock()
+    entity = _service_entity(device)
+
+    await entity.async_set_external_temperature(temperature=20.0)
+    _mark_reached_the_unit(device)
 
     for operation, mode in (
         (False, HVAC_TRANSLATION[HVACMode.COOL]),
@@ -295,11 +381,11 @@ async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
         assert entity._attr_current_temperature == 23.5
 
 
-async def test_set_external_temperature_none_clears_override(device):
+async def test_set_external_temperature_none_clears_override(device, carrier):
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
     device.async_set_external_temperature = AsyncMock()
-    entity = AircoClimate(device)
+    entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=20.0)
     await entity.async_set_external_temperature(temperature=None)
@@ -308,10 +394,10 @@ async def test_set_external_temperature_none_clears_override(device):
     device.async_set_external_temperature.assert_awaited_with(None)
 
 
-async def test_set_external_temperature_deferred_when_off(device):
+async def test_set_external_temperature_deferred_when_off(device, carrier):
     device.airco.Operation = False
     device.async_set_external_temperature = AsyncMock()
-    entity = AircoClimate(device)
+    entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=20.0)
 
@@ -319,22 +405,38 @@ async def test_set_external_temperature_deferred_when_off(device):
     device.async_set_external_temperature.assert_not_awaited()
 
 
-async def test_restore_state_restores_external_temperature_override(device):
-    device.async_set_external_temperature = AsyncMock()
-    entity = AircoClimate(device)
-    entity.hass = device.hass
-    entity.entity_id = "climate.test_ac"
+def _restoring_entity(device, restored: dict[str, float | str | None]) -> AircoClimate:
+    entity = _service_entity(device)
+    entity.async_get_last_extra_data = AsyncMock(return_value=RestoredExtraData(restored))
+    return entity
 
-    restored_state = SimpleNamespace(
-        attributes={"external_temperature_override": 19.25}
-    )
-    entity.async_get_last_state = AsyncMock(return_value=restored_state)
 
+async def _add_and_remove(entity: AircoClimate) -> None:
     await entity.async_added_to_hass()
     # Added by hand rather than through a platform, so the coordinator
     # listener has to be released the same way - see tests/integration/
     # test_entity.py.
     entity._call_on_remove_callbacks()
 
+
+async def test_restore_state_restores_external_temperature_override(device):
+    entity = _restoring_entity(device, {"external_temperature_override": 19.25})
+
+    await _add_and_remove(entity)
+
     assert entity._external_temperature_override == 19.25
     assert device._external_temperature_override == 19.25
+    # Restored, not sent: nothing has told the unit about it yet.
+    assert device.external_temperature_applied is False
+
+
+@pytest.mark.parametrize("restored", [60.0, -30.0, "unavailable"])
+async def test_restore_state_ignores_an_unusable_override(device, restored):
+    # Out of range is not merely useless: encoding it raises, and it would do
+    # so on every frame, taking the write path down with it after every restart.
+    entity = _restoring_entity(device, {"external_temperature_override": restored})
+
+    await _add_and_remove(entity)
+
+    assert entity._external_temperature_override is None
+    assert device._external_temperature_override is None

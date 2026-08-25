@@ -342,17 +342,33 @@ async def test_set_airco_explicitly_clears_external_temperature_override(device)
     assert raw[5] == 0xFF
 
 
-async def test_set_airco_preserves_explicitly_sent_fields_when_response_lacks_them(device):
+async def test_external_temperature_counts_as_applied_once_a_frame_carried_it(device):
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
-    # Simulate a write response that does not reflect the requested fan speed.
-    device._api.send_airco_command = AsyncMock(
-        return_value=_stats_response(ON_COOL_PAYLOAD)["airconStat"]
-    )
+    device.set_external_temperature_override(18.7)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
 
-    await device.set_airco({AirconCommands.AirFlow: 4})
+    # Arming alone says nothing about what the unit holds.
+    assert device.external_temperature_applied is False
 
-    assert device.airco.AirFlow == 4
+    await device.set_airco({AirconCommands.PresetTemp: 22})
+
+    assert device.external_temperature_applied is True
+
+
+async def test_external_temperature_stops_counting_as_applied_in_fan_only(device):
+    # fan_only sends 0xFF in byte 5, which puts the unit back on its own
+    # sensor - the override stays armed but is no longer in effect.
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.set_airco({AirconCommands.PresetTemp: 22})
+    await device.set_airco({AirconCommands.OperationMode: 3})
+
+    assert device.external_temperature_applied is False
+    assert device.external_temperature_override == 18.7
 
 
 async def test_set_airco_raises_and_logs_on_send_failure(device):

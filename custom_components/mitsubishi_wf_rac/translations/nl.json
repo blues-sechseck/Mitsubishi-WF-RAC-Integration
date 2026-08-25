@@ -61,6 +61,9 @@
     "home_leave_mode_status_unknown": {
       "message": "De Home Leave Mode waarden zijn nog niet bekend. Roep eerst één keer de actie \"Home Leave Mode status opvragen\" van de climate-entiteit aan - het apparaat levert deze waarden niet bij een gewone poll."
     },
+    "external_temperature_needs_service_data": {
+      "message": "Schakel eerst minstens één bedrijfsdatasensor in: de periodieke aanvraag daarvan brengt de externe temperatuur naar het apparaat."
+    },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} is geen totaal-energieverbruiksensor."
     }

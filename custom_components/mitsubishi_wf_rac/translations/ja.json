@@ -61,6 +61,9 @@
     "home_leave_mode_status_unknown": {
       "message": "Home Leave Modeの値はまだ不明です。エアコンエンティティの「Home Leave Modeステータスを要求」アクションを一度実行してください。通常のポーリングにはこの値は含まれません。"
     },
+    "external_temperature_needs_service_data": {
+      "message": "先に運転データセンサーを1つ以上有効にしてください。外部温度を機器に届けるのは、そのセンサーの定期リクエストです。"
+    },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} は積算電力量センサーではありません。"
     }

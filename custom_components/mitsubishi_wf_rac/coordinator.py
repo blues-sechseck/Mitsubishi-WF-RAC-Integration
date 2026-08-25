@@ -264,6 +264,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._foreign_activity_since: datetime | None = None
         self._service_data_task: asyncio.Task[None] | None = None
         self._external_temperature_override: float | None = None
+        self._external_temperature_applied = False
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
         # an older version, and refusing to set up over it would be worse than
@@ -321,8 +322,33 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
         Used by the climate entity when restoring persisted state; the value
         is re-armed into future commands without immediately issuing a new one.
+        Which is exactly why it counts as unapplied until a frame has carried
+        it: a restored value says what we intend to send, not what the unit
+        currently regulates on.
         """
         self._external_temperature_override = value
+        self._external_temperature_applied = False
+
+    @property
+    def external_temperature_applied(self) -> bool:
+        """Whether a frame carrying the override has actually reached the unit
+        since it was armed.
+
+        False after a restart or reload until the next command or operation-data
+        request goes out, and again whenever a frame writes 0xFF instead (any
+        command sent while off or in fan_only does). Best effort: a command from
+        another controller can revert byte 5 without us seeing it.
+        """
+        return self._external_temperature_applied
+
+    def subscribed_service_data_codes(self) -> tuple[int, ...]:
+        """Operation-data codes currently subscribed by entities, sorted.
+
+        Empty when no operation-data sensor is enabled - which means no
+        periodic request goes out, and with it no carrier for the external
+        temperature override between commands.
+        """
+        return tuple(sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES)))
 
     async def update(self) -> bool:
         """Update the device information from API.
@@ -602,9 +628,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """Kick off a background request for active operation-data segments
         when due (see SERVICE_DATA_MIN_SPACING).
         """
-        service_data_codes = tuple(
-            sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES))
-        )
+        service_data_codes = self.subscribed_service_data_codes()
         if not service_data_codes:
             return
         if self.foreign_activity:
@@ -662,11 +686,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         task that deliberately swallows its errors.
         """
         await asyncio.sleep(SERVICE_DATA_REQUEST_OFFSET.total_seconds())
-        # The state this is built from no longer matters: a status request
+        # The state this is built from is almost irrelevant: a status request
         # carries no set-bits, so the unit applies none of it (see
-        # RacParser.status_request_to_byte). The offset stays because it is
-        # about spacing requests, not about what they contain - a second
-        # request too soon after the poll is what the module refuses.
+        # RacParser.status_request_to_byte). Byte 5 is the one exception, since
+        # it has no set-bit to leave out - an active external temperature
+        # override rides along here, and that is the point: this is the frame
+        # that keeps it alive between commands. Note that this also makes the
+        # request a write in the strict sense, which is what the backdated
+        # timestamp below trades away part of the lock for. The offset stays
+        # because it is about spacing requests, not about what they contain -
+        # a second request too soon after the poll is what the module refuses.
         params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
         timestamp_offset = -round(self._service_data_stamp_backdate().total_seconds())
         for attempt in (1, 2):
@@ -927,6 +956,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self._carry_forward_home_leave_mode(new_airco)
                 self._carry_forward_service_data(new_airco)
                 self._airco = new_airco
+                # After the write, not before: until the unit has answered,
+                # nothing says it holds the value (see
+                # external_temperature_applied).
+                self._external_temperature_applied = (
+                    self._parser.carries_external_temperature(airco_stat)
+                )
             except (AirconApiError, KeyError, TypeError, ValueError) as ex:
                 if log_failure:
                     _LOGGER.warning("Could not send airco data: %s", str(ex))

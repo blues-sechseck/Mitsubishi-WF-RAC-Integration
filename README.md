@@ -272,18 +272,6 @@ device before saving it.
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 
-## Services
-
-The climate entity exposes the following entity services (use as `mitsubishi_wf_rac.<service>`).
-
-| Service | Fields | Description |
-|---|---|---|
-| `set_horizontal_swing_mode` | `swing_mode` | Set the horizontal (left/right) louver position. |
-| `set_vertical_swing_mode` | `swing_mode` | Set the vertical (up/down) louver position. |
-| `request_home_leave_mode_status` | — | Ask the unit to report its Home Leave Mode thresholds/airflow (only on supporting models). |
-| `set_home_leave_mode` | `temp_rule_cooling`, `temp_setting_cooling`, `air_flow_cooling`, `temp_rule_heating`, `temp_setting_heating`, `air_flow_heating` | Write new Home Leave Mode thresholds/airflow (only on supporting models). |
-| `set_external_temperature` | `temperature` (optional) | Provide an external room temperature to the AC, overriding its own indoor sensor. Omit `temperature` or pass `null` to revert to the internal sensor. The value is persisted across restarts and reloaded with every ordinary command. |
-
 ### Target Temp. Offset sign convention
 
 The unit's internal temperature sensor is a **return-air sensor built into the indoor unit**, not a sensor sitting where you actually care about the temperature. It reads a biased version of the room - but which direction, and by how much, depends on your installation, not on cooling vs. heating alone:
@@ -296,6 +284,29 @@ There's no way to predict which case applies to your unit from its mode alone - 
 Target Temp. Offset corrects for this bias: `true_room ≈ PresetTemp + offset`. To land the *room* on the temperature you actually requested, the setpoint sent to the unit is `commanded PresetTemp = requested − offset`. Concretely: **a negative offset raises the setpoint actually sent to the unit** (a positive offset lowers it).
 
 **Measuring it:** place a reference sensor away from the unit's own airflow, then average `current_temperature` (the Indoor Temperature sensor) minus that reference, split by the climate entity's `hvac_action`. Use the average while `cooling` (or `heating`) as your starting point for Target Temp. Offset (Cooling) / (Heating) - that's the state the thermostat loop actually regulates in, and it's not interchangeable with `idle` or `off`: on the installation above, the same unit's average bias moved by more than a kelvin between `cooling` and `off`. This is also why no single value is correct for both cool and heat at once, and why the offset isn't a fixed mounting/calibration error you can look up - it calibrates your installation's operating regime, and only a measurement of *your* unit, in the state it's actually controlling in, gets it right.
+
+# Services
+
+The climate entity exposes the following entity services (use as `mitsubishi_wf_rac.<service>`).
+
+| Service | Fields | Description |
+|---|---|---|
+| `set_horizontal_swing_mode` | `swing_mode` | Set the horizontal (left/right) louver position. |
+| `set_vertical_swing_mode` | `swing_mode` | Set the vertical (up/down) louver position. |
+| `request_home_leave_mode_status` | — | Ask the unit to report its Home Leave Mode thresholds/airflow (only on supporting models). |
+| `set_home_leave_mode` | `temp_rule_cooling`, `temp_setting_cooling`, `air_flow_cooling`, `temp_rule_heating`, `temp_setting_heating`, `air_flow_heating` | Write new Home Leave Mode thresholds/airflow (only on supporting models). |
+| `set_external_temperature` | `temperature` (optional) | Provide an external room temperature to the AC, overriding its own indoor sensor. Omit `temperature` or pass `null` to revert to the internal sensor. See below. |
+
+## External temperature override
+
+`set_external_temperature` hands the unit a room temperature measured somewhere you actually care about, and it regulates on that instead of its own return-air sensor.
+
+The value is not a setting the unit stores under a flag of its own: it rides along in every frame this integration sends, and any frame that leaves it out puts the unit back on its internal sensor. Two things follow.
+
+- **At least one operation-data sensor has to be enabled.** That sensor's periodic request is what carries the value between commands; without it the override would survive only until the next thing that talks to the unit. The action refuses to arm an override while no such sensor exists. Clearing one always works.
+- **While the unit is off or in `fan_only`, nothing is sent.** Neither mode regulates on a room temperature. The override stays armed and goes out again by itself once the unit is back in a mode that uses it.
+
+The override survives a restart and a reload. It is re-armed, not re-sent: after a restart the unit is still on whatever it last received until the next frame goes out, which is why the climate entity's `current_temperature` keeps showing the unit's own reading until then, and shows the injected value afterwards. The Indoor Temperature sensor always shows the unit's own reading - the two are meant to differ while an override is in effect.
 
 # Known limitations
 

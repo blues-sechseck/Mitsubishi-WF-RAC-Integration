@@ -61,6 +61,9 @@
     "home_leave_mode_status_unknown": {
       "message": "Die Home-Leave-Mode-Werte sind noch nicht bekannt. Rufen Sie zuerst einmal die Aktion \"Home-Leave-Mode-Status abfragen\" der Klima-Entität auf - das Gerät liefert diese Werte nicht bei einer normalen Abfrage."
     },
+    "external_temperature_needs_service_data": {
+      "message": "Aktivieren Sie zuerst mindestens einen Betriebsdaten-Sensor: Dessen regelmäßige Abfrage trägt die externe Temperatur zum Gerät."
+    },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} ist kein Energieverbrauch-Gesamt-Sensor."
     }

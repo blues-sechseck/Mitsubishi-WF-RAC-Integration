@@ -166,6 +166,15 @@ def _empty_stat_bytes() -> bytearray:
     return bytearray([0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
 
+# Byte 5 carries the room temperature as round(T * 4) + 61, with 0xFF reserved
+# for "use the internal sensor" - so 0x00..0xFE is the whole encodable span.
+# Anything outside it makes encode_external_temperature() raise, which would
+# take down the write path on every single frame, so the range is enforced
+# wherever a value enters the integration (service schema, restored state).
+EXTERNAL_TEMPERATURE_MIN: Final = -15.25
+EXTERNAL_TEMPERATURE_MAX: Final = 48.25
+
+
 def is_external_temperature_mode(operation: bool, operation_mode: int) -> bool:
     """Return whether the unit is in a mode that can use an external
     temperature override.
@@ -203,13 +212,33 @@ class RacParser:
         that actually regulates temperature.
 
         Off and fan_only do not use a room-temperature input for control, so
-        writing byte 5 there is at best pointless and at worst collides with
-        other protocol features that share the frame (e.g. self-clean bits on
-        ModelNr 1/2 units). The override is kept integration-side and re-applied
-        automatically once the unit switches back to a temperature-controlling
-        mode.
+        there is nothing for the value to do there. Note what "don't write it"
+        means on this byte: it has no set-bit of its own, so the frame carries
+        0xFF instead and the unit actively falls back to its internal sensor -
+        skipping the injection is a write, not an omission. The override is
+        kept integration-side and re-applied automatically once the unit
+        switches back to a temperature-controlling mode.
+
+        This is a mode decision, not a collision one: the self-clean bits sit
+        in bytes 10 and 12 and never touch byte 5.
         """
         return is_external_temperature_mode(aircon_stat.Operation, aircon_stat.OperationMode)
+
+    @classmethod
+    def carries_external_temperature(cls, aircon_stat: AirconStat) -> bool:
+        """Whether the frame built from this state writes the override into
+        byte 5 - i.e. whether the unit ends up holding it.
+
+        Status requests carry it unconditionally (they exist to keep it
+        alive); ordinary commands only in a temperature-controlling mode.
+        The coordinator uses this to tell an armed override from one the unit
+        has actually been told about.
+        """
+        if aircon_stat.ExternalTemperature is None:
+            return False
+        return cls._is_status_request(aircon_stat) or cls._should_encode_external_temperature(
+            aircon_stat
+        )
 
     def to_base64(self, aircon_stat: AirconStat) -> str:
         """Convert AirconStat to Base64 string."""
