@@ -307,7 +307,7 @@ async def test_set_airco_includes_stored_external_temperature_override(device):
 
     captured = {}
 
-    async def _capture_and_echo(airco_id, command):
+    async def _capture_and_echo(airco_id, command, **_kwargs):
         captured["command"] = command
         return await _echo_send_airco_command(airco_id, command)
 
@@ -327,7 +327,7 @@ async def test_set_airco_explicitly_clears_external_temperature_override(device)
 
     captured = {}
 
-    async def _capture_and_echo(airco_id, command):
+    async def _capture_and_echo(airco_id, command, **_kwargs):
         captured["command"] = command
         return await _echo_send_airco_command(airco_id, command)
 

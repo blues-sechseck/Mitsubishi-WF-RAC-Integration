@@ -139,6 +139,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         super().__init__(device)
         self._attr_name = device.device_name
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-climate"
+        self._update_state()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -162,7 +163,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         is recorded by the state recorder and restored after a restart or
         config-entry reload.
         """
-        attrs = super().extra_state_attributes or {}
+        attrs = dict(super().extra_state_attributes or {})
         if self._external_temperature_override is not None:
             attrs["external_temperature_override"] = self._external_temperature_override
         return attrs

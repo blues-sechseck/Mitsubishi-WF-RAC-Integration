@@ -8,6 +8,7 @@ the offset exactly like the climate entity. Needs the `hass` fixture (Device
 is a DataUpdateCoordinator), hence tests/integration/ rather than tests/unit/.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -254,7 +255,7 @@ async def test_set_external_temperature_forwards_to_device_in_cool_mode(device):
 
 
 async def test_update_state_uses_indoor_temp_without_override(device):
-    device.config_entry.options[CONF_INDOOR_OFFSET] = 1.5
+    _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     entity = AircoClimate(device)
 
@@ -264,7 +265,7 @@ async def test_update_state_uses_indoor_temp_without_override(device):
 
 
 async def test_update_state_uses_override_when_set(device):
-    device.config_entry.options[CONF_INDOOR_OFFSET] = 1.5
+    _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
@@ -277,7 +278,7 @@ async def test_update_state_uses_override_when_set(device):
 
 
 async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
-    device.config_entry.options[CONF_INDOOR_OFFSET] = 1.5
+    _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     entity = AircoClimate(device)
 
@@ -330,6 +331,10 @@ async def test_restore_state_restores_external_temperature_override(device):
     entity.async_get_last_state = AsyncMock(return_value=restored_state)
 
     await entity.async_added_to_hass()
+    # Added by hand rather than through a platform, so the coordinator
+    # listener has to be released the same way - see tests/integration/
+    # test_entity.py.
+    entity._call_on_remove_callbacks()
 
     assert entity._external_temperature_override == 19.25
     assert device._external_temperature_override == 19.25
