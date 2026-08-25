@@ -333,9 +333,8 @@ async def test_set_airco_explicitly_clears_external_temperature_override(device)
 
     device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
 
-    await device.set_airco({AirconCommands.ExternalTemperature: None})
-
-    assert device._external_temperature_override is None
+    device.set_external_temperature_override(None)
+    await device.set_airco({AirconCommands.PresetTemp: 22})
 
     raw = base64.b64decode(captured["command"])
 

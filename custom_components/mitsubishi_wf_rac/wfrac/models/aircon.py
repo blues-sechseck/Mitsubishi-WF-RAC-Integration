@@ -18,7 +18,6 @@ class AirconCommands(StrEnum):
     Entrust = "Entrust"
     IsSelfCleanOperation = "IsSelfCleanOperation"
     IsSelfCleanReset = "IsSelfCleanReset"
-    ExternalTemperature = "ExternalTemperature"
     # CoolHotJudge = ''
 
     # Vacant = ''

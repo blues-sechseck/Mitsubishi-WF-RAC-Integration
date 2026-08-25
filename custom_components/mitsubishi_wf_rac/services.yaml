@@ -185,11 +185,12 @@ set_home_leave_mode:
 set_external_temperature:
   name: Set external temperature override
   description: >-
-    Sends an external room temperature override to the AC, which then regulates
-    on it instead of its own indoor sensor. Needs at least one operation data
-    sensor enabled: that sensor's periodic request is what keeps the value
-    alive on the unit. Omit the temperature to revert to the internal room
-    sensor.
+    Arms an external room temperature for the AC to regulate on instead of its
+    own indoor sensor. The value is not sent by this action; it rides along on
+    the next frame that goes out anyway, so it takes effect within a minute.
+    Needs at least one operation data sensor enabled, since that sensor's
+    periodic request is what carries it. Omit the temperature to revert to the
+    internal room sensor.
   target:
     entity:
       integration: mitsubishi_wf_rac

@@ -382,20 +382,26 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             )
 
     async def async_set_external_temperature(self, temperature: float | None = None) -> None:
-        """Set the external room temperature override or revert to the internal sensor.
+        """Arm an external room temperature override, or revert to the unit's
+        internal sensor. The valid range is enforced by the service schema.
 
-        The valid range is enforced by the service schema. The value is stored
-        integration-side so it survives restarts and reloads. It is only sent
-        to the unit when the unit is in a temperature-controlling mode; in
-        off or fan_only the command is deferred and re-armed automatically
-        once the unit switches back to a mode that can use it.
+        Arming only: nothing is sent from here. The value rides along on the
+        next frame that goes out anyway - the operation-data request once a
+        cycle, or any command in between - and the same is true of clearing
+        it, since a frame without an override carries 0xFF and puts the unit
+        back on its own sensor.
 
-        Arming requires at least one operation-data sensor to be enabled.
-        Byte 5 has no set-bit, so any frame that leaves it at 0xFF sends the
-        unit back to its internal sensor: without the periodic operation-data
-        request to carry the value between commands, the override would last
-        until the next thing that talks to the unit and then vanish silently.
-        Clearing it is always allowed - that direction needs no carrier.
+        A command frame of this action's own would cost more than the wait.
+        Byte 5 has no set-bit, so it cannot be written on its own: the frame
+        carrying it also re-asserts power, mode, fan speed, setpoint and both
+        vane axes, which is what ends a running self-clean cycle. It would
+        also take the unit's 60-second write lock, and a source sensor
+        reporting every minute would hold that lock permanently, locking the
+        official app out for as long as the override is in use.
+
+        Which is why arming requires at least one operation-data sensor: its
+        periodic request is the frame that carries the value. Clearing needs
+        no carrier and is always allowed.
         """
         if temperature is not None and not self._device.subscribed_service_data_codes():
             raise ServiceValidationError(
@@ -406,12 +412,9 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             )
         self._external_temperature_override = temperature
         self._device.set_external_temperature_override(temperature)
-        airco = self._device.airco
-        if is_external_temperature_mode(airco.Operation, airco.OperationMode):
-            await self._device.async_set_external_temperature(temperature)
-        # The command path updates entities only once its response lands, and
-        # a deferred override sends nothing at all - so refresh here, or the
-        # attribute stays stale until the next poll.
+        # Nothing else refreshes the entity here - no command goes out, so
+        # there is no response to update from, and the next poll is up to a
+        # minute away.
         self._update_state()
         self.async_write_ha_state()
 
