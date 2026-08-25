@@ -59,6 +59,22 @@ RESULT_CODES: dict[int, str] = {
     429: "too many requests",
 }
 
+# getAirconStat touches neither the write lock nor the account table, so the
+# generic wording above sends a reader hunting for a lock that was never
+# involved. Its result 1 means only that the module had no fresh data from the
+# indoor unit - established in the module firmware.
+READ_RESULT_CODES: dict[int, str] = {
+    1: "the module had no fresh data from the indoor unit",
+}
+
+
+def describe_result(command: str, code: int) -> str:
+    """What a `result` code means for the command that returned it."""
+    if command == "getAirconStat" and code in READ_RESULT_CODES:
+        return READ_RESULT_CODES[code]
+    return RESULT_CODES.get(code, "meaning unknown")
+
+
 # setAirconStat codes that mean "declined, try again shortly" rather than
 # "your account is not known here". See RESULT_CODES above and
 # AirconWriteRefusedError.
@@ -157,6 +173,10 @@ class Repository:
         self._next_request_after = datetime.now()
         # Last refusal reported per command, see _report_result_code().
         self._refused_commands: dict[str, int] = {}
+        # Every non-zero result ever seen, per command. The log stays quiet
+        # about refusals the caller recovers from; these counts are what a
+        # diagnostics download carries instead.
+        self._result_codes: dict[str, dict[str, int]] = {}
         # Previously-discovered communication method (http/https), if the caller
         # persisted one from a prior run - skips rediscovery below. Keep it as
         # the preferred method as well: if a transport outage invalidates the
@@ -339,18 +359,27 @@ class Repository:
         return json_response
 
     def _report_result_code(self, command: str, response: dict[str, Any]) -> None:
-        """Say so when the unit answers HTTP 200 and still refuses the command.
+        """Record that the unit answered HTTP 200 and still refused the command.
 
         Nothing here changes what the caller does with the response. Which
         firmware reports which code on success over the local API is not
         established, and a command wrongly treated as failed would be worse
-        than the silent failure this makes visible - reports of "nothing
-        happens, and nothing in the log" currently have nothing to go on at
-        all.
+        than the silent failure this records.
 
-        One line per command entering a failing state, like everywhere else in
-        this integration: a unit that answers the same refusal every minute
-        would otherwise fill the log with a message the user has already read.
+        Debug, not warning: this layer sees only "the unit said no" and cannot
+        know whether that mattered. Most refusals here are a transient account
+        lease lapsing, which the caller's retry clears within seconds and the
+        user can do nothing about - a warning for those is noise in an
+        otherwise healthy setup. Escalation belongs to the caller, which knows
+        whether the request eventually got through (see
+        DeviceCoordinator.set_airco and _async_request_service_data).
+
+        The counts survive in `result_codes` for the diagnostics download, so
+        going quiet does not mean losing the evidence.
+
+        One line per command entering a failing state: a unit that answers the
+        same refusal every minute would otherwise repeat itself endlessly even
+        at debug level.
         """
         raw = response.get("result")
         if raw is None:
@@ -362,17 +391,23 @@ class Repository:
         if code == 0:
             self._refused_commands.pop(command, None)
             return
+        counts = self._result_codes.setdefault(command, {})
+        counts[str(code)] = counts.get(str(code), 0) + 1
         if self._refused_commands.get(command) == code:
-            _LOGGER.debug("Aircon still answers %r with result %s", command, code)
             return
         self._refused_commands[command] = code
-        _LOGGER.warning(
+        _LOGGER.debug(
             "Aircon answered %r with result %s (%s) - the request was accepted "
             "but not carried out",
             command,
             code,
-            RESULT_CODES.get(code, "meaning unknown"),
+            describe_result(command, code),
         )
+
+    @property
+    def result_codes(self) -> dict[str, dict[str, int]]:
+        """How often each non-zero `result` code came back, per command."""
+        return {command: dict(codes) for command, codes in self._result_codes.items()}
 
     async def get_info(self) -> dict[str, Any]:
         """Simple command to get aircon details"""
@@ -440,11 +475,11 @@ class Repository:
         if code in WRITE_REFUSED_CODES:
             raise AirconWriteRefusedError(
                 f"Aircon refused setAirconStat with result {code} "
-                f"({RESULT_CODES.get(code, 'meaning unknown')})"
+                f"({describe_result('setAirconStat', code)})"
             )
         if code == 2:
             raise AirconRegistrationError(
                 f"Aircon refused setAirconStat with result {code} "
-                f"({RESULT_CODES.get(code, 'meaning unknown')})"
+                f"({describe_result('setAirconStat', code)})"
             )
         return cast(str, result["contents"]["airconStat"])

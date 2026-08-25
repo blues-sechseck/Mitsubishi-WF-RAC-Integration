@@ -97,6 +97,8 @@ This integration creates one device per airco with the following entities.
 
 The diagnostic operation-data sensors below are disabled by default. Enabling a sensor makes the integration request its value; leaving all of them disabled makes no extra request at all.
 
+Any one of them switches the request on, so pick one that always has something to show. **Indoor Coil Temperature** is the safest choice: it is per indoor unit and reads a temperature whatever the system is doing. **Compressor Frequency** is the more telling value where it works, but reads a constant 0 on older firmware ([#207](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/207)). **Hot Gas Temperature** is a poor first choice: it reads unknown whenever the outdoor unit is idle, which looks like a broken sensor rather than a resting one.
+
 | Entity | Values | Description |
 |---|---|---|
 | Indoor Temperature | °C | Same value as the climate entity's `current_temperature`, exposed as its own sensor. |

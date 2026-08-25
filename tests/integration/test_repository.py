@@ -221,19 +221,31 @@ async def test_refusal_in_the_result_field_is_reported_once(repository, caplog):
         ]
     )
 
+    def _reports():
+        return [
+            r for r in caplog.records
+            if "was accepted but not carried out" in r.message
+        ]
+
     # The caller still gets the response: nothing about the control flow moves.
     assert await repo.get_aircon_stats("airco-id") == {"airconStat": "AAA="}
     await repo.get_aircon_stats("airco-id")
 
-    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
-    assert len(warnings) == 1
-    assert "result 12 (refused - another client holds the write lock" in warnings[0].message
+    assert len(_reports()) == 1
+    assert "result 12 (refused - another client holds the write lock" in _reports()[0].message
+    # Debug, not warning: this layer cannot tell whether the refusal mattered,
+    # and the common ones clear by themselves. See _report_result_code.
+    assert {r.levelname for r in _reports()} == {"DEBUG"}
 
     # A success clears it, so a later refusal is worth saying again.
     await repo.get_aircon_stats("airco-id")
     await repo.get_aircon_stats("airco-id")
 
-    assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 2
+    assert len(_reports()) == 2
+
+    # Every refusal is counted even though only two were logged - this is what
+    # a diagnostics download carries in place of the log lines.
+    assert repo.result_codes == {"getAirconStat": {"12": 3}}
 
 
 async def test_send_airco_command_raises_on_registration_result_code(repository):
@@ -279,13 +291,30 @@ async def test_send_airco_command_does_not_raise_on_unrelated_result_code(reposi
 
 
 async def test_unknown_result_code_is_still_reported(repository, caplog):
+    caplog.set_level("DEBUG", logger="custom_components.mitsubishi_wf_rac.wfrac.repository")
     repo, _ = repository([_FakeResponse(200, json.dumps({"result": 77, "contents": {}}))])
 
     await repo.get_aircon_stats("airco-id")
 
-    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
-    assert len(warnings) == 1
-    assert "result 77 (meaning unknown)" in warnings[0].message
+    reports = [r for r in caplog.records if "was accepted but not carried out" in r.message]
+    assert len(reports) == 1
+    assert "result 77 (meaning unknown)" in reports[0].message
+
+
+async def test_read_refusal_does_not_blame_the_write_lock(repository, caplog):
+    """getAirconStat touches neither the write lock nor the account table, so
+    its result 1 must not be described with the setAirconStat wording - that
+    reading sent a tester chasing a lock that was never involved (#294).
+    """
+    caplog.set_level("DEBUG", logger="custom_components.mitsubishi_wf_rac.wfrac.repository")
+    repo, _ = repository([_FakeResponse(200, json.dumps({"result": 1, "contents": {}}))])
+
+    await repo.get_aircon_stats("airco-id")
+
+    reports = [r for r in caplog.records if "was accepted but not carried out" in r.message]
+    assert len(reports) == 1
+    assert "no fresh data from the indoor unit" in reports[0].message
+    assert "write lock" not in reports[0].message
 
 
 async def test_timestamp_offset_backdates_the_request_stamp(repository):
