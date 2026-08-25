@@ -746,6 +746,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         warning about a module behaviour no one can act on. Running out of
         values is the part a user can see, and it is worth exactly one line -
         with a matching one when they come back.
+
+        Every occurrence measured so far coincided with network maintenance
+        (a controller update, an access point restarting), not with anything
+        the unit did, so the message points there rather than at the air
+        conditioner.
         """
         if self._service_data_expired:
             return
@@ -758,7 +763,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._service_data_expired = True
         _LOGGER.warning(
             "No operation data from [%s] for over %.0fs; its compressor, "
-            "current, temperature and EEV sensors now report unknown",
+            "current, temperature and EEV sensors now report unknown. A "
+            "network interruption is the usual cause - check whether other "
+            "devices dropped out at the same time",
             self.device_name,
             SERVICE_DATA_MAX_AGE.total_seconds(),
         )
