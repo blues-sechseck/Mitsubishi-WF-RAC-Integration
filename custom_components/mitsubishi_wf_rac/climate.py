@@ -399,17 +399,11 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         reporting every minute would hold that lock permanently, locking the
         official app out for as long as the override is in use.
 
-        Which is why arming requires at least one operation-data sensor: its
-        periodic request is the frame that carries the value. Clearing needs
-        no carrier and is always allowed.
+        The frame it rides on is the operation-data request, which the
+        coordinator starts asking for while an override is armed - the
+        override subscribes to a segment itself, exactly like an enabled
+        diagnostic sensor does (see Device._sync_external_temperature_carrier).
         """
-        if temperature is not None and not self._device.subscribed_service_data_codes():
-            raise ServiceValidationError(
-                "The external temperature override needs at least one operation "
-                "data sensor enabled to carry it",
-                translation_domain=DOMAIN,
-                translation_key="external_temperature_needs_service_data",
-            )
         self._external_temperature_override = temperature
         self._device.set_external_temperature_override(temperature)
         # Nothing else refreshes the entity here - no command goes out, so

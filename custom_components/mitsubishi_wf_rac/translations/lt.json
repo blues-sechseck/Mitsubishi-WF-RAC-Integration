@@ -61,9 +61,6 @@
     "home_leave_mode_status_unknown": {
       "message": "Home Leave Mode reikšmės dar nežinomos. Pirmiausia kartą iškvieskite kondicionieriaus veiksmą \"Request Home Leave Mode status\" - įprasta apklausa šių reikšmių negrąžina."
     },
-    "external_temperature_needs_service_data": {
-      "message": "Pirmiausia įjunkite bent vieną veikimo duomenų jutiklį: jo periodinė užklausa perduoda išorinę temperatūrą įrenginiui."
-    },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} nėra bendro energijos suvartojimo jutiklis."
     }

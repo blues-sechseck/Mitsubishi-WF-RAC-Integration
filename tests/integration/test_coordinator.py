@@ -120,7 +120,8 @@ async def device(hass):
         swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
-    return dev
+    yield dev
+    await dev.async_shutdown()
 
 
 # --- update() -------------------------------------------------------------

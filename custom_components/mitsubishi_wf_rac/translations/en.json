@@ -61,9 +61,6 @@
     "home_leave_mode_status_unknown": {
       "message": "Home Leave Mode values are unknown yet. Call the climate entity's \"Request Home Leave Mode status\" action once first - the unit doesn't include them in a plain poll."
     },
-    "external_temperature_needs_service_data": {
-      "message": "Enable at least one operation-data sensor first: its periodic request is what carries the external temperature to the unit."
-    },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} is not an Energy Usage Total sensor."
     }

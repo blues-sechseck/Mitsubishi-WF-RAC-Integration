@@ -177,6 +177,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
     # Unload entities for this entry/device.
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
+    # The coordinator can hold a listener of its own (the carrier for an armed
+    # external temperature override), which would outlive the entry and keep
+    # its refresh timer running.
+    await entry.runtime_data.device.async_shutdown()
+
     if unload_ok:
         _LOGGER.info("Unloaded entry for device [%s]", entry.data[CONF_NAME])
     else:

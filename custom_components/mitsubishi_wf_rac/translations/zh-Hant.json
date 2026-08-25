@@ -61,9 +61,6 @@
     "home_leave_mode_status_unknown": {
       "message": "離家模式的數值尚未知曉。請先呼叫一次空調實體的「請求離家模式狀態」操作 —— 常規輪詢不包含這些數值。"
     },
-    "external_temperature_needs_service_data": {
-      "message": "請先啟用至少一個運轉資料感測器：外部溫度是靠它的定期請求送到空調的。"
-    },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} 不是累計用電量感測器。"
     }

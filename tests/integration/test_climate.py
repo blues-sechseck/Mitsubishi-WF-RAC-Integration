@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from homeassistant.components.climate.const import HVACMode
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.restore_state import RestoredExtraData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -31,7 +30,7 @@ from custom_components.mitsubishi_wf_rac.const import (
 from custom_components.mitsubishi_wf_rac.coordinator import Device
 from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
 from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
-    SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_INDOOR_COIL_RAW,
 )
 
 
@@ -63,7 +62,8 @@ async def device(hass):
         swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
-    return dev
+    yield dev
+    await dev.async_shutdown()
 
 
 async def test_set_temperature_subtracts_target_offset(device):
@@ -247,19 +247,6 @@ async def test_target_sensor_matches_climate_entity(device, hvac_mode, override_
     assert sensor._attr_native_value == climate._attr_target_temperature
 
 
-@pytest.fixture
-def carrier(device):
-    """An enabled operation-data sensor, which arming an override requires.
-
-    Subscribed the way the sensor platform does it - through the coordinator's
-    context - rather than by patching, so the test exercises the same lookup
-    the request path uses.
-    """
-    remove = device.async_add_listener(lambda: None, SERVICE_DATA_COMPRESSOR_FREQ)
-    yield
-    remove()
-
-
 def _service_entity(device) -> AircoClimate:
     """A climate entity wired up enough to write its own state.
 
@@ -279,7 +266,7 @@ def _mark_reached_the_unit(device) -> None:
     device._external_temperature_applied = True
 
 
-async def test_set_external_temperature_arms_without_sending_anything(device, carrier):
+async def test_set_external_temperature_arms_without_sending_anything(device):
     # The action never sends a frame of its own, not even in a mode that could
     # use the value right away: byte 5 cannot be written on its own, so the
     # frame would re-assert every other setting and take the write lock for a
@@ -296,30 +283,18 @@ async def test_set_external_temperature_arms_without_sending_anything(device, ca
     device.async_queue_command.assert_not_awaited()
 
 
-async def test_set_external_temperature_needs_an_operation_data_sensor(device):
-    # No carrier fixture: nothing subscribes to an operation-data code, so
-    # there is no periodic request to keep the override alive on the unit.
-    device.airco.Operation = True
-    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+async def test_arming_an_override_switches_the_operation_data_request_on(device):
+    # No diagnostic sensor is enabled here: the override subscribes on its own
+    # behalf, so the request that carries it starts going out.
     entity = _service_entity(device)
 
-    with pytest.raises(ServiceValidationError):
-        await entity.async_set_external_temperature(temperature=18.7)
+    await entity.async_set_external_temperature(temperature=18.7)
 
-    assert entity._external_temperature_override is None
-    assert device.external_temperature_override is None
-
-
-async def test_clearing_external_temperature_needs_no_operation_data_sensor(device):
-    # Reverting to the internal sensor is what happens by default, so it must
-    # stay possible even once the carrier is gone.
-    device.airco.Operation = True
-    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
-    entity = _service_entity(device)
+    assert SERVICE_DATA_INDOOR_COIL_RAW in set(device.async_contexts())
 
     await entity.async_set_external_temperature(temperature=None)
 
-    assert device.external_temperature_override is None
+    assert SERVICE_DATA_INDOOR_COIL_RAW not in set(device.async_contexts())
 
 
 async def test_update_state_uses_indoor_temp_without_override(device):
@@ -332,7 +307,7 @@ async def test_update_state_uses_indoor_temp_without_override(device):
     assert entity._attr_current_temperature == 23.5
 
 
-async def test_update_state_uses_override_once_the_unit_has_it(device, carrier):
+async def test_update_state_uses_override_once_the_unit_has_it(device):
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
@@ -346,7 +321,7 @@ async def test_update_state_uses_override_once_the_unit_has_it(device, carrier):
     assert entity._attr_current_temperature == 20.0
 
 
-async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device, carrier):
+async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device):
     # Armed but not yet carried by any frame - the case after a restart. The
     # unit is still regulating on its own sensor, so that is what is shown.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
@@ -361,7 +336,7 @@ async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device,
     assert entity._attr_current_temperature == 23.5
 
 
-async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device, carrier):
+async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
@@ -382,7 +357,7 @@ async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device, ca
         assert entity._attr_current_temperature == 23.5
 
 
-async def test_set_external_temperature_none_clears_override(device, carrier):
+async def test_set_external_temperature_none_clears_override(device):
     # Clearing needs no frame of its own either: the next one to go out
     # carries 0xFF, which is what puts the unit back on its own sensor.
     device.airco.Operation = True
@@ -398,7 +373,7 @@ async def test_set_external_temperature_none_clears_override(device, carrier):
     device.async_queue_command.assert_not_awaited()
 
 
-async def test_set_external_temperature_arms_while_the_unit_is_off(device, carrier):
+async def test_set_external_temperature_arms_while_the_unit_is_off(device):
     # Nothing to defer: the value sits armed and goes out with whatever frame
     # comes next, whether or not the unit can use it yet.
     device.airco.Operation = False

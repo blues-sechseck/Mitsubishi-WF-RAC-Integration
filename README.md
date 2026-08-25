@@ -303,10 +303,10 @@ The climate entity exposes the following entity services (use as `mitsubishi_wf_
 
 The value is not a setting the unit stores under a flag of its own. It has no set-bit, which means it can only travel inside a frame sent for some other reason - and any frame that leaves it out sends the unit back to its internal sensor. Two things follow from that.
 
-- **The action arms the value, it does not send it.** What carries it is the periodic operation-data request, so **at least one operation-data sensor has to be enabled** - the action refuses to arm an override without one. It reaches the unit within a minute, or sooner if you change something else in the meantime and a command goes out anyway. Clearing an override always works, and takes effect the same way: the next frame carries "internal sensor" again.
+- **The action arms the value, it does not send it.** What carries it is the operation-data request, which the integration starts making for as long as an override is armed - the same request an enabled diagnostic sensor triggers, asked for on the override's own behalf, so nothing has to be switched on by hand. The value reaches the unit within a minute, or sooner if a command goes out for another reason in the meantime. Clearing takes effect the same way: the next frame carries "internal sensor" again.
 - **Nothing is written just for the override.** A frame carrying it also re-asserts power, mode, fan speed, setpoint and both louver axes, and it takes the unit's 60-second write lock. Sending one per sensor reading would end any running self-clean cycle and keep the official app locked out for as long as the override is in use.
 
-Feeding the value from an automation on every sensor update is fine and costs nothing extra - each call just replaces the armed value.
+Feeding the value from an automation on every sensor update is fine and costs nothing extra - each call just replaces the armed value. What an armed override does cost is that one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
 
 The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out, which is why the climate entity's `current_temperature` keeps showing the unit's own reading until then, and shows the injected value afterwards. The Indoor Temperature sensor always shows the unit's own reading - the two are meant to differ while an override is in effect.
 

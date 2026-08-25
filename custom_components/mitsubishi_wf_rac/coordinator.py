@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import Mapping
 from datetime import datetime, timedelta
+from collections.abc import Callable
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -15,7 +16,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
 from .wfrac.firmware_check import fetch_latest_firmware
 from .wfrac.models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
-from .wfrac.rac_parser import RacParser, SERVICE_DATA_CODES
+from .wfrac.rac_parser import (
+    RacParser,
+    SERVICE_DATA_CODES,
+    SERVICE_DATA_INDOOR_COIL_RAW,
+)
 from .wfrac.repository import (
     MIN_TIME_BETWEEN_REQUESTS,
     REQUEST_TIMEOUT,
@@ -87,6 +92,12 @@ SERVICE_DATA_STAMP_BACKDATE = timedelta(seconds=55)
 # stamped when they finish, not when they were due - does not read as too soon
 # and drop the cycle.
 SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
+# The segment an armed external temperature override subscribes to on its own
+# behalf (see _sync_external_temperature_carrier). Any code would do - what
+# matters is that a request goes out at all, since that is the frame the
+# override rides on - so this is the one that answers under every condition:
+# it is per indoor unit and reads a temperature whatever the system is doing,
+# which is why it is also the sensor the README recommends enabling first.
 
 # ...but it does matter *where* in the cycle it lands. Issued straight off the
 # back of a poll it reached the module about a second after the getAirconStat
@@ -265,6 +276,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._service_data_task: asyncio.Task[None] | None = None
         self._external_temperature_override: float | None = None
         self._external_temperature_applied = False
+        self._external_temperature_carrier: Callable[[], None] | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
         # an older version, and refusing to set up over it would be worse than
@@ -328,6 +340,42 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         self._external_temperature_override = value
         self._external_temperature_applied = False
+        self._sync_external_temperature_carrier()
+
+    async def async_shutdown(self) -> None:
+        """Release the override's own operation-data subscription along with
+        the coordinator. A listener outstanding after unload would keep the
+        refresh timer alive for an entry that no longer exists.
+        """
+        self._release_external_temperature_carrier()
+        await super().async_shutdown()
+
+    def _release_external_temperature_carrier(self) -> None:
+        if self._external_temperature_carrier is not None:
+            self._external_temperature_carrier()
+            self._external_temperature_carrier = None
+
+    def _sync_external_temperature_carrier(self) -> None:
+        """Subscribe to an operation-data segment for as long as an override is
+        armed, and drop the subscription again when it is cleared.
+
+        The override needs a frame to ride on, and the operation-data request
+        is the one frame that goes out on its own without writing anything
+        else. Rather than making that the user's problem - enable a diagnostic
+        sensor or the feature quietly does nothing - the override subscribes
+        like any other consumer of that request, and _maybe_request_service_data()
+        starts asking for the same reason it does for an enabled sensor.
+
+        Costs what an enabled operation-data sensor costs: one extra request
+        per poll cycle, holding the unit's write lock for part of it.
+        """
+        if self._external_temperature_override is not None:
+            if self._external_temperature_carrier is None:
+                self._external_temperature_carrier = self.async_add_listener(
+                    lambda: None, context=SERVICE_DATA_INDOOR_COIL_RAW
+                )
+            return
+        self._release_external_temperature_carrier()
 
     @property
     def external_temperature_applied(self) -> bool:
@@ -341,12 +389,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         return self._external_temperature_applied
 
-    def subscribed_service_data_codes(self) -> tuple[int, ...]:
-        """Operation-data codes currently subscribed by entities, sorted.
-
-        Empty when no operation-data sensor is enabled - which means no
-        periodic request goes out, and with it no carrier for the external
-        temperature override between commands.
+    def _subscribed_service_data_codes(self) -> tuple[int, ...]:
+        """Operation-data codes currently subscribed, sorted: one per enabled
+        diagnostic sensor, plus the carrier an armed external temperature
+        override holds (see _sync_external_temperature_carrier).
         """
         return tuple(sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES)))
 
@@ -628,7 +674,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """Kick off a background request for active operation-data segments
         when due (see SERVICE_DATA_MIN_SPACING).
         """
-        service_data_codes = self.subscribed_service_data_codes()
+        service_data_codes = self._subscribed_service_data_codes()
         if not service_data_codes:
             return
         if self.foreign_activity:

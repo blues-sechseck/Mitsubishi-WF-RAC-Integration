@@ -61,9 +61,6 @@
     "home_leave_mode_status_unknown": {
       "message": "离家模式的数值尚未知晓。请先调用一次空调实体的“请求离家模式状态”操作 —— 常规轮询不包含这些数值。"
     },
-    "external_temperature_needs_service_data": {
-      "message": "请先启用至少一个运行数据传感器：外部温度是靠它的定期请求发送到空调的。"
-    },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} 不是累计用电量传感器。"
     }
