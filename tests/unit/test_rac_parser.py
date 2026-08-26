@@ -497,6 +497,34 @@ def test_receive_to_bytes_entrust_round_trips(parser):
     assert ac.Entrust is True
 
 
+# --- receive_to_bytes(): byte 0 carries the reported model constant -----
+#
+# ModelNr folds ZT (raw 3) onto 2 and leaves anything unrecognised at -1, so
+# echoing it would send a ZT unit a 2 and an FDT unit nothing. The app echoes
+# the reported byte instead, and a mismatch here is what other clients saw
+# answered with result 12.
+
+
+@pytest.mark.parametrize(
+    ("model_nr", "model_nr_raw"),
+    [(1, 1), (2, 2), (2, 3), (-1, 64)],
+)
+def test_receive_to_bytes_preserves_raw_model_byte(parser, model_nr, model_nr_raw):
+    stat = _base_stat(ModelNr=model_nr, ModelNrRaw=model_nr_raw)
+    assert parser.receive_to_bytes(stat)[0] == model_nr_raw
+
+
+@pytest.mark.parametrize(
+    ("model_nr", "expected"),
+    [(1, 1), (2, 2), (0, 0), (-1, 0)],
+)
+def test_receive_to_bytes_falls_back_to_model_nr_without_raw(parser, model_nr, expected):
+    # Only hand-built stats get here - from_aircon() always carries the raw
+    # byte along - and the byte has to stay inside the seven-bit model field.
+    stat = _base_stat(ModelNr=model_nr)
+    assert parser.receive_to_bytes(stat)[0] == expected
+
+
 # --- command_to_byte(): command-direction self-clean encoding -----------
 #
 # IsSelfCleanOperation is *not* part of the round-trip tests above: the

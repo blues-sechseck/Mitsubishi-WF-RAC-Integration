@@ -467,8 +467,15 @@ class RacParser:
         if not aircon_stat.CoolHotJudge:
             stat_byte[8] |= 8
 
-        if aircon_stat.ModelNr in (1, 2):
-            stat_byte[0] |= aircon_stat.ModelNr
+        # The app echoes the true model constant here, including the ones our
+        # ModelNr grouping folds away (3 = ZT, 64 = FDT) - a mismatch in this
+        # byte is what other clients saw rejected with result 12.
+        model_nr_raw = aircon_stat.ModelNrRaw
+        if not isinstance(model_nr_raw, int) or not 0 <= model_nr_raw <= 127:
+            # A stat built by hand carries no reported byte to echo; the coarse
+            # ModelNr stands in, clamped to the protocol's seven-bit field.
+            model_nr_raw = aircon_stat.ModelNr if 0 <= aircon_stat.ModelNr <= 127 else 0
+        stat_byte[0] |= model_nr_raw
 
         if aircon_stat.ModelNr == 1:
             stat_byte[10] |= 1 if aircon_stat.Vacant else 0
