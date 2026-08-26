@@ -553,6 +553,17 @@ ordinary `setAirconStat` commands do not clear it.) Treat it as a counter that
 may restart at any time: accumulate its upward steps yourself if you want a
 lifetime figure, and never read a low value as a fault.
 
+**What the 0.25 kWh resolution costs.** Only completed steps are reported, so
+whatever a run consumes above its last completed step never appears in the
+counter at all, and the next power-on clears it — a lifetime figure built from
+this source is therefore always low. The shortfall is a fixed amount *per run*,
+about 0.125 kWh on average, no matter how long the run is `[INF]`: a unit
+cycling every half hour totals noticeably low, one running for hours at a time
+is off by little. A run consuming less than 0.25 kWh reads 0 throughout and
+contributes nothing `[HW]`. There is no finer counter in the protocol — an
+external energy meter is the only accurate option for a frequently cycling
+unit.
+
 On a multi-split the counter is **per indoor unit**, not a shared outdoor-unit
 total, so the values of two units may be summed. `[HW]` (Verified on a
 two-unit multi-split: one unit cleared its counter at its own power-on while
@@ -1029,6 +1040,7 @@ things are worth knowing before anyone goes looking:
 | Can I feed an external room temperature without opening the unit? | Probably yes, via §5.6. Untested. |
 | Does the module do anything smart with the state bytes? | No. It is a base64 pipe. All semantics live in the RL78 and the AC. `[FW]` |
 | Why does the energy counter keep dropping to zero? | It is a per-run counter, not a lifetime one (§5.2). Nothing is broken. |
+| Why is my accumulated energy total lower than my electricity meter? | The counter reports whole 0.25 kWh steps only, and each power-on discards the unreported remainder — about 0.125 kWh per run (§5.2). |
 | How do I tell "unit is on" from "compressor is actually running"? | `state[9] & 0x02` (§4.6), free in every poll. On a multi-split it answers per indoor unit, unlike compressor frequency. |
 | Why does my client work on one unit and fail on another? | Almost always `airconId` missing (§2.5), TLS too modern (§2.2), or the four account slots being full. |
 | Why do my commands get refused right after someone used the app? | The 60-second write lock (§2.7). Wait for `expires` and send again. |
