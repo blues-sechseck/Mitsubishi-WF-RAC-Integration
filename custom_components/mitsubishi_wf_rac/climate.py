@@ -470,17 +470,12 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         target_offset = self._resolve_target_offset(mode_from_operation)
 
         self._attr_target_temperature = airco.PresetTemp + target_offset
-        # Report the override only once the unit demonstrably holds it and is
-        # in a mode that regulates on it. An override that is merely armed -
-        # just restored, or waiting out an off/fan_only spell - is not what the
-        # unit is working with, and the unit never reports the injected value
-        # back (it keeps reporting its own return-air reading in a separate
-        # segment), so this is the only place that can tell the two apart.
-        # Deliberately diverges from the Indoor Temperature sensor, which
-        # always shows the unit's own reading.
+        # Show the override whenever it is armed and the unit is in a mode that
+        # actually regulates on a room temperature. Off and fan_only are handled
+        # by the third condition. Deliberately diverges from the Indoor
+        # Temperature sensor, which always shows the unit's own reading.
         if (
             self._external_temperature_override is not None
-            and self._device.external_temperature_applied
             and is_external_temperature_mode(airco.Operation, airco.OperationMode)
         ):
             self._attr_current_temperature = self._external_temperature_override
