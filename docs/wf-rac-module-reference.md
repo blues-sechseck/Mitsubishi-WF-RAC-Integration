@@ -497,6 +497,10 @@ coarse fallback, and useful as a plausibility check.
 the *write* direction (`command[5]`, §5.6); in the read direction the AC reports
 the temperature it is actually using.
 
+Which is literal: with an external room temperature injected, `state[5]` carries
+back exactly the value that was written, and so does the pushed indoor-temperature
+segment below — neither is a reading of the room any more. See §5.6. `[HW]`
+
 The temperature you actually want arrives as **pushed variable segments** (§5.2)
 with much better resolution: 256-entry thermistor lookup tables, 0.1 °C steps,
 −30…52 °C indoor and −50…43 °C outdoor. These tables are non-linear and are not
@@ -800,10 +804,30 @@ use it **instead of** its built-in sensor `[EXT]`; the encoding is
 `raw = round(T × 4) + 61`.
 
 The official app never writes this byte — it is fixed at `0xFF`. `[APP]` The
-path is open on the WF-RAC interface `[FW]`, but **it is untested `[INF]`**, and
-it is a real control command, not a query. This is the single most requested
-reason for replacing the module with an ESP32, and it may not require replacing
-anything.
+path is open on the WF-RAC interface `[FW]`, and it works: **verified on an
+SRK20ZS-WF** (`WF-RAC-HTTPS` 025/200) in cooling `[HW]`. It is a real control
+command, not a query. This is the single most requested reason for replacing the
+module with an ESP32, and it does not require replacing anything.
+
+**Both read paths follow the injected value.** 18.0 °C written into `command[5]`
+came back one poll cycle later as `state[5] = 0x85` — exactly the byte written —
+and as 18.5 °C in the pushed indoor-temperature segment (§5.2), while the room
+was at 21.2 °C. Writing `0xFF` again restored the real reading within one cycle,
+to 0.05 K of its previous value. So while an override stands, **nothing on the
+wire still reports the unit's own sensor**: a client that wants the room
+temperature has to keep its own source.
+
+The 0.5 K between the two is not something the AC adds to injected values. The
+same gap sits between `state[5]` and the pushed segment in every reading with no
+override in sight (22.50/23.0, 22.25/22.7, 20.75/21.2) — `state[5]` steps in
+0.25 K, the pushed segment comes from the 0.1 K table of §5.2. One source, two
+resolutions.
+
+The value has no set-bit of its own (§4.3), so it is written by whichever frame
+goes out next and reverted by any frame that leaves the byte at `0xFF` — there is
+no way to write it once and leave it. A periodic request frame is the cheapest
+carrier for it; note that this makes such a frame a write, and that a running
+self-clean cycle does not survive one `[HW]`.
 
 ### 5.7 Compressor overload protection (speed-limit clamps)
 
@@ -1037,7 +1061,7 @@ things are worth knowing before anyone goes looking:
 | Can I run an ESP32 on CNS *and* keep the WF-RAC module? | No. Two active slaves on the bus conflict. A purely passive sniffer that never drives MISO is fine. `[EXT]` |
 | Is there a local MQTT broker? | No. MQTT is cloud-only, endpoint fetched from `iot.smartmair.com`, mutual TLS with a device certificate in flash. `[FW]` |
 | Can I get compressor/current/hours without opening the unit? | Yes, via §5.3 — verified end to end, all fifteen codes in §5.4 answer. Watch the firmware caveat there. |
-| Can I feed an external room temperature without opening the unit? | Probably yes, via §5.6. Untested. |
+| Can I feed an external room temperature without opening the unit? | Yes, via §5.6, verified on hardware. It also replaces the room temperature the unit reports back. |
 | Does the module do anything smart with the state bytes? | No. It is a base64 pipe. All semantics live in the RL78 and the AC. `[FW]` |
 | Why does the energy counter keep dropping to zero? | It is a per-run counter, not a lifetime one (§5.2). Nothing is broken. |
 | Why is my accumulated energy total lower than my electricity meter? | The counter reports whole 0.25 kWh steps only, and each power-on discards the unreported remainder — about 0.125 kWh per run (§5.2). |

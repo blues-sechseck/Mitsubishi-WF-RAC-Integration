@@ -101,7 +101,7 @@ Any one of them switches the request on, so pick one that always has something t
 
 | Entity | Values | Description |
 |---|---|---|
-| Indoor Temperature | °C | Same value as the climate entity's `current_temperature`, exposed as its own sensor. |
+| Indoor Temperature | °C | The room temperature the unit reports, exposed as its own sensor. Normally the same value as the climate entity's `current_temperature`; while an external temperature override is in effect it follows that override rather than the room (see [External temperature override](#external-temperature-override)). |
 | Outdoor Temperature *(shared on multi-split)* | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. On multi-split systems this is an outdoor-unit-level value - reads identically on every indoor unit sharing one outdoor unit, since there's only one outdoor sensor. |
 | Target Temperature *(disabled by default)* | °C | Current setpoint, exposed as its own sensor. Off by default because the climate entity already carries the same value as its `target_temperature` attribute. |
 | Energy Usage (current run) | kWh, increasing | Energy consumption of the **current run**, as reported by the unit in **0.25 kWh steps**. The unit clears this counter to 0 every time it is switched on, and holds the last value while it is off — so a low or zero reading is normal, not a fault, and a run consuming less than 0.25 kWh reads 0 throughout. For a lifetime figure use Energy Usage Total below. Only created if the unit actually reports this value — not all models do. |
@@ -301,14 +301,17 @@ The climate entity exposes the following entity services (use as `mitsubishi_wf_
 
 `set_external_temperature` hands the unit a room temperature measured somewhere you actually care about, and it regulates on that instead of its own return-air sensor.
 
-The value is not a setting the unit stores under a flag of its own. It has no set-bit, which means it can only travel inside a frame sent for some other reason - and any frame that leaves it out sends the unit back to its internal sensor. Two things follow from that.
+The value is not a setting the unit stores under a flag of its own. It has no set-bit, which means it can only travel inside a frame sent for some other reason - and any frame that leaves it out sends the unit back to its internal sensor. Three things follow from that.
 
 - **The action arms the value, it does not send it.** What carries it is the operation-data request, which the integration starts making for as long as an override is armed - the same request an enabled diagnostic sensor triggers, asked for on the override's own behalf, so nothing has to be switched on by hand. The value reaches the unit within a minute, or sooner if a command goes out for another reason in the meantime. Clearing takes effect the same way: the next frame carries "internal sensor" again.
 - **Nothing is written just for the override.** A frame carrying it also re-asserts power, mode, fan speed, setpoint and both louver axes, and it takes the unit's 60-second write lock. Sending one per sensor reading would end any running self-clean cycle and keep the official app locked out for as long as the override is in use.
+- **While the unit is off or in `fan_only`, the override is not written.** Neither mode regulates on a room temperature, and a request carrying the value ends a self-clean cycle started from the remote - self-clean runs from the off state. The unit falls back to its own sensor there, and the first frame after it returns to a regulating mode writes the value again.
 
 Feeding the value from an automation on every sensor update is fine and costs nothing extra - each call just replaces the armed value. What an armed override does cost is that one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
 
-The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out, which is why the climate entity's `current_temperature` keeps showing the unit's own reading until then, and shows the injected value afterwards. The Indoor Temperature sensor always shows the unit's own reading - the two are meant to differ while an override is in effect.
+**While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; keep your own sensor for that. Clearing the override brings the real reading back within a cycle.
+
+The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out, which is why the climate entity's `current_temperature` keeps showing the unit's reported reading until then, and the injected value afterwards.
 
 # Known limitations
 

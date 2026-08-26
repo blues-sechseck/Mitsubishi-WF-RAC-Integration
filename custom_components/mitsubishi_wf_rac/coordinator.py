@@ -337,9 +337,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         Which is exactly why it counts as unapplied until a frame has carried
         it: a restored value says what we intend to send, not what the unit
         currently regulates on.
+
+        Replacing one override with another leaves that standing, though. The
+        unit is holding an override either way, and the new reading reaches it
+        on the next frame; resetting the flag for every value a source sensor
+        reports would make anything keyed to it flip back and forth at the
+        rate of the automation feeding it.
         """
+        if (value is None) != (self._external_temperature_override is None):
+            self._external_temperature_applied = False
         self._external_temperature_override = value
-        self._external_temperature_applied = False
         self._sync_external_temperature_carrier()
 
     async def async_shutdown(self) -> None:
@@ -751,9 +758,14 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
-                # Push updated state (including external_temperature_applied) to
-                # entities without waiting for the next poll.
-                self.async_set_updated_data(self._airco)
+                # Notify, but deliberately not through async_set_updated_data():
+                # that resets the refresh timer, and this runs half a cycle
+                # after the poll - every cycle - so it would push the next poll
+                # to 90s and keep doing so, silently turning the documented
+                # 60s cadence into something else. Listeners get the fresh
+                # state (set_airco() has already stored it) without the
+                # schedule moving.
+                self.async_update_listeners()
                 return
             except AirconWriteRefusedError as ex:
                 # Someone else may hold the write lock. Unlike a user command

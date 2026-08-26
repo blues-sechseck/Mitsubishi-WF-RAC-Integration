@@ -336,6 +336,24 @@ async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device)
     assert entity._attr_current_temperature == 23.5
 
 
+async def test_update_state_keeps_showing_the_override_when_the_value_changes(device):
+    # A source sensor feeding the action reports a new value every cycle. That
+    # replaces a live override rather than starting a new one, so the display
+    # must not fall back to the unit's reading in between.
+    _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
+    device.airco.IndoorTemp = 22.0
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    entity = _service_entity(device)
+
+    await entity.async_set_external_temperature(temperature=20.0)
+    _mark_reached_the_unit(device)
+    await entity.async_set_external_temperature(temperature=20.25)
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 20.25
+
+
 async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0

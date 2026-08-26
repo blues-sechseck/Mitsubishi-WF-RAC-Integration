@@ -652,7 +652,11 @@ def test_status_request_to_byte_preserves_external_temperature_override(parser):
     assert stat_byte[5] == round(23.5 * 4) + 61
 
 
-def test_status_request_to_byte_preserves_override_even_when_off(parser):
+def test_status_request_to_byte_leaves_the_override_out_when_off(parser):
+    # Confirmed on hardware: a request carrying byte 5 ends a running
+    # self-clean cycle, and self-clean runs from the off state. The override
+    # lapses to the internal sensor there and is written again by the first
+    # frame that goes out once the unit is back in a regulating mode.
     stat = _base_stat(
         Operation=False,
         OperationMode=1,
@@ -660,7 +664,7 @@ def test_status_request_to_byte_preserves_override_even_when_off(parser):
         ServiceDataStatusRequest=True,
     )
     stat_byte = parser.status_request_to_byte(stat)
-    assert stat_byte[5] == round(23.5 * 4) + 61
+    assert stat_byte[5] == 0xFF
 
 
 def test_command_to_byte_external_temperature_encodes_correctly(parser):
