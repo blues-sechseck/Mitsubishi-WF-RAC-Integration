@@ -751,6 +751,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
+                # Push updated state (including external_temperature_applied) to
+                # entities without waiting for the next poll.
+                self.async_set_updated_data(self._airco)
                 return
             except AirconWriteRefusedError as ex:
                 # Someone else may hold the write lock. Unlike a user command

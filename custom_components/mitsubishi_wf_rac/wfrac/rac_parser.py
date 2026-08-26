@@ -362,14 +362,15 @@ class RacParser:
         stat_byte = _empty_stat_bytes()
         if not aircon_stat.CoolHotJudge:
             stat_byte[8] |= 8
-        # Status requests preserve any active override regardless of the
-        # current operating mode: the unit stores byte 5 as live state, and
-        # a plain poll while off or in fan_only would otherwise revert it.
-        raw_temperature = self.encode_external_temperature(
-            aircon_stat.ExternalTemperature
-        )
-        if raw_temperature is not None:
-            stat_byte[5] = raw_temperature
+        # External temperature override: only inject in temperature-controlling modes.
+        # Off and fan_only do not regulate temperature, so leaving byte 5 at 0xFF
+        # (internal sensor) is correct for those modes.
+        if self._should_encode_external_temperature(aircon_stat):
+            raw_temperature = self.encode_external_temperature(
+                aircon_stat.ExternalTemperature
+            )
+            if raw_temperature is not None:
+                stat_byte[5] = raw_temperature
         return stat_byte
 
     def command_to_byte(self, aircon_stat: AirconStat) -> bytearray:
