@@ -11,6 +11,12 @@ jobs:
   hacs:
     name: HACS
     runs-on: "ubuntu-latest"
+    # Upstream only. Two of this action's checks are about repository
+    # properties rather than the code - topics set, issues enabled - and a
+    # fork has neither by default and cannot be expected to fix that. Running
+    # it there fails every push and every nightly schedule inherited with the
+    # fork, and mails the failures to whoever pushed.
+    if: github.repository == 'blues-sechseck/Mitsubishi-WF-RAC-Integration'
     steps:
       - name: HACS validation
         uses: "hacs/action@main"
