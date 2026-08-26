@@ -75,3 +75,7 @@ def test_per_mode_offsets_explain_that_blank_means_the_general_offset():
     assert "target_offset_heat" in described
 
 
+def test_external_temperature_source_explains_its_failsafe():
+    described = STRINGS["options"]["step"]["init"]["data_description"]
+    assert "external_temperature_source" in described
+

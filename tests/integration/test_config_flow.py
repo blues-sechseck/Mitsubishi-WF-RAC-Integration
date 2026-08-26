@@ -19,6 +19,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_FIRMWARE_UPDATE_CHECK,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_INDOOR_OFFSET,
     CONF_OPERATOR_ID,
     CONF_OUTDOOR_OFFSET,
@@ -520,11 +521,13 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
             CONF_INDOOR_OFFSET: 1.0,
             CONF_OUTDOOR_OFFSET: -1.0,
             CONF_TARGET_OFFSET: 0.5,
+            CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.living_room_temperature",
         },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_TARGET_OFFSET] == 0.5
+    assert result["data"][CONF_EXTERNAL_TEMPERATURE_SOURCE] == "sensor.living_room_temperature"
     # host isn't a form field anymore (moved to the reconfigure flow), but
     # the entry's existing value must survive an options save regardless.
     assert result["data"]["host"] == "192.168.1.50"

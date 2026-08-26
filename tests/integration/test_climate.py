@@ -8,11 +8,13 @@ the offset exactly like the climate entity. Needs the `hass` fixture (Device
 is a DataUpdateCoordinator), hence tests/integration/ rather than tests/unit/.
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from homeassistant.components.climate.const import HVACMode
+from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, STATE_UNKNOWN, STATE_UNAVAILABLE, UnitOfTemperature
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.restore_state import RestoredExtraData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -22,6 +24,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     ATTR_TARGET_TEMPERATURE,
     CONF_INDOOR_OFFSET,
     CONF_OVERSHOOT_COOL,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -35,7 +38,7 @@ from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
 )
 
 
-def _set_options(device: Device, options: dict[str, float]) -> None:
+def _set_options(device: Device, options: dict[str, object]) -> None:
     # ConfigEntry.options is a read-only mappingproxy, so tests set the offsets
     # the same way the options flow does - through async_update_entry(), merged
     # onto whatever is already there.
@@ -448,6 +451,102 @@ async def test_current_temperature_follows_the_unit_without_an_overshoot(device)
     entity._update_state()
 
     assert entity._attr_current_temperature == 22.5
+def _with_external_temperature_source(device: Device) -> str:
+    source = "sensor.living_room_temperature"
+    _set_options(device, {CONF_EXTERNAL_TEMPERATURE_SOURCE: source})
+    return source
+
+
+async def test_external_temperature_source_arms_from_its_current_state(device):
+    source = _with_external_temperature_source(device)
+    device.hass.states.async_set(
+        source, "68", {ATTR_UNIT_OF_MEASUREMENT: UnitOfTemperature.FAHRENHEIT}
+    )
+    entity = _service_entity(device)
+    entity.async_get_last_extra_data = AsyncMock(
+        return_value=RestoredExtraData({"external_temperature_override": 19.25})
+    )
+
+    await _add_and_remove(entity)
+
+    # Source state wins over stored service data, including across reloads.
+    assert entity._external_temperature_override == 20.0
+    assert device.external_temperature_override == 20.0
+
+
+@pytest.mark.parametrize("missing_state", [STATE_UNAVAILABLE, STATE_UNKNOWN])
+async def test_external_temperature_source_fails_safe_for_unusable_states(device, missing_state):
+    source = _with_external_temperature_source(device)
+    device.hass.states.async_set(source, "20.12", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+
+    device.hass.states.async_set(source, missing_state)
+    await device.hass.async_block_till_done()
+
+    assert entity._external_temperature_override is None
+    assert device.external_temperature_override is None
+    entity._call_on_remove_callbacks()
+
+
+async def test_external_temperature_source_fails_safe_when_entity_disappears(device):
+    source = _with_external_temperature_source(device)
+    device.hass.states.async_set(source, "20", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+
+    device.hass.states.async_remove(source)
+    await device.hass.async_block_till_done()
+
+    assert entity._external_temperature_override is None
+    entity._call_on_remove_callbacks()
+
+
+async def test_external_temperature_source_follows_state_changes(device):
+    source = _with_external_temperature_source(device)
+    device.hass.states.async_set(source, "20", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+
+    device.hass.states.async_set(source, "20.3", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    await device.hass.async_block_till_done()
+
+    assert entity._external_temperature_override == 20.25
+    entity._call_on_remove_callbacks()
+
+
+async def test_external_temperature_source_ignores_a_repeated_protocol_value(device):
+    source = _with_external_temperature_source(device)
+    device.hass.states.async_set(source, "20.12", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    set_override = MagicMock(wraps=device.set_external_temperature_override)
+    device.set_external_temperature_override = set_override
+    await entity.async_added_to_hass()
+
+    device.hass.states.async_set(source, "20.10", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    await device.hass.async_block_till_done()
+
+    assert entity._external_temperature_override == 20.0
+    set_override.assert_called_once_with(20.0)
+    entity._call_on_remove_callbacks()
+
+
+async def test_set_external_temperature_refuses_values_with_configured_source(device):
+    _with_external_temperature_source(device)
+    entity = _service_entity(device)
+
+    with pytest.raises(ServiceValidationError, match="configured source"):
+        await entity.async_set_external_temperature(temperature=20.0)
+
+
+async def test_set_external_temperature_allows_clearing_with_configured_source(device):
+    _with_external_temperature_source(device)
+    entity = _service_entity(device)
+    entity._set_external_temperature_override(20.0)
+
+    await entity.async_set_external_temperature(temperature=None)
+
+    assert entity._external_temperature_override is None
 
 
 def _restoring_entity(device, restored: dict[str, float | str | None]) -> AircoClimate:

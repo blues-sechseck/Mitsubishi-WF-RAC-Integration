@@ -32,6 +32,7 @@ from .const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_FIRMWARE_UPDATE_CHECK,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OPERATOR_ID,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
@@ -478,6 +479,21 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_INDOOR_OFFSET,
                         default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0),
                     ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
+                    # Keep this optional without a default: an omitted source
+                    # must stay omitted, rather than becoming a falsey value
+                    # that unnecessarily changes the saved options shape.
+                    vol.Optional(
+                        CONF_EXTERNAL_TEMPERATURE_SOURCE,
+                        description={
+                            "suggested_value": self.config_entry.options.get(
+                                CONF_EXTERNAL_TEMPERATURE_SOURCE
+                            )
+                        },
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="sensor", device_class="temperature"
+                        )
+                    ),
                     vol.Optional(
                         CONF_OUTDOOR_OFFSET,
                         default=self.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0),
