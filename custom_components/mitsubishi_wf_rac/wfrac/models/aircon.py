@@ -133,6 +133,7 @@ class AirconStat(AirconBase):
     HomeLeaveModeStatusRequest: bool = False
     HomeLeaveModeForCooling: HomeLeaveModeSetting | None = None
     HomeLeaveModeForHeating: HomeLeaveModeSetting | None = None
+    ExternalTemperature: float | None = None
     # See AirconCommands - only ever set via Device._maybe_request_service_data().
     ServiceDataStatusRequest: tuple[int, ...] = ()
 

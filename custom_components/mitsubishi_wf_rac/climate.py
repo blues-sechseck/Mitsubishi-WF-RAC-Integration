@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from . import MitsubishiWfRacConfigEntry
@@ -19,16 +20,23 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 
 from .entity import WfRacEntity
 from .coordinator import Device
 from .wfrac.models.aircon import Aircon, AirconCommands, HomeLeaveModeSetting
+from .wfrac.rac_parser import (
+    EXTERNAL_TEMPERATURE_MAX,
+    EXTERNAL_TEMPERATURE_MIN,
+    is_external_temperature_mode,
+)
 from .const import (
     DOMAIN,
     FAN_MODE_TRANSLATION,
     HVAC_TRANSLATION,
     SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS,
     SERVICE_SET_HOME_LEAVE_MODE,
+    SERVICE_SET_EXTERNAL_TEMPERATURE,
     SERVICE_SET_HORIZONTAL_SWING_MODE,
     SERVICE_SET_VERTICAL_SWING_MODE,
     SUPPORT_FLAGS,
@@ -101,9 +109,39 @@ async def async_setup_entry(
         "async_set_home_leave_mode",
     )
 
+    platform.async_register_entity_service(
+        SERVICE_SET_EXTERNAL_TEMPERATURE,
+        {
+            vol.Optional("temperature"): vol.Any(
+                vol.Range(min=EXTERNAL_TEMPERATURE_MIN, max=EXTERNAL_TEMPERATURE_MAX),
+                None,
+            ),
+        },
+        "async_set_external_temperature",
+    )
 
-class AircoClimate(WfRacEntity, ClimateEntity):
+
+@dataclass
+class ExternalTemperatureOverrideData(ExtraStoredData):
+    """The armed external temperature override, stored next to the entity state.
+
+    Deliberately not carried by a state attribute: attributes are only merged
+    into a state while the entity is available, and this module goes
+    unreachable for about a minute every hour, so an override armed before that
+    gap would quietly disappear from the restored state.
+    """
+
+    external_temperature_override: float | None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Serialise for the restore-state store."""
+        return {"external_temperature_override": self.external_temperature_override}
+
+
+class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     """Representation of a climate entity"""
+
+    _external_temperature_override: float | None = None
 
     _attr_supported_features: ClimateEntityFeature = SUPPORT_FLAGS
     _attr_temperature_unit: str = UnitOfTemperature.CELSIUS
@@ -124,6 +162,66 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         self._attr_name = device.device_name
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-climate"
         self._update_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._restore_external_temperature_override(await self.async_get_last_extra_data())
+        # No async_write_ha_state() here: the platform writes the state itself
+        # once this returns, and until then the entity is still being added,
+        # which makes the call a no-op.
+        self._update_state()
+
+    def _restore_external_temperature_override(self, stored: ExtraStoredData | None) -> None:
+        """Re-arm the override recorded before the last restart or reload.
+
+        Restoring only arms it integration-side - the unit is not told anything
+        here. The next outgoing frame carries the value, and until one has, the
+        override counts as unapplied (Device.external_temperature_applied).
+        """
+        if stored is None:
+            return
+        restored = stored.as_dict().get("external_temperature_override")
+        if restored is None:
+            return
+        try:
+            value = float(restored)
+        except (TypeError, ValueError):
+            _LOGGER.warning(
+                "Ignoring unreadable stored external temperature override: %r", restored
+            )
+            return
+        # Range-checked here rather than left to the encoder: a value outside
+        # the encodable span raises on every frame it is put into, which would
+        # take down the command path and the operation-data request with it -
+        # and it would do so on every restart, with nothing pointing at the
+        # stored value as the cause.
+        if not EXTERNAL_TEMPERATURE_MIN <= value <= EXTERNAL_TEMPERATURE_MAX:
+            _LOGGER.warning(
+                "Ignoring stored external temperature override %s °C: outside the "
+                "encodable range of %s..%s °C",
+                value,
+                EXTERNAL_TEMPERATURE_MIN,
+                EXTERNAL_TEMPERATURE_MAX,
+            )
+            return
+        self._external_temperature_override = value
+        self._device.set_external_temperature_override(value)
+
+    @property
+    def extra_restore_state_data(self) -> ExtraStoredData:
+        """What async_added_to_hass() reads back after a restart or reload."""
+        return ExternalTemperatureOverrideData(self._external_temperature_override)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the armed override, so it is visible without calling the
+        action to find out. Display only - the value that survives a restart is
+        the one in extra_restore_state_data above.
+        """
+        attrs = dict(super().extra_state_attributes or {})
+        if self._external_temperature_override is not None:
+            attrs["external_temperature_override"] = self._external_temperature_override
+        return attrs
 
     def _min_temp_for_mode(self, hvac_mode: HVACMode) -> float:
         """Minimum setpoint depends on hvac_mode.
@@ -283,6 +381,37 @@ class AircoClimate(WfRacEntity, ClimateEntity):
                 }
             )
 
+    async def async_set_external_temperature(self, temperature: float | None = None) -> None:
+        """Arm an external room temperature override, or revert to the unit's
+        internal sensor. The valid range is enforced by the service schema.
+
+        Arming only: nothing is sent from here. The value rides along on the
+        next frame that goes out anyway - the operation-data request once a
+        cycle, or any command in between - and the same is true of clearing
+        it, since a frame without an override carries 0xFF and puts the unit
+        back on its own sensor.
+
+        A command frame of this action's own would cost more than the wait.
+        Byte 5 has no set-bit, so it cannot be written on its own: the frame
+        carrying it also re-asserts power, mode, fan speed, setpoint and both
+        vane axes, which is what ends a running self-clean cycle. It would
+        also take the unit's 60-second write lock, and a source sensor
+        reporting every minute would hold that lock permanently, locking the
+        official app out for as long as the override is in use.
+
+        The frame it rides on is the operation-data request, which the
+        coordinator starts asking for while an override is armed - the
+        override subscribes to a segment itself, exactly like an enabled
+        diagnostic sensor does (see Device._sync_external_temperature_carrier).
+        """
+        self._external_temperature_override = temperature
+        self._device.set_external_temperature_override(temperature)
+        # Nothing else refreshes the entity here - no command goes out, so
+        # there is no response to update from, and the next poll is up to a
+        # minute away.
+        self._update_state()
+        self.async_write_ha_state()
+
     async def async_turn_off(self) -> None:
         """Turn the entity off."""
         await self._device.async_queue_command({AirconCommands.Operation: False})
@@ -341,7 +470,22 @@ class AircoClimate(WfRacEntity, ClimateEntity):
         target_offset = self._resolve_target_offset(mode_from_operation)
 
         self._attr_target_temperature = airco.PresetTemp + target_offset
-        self._attr_current_temperature = airco.IndoorTemp + indoor_offset
+        # Report the override only once the unit demonstrably holds it and is
+        # in a mode that regulates on it. An override that is merely armed -
+        # just restored, or waiting out an off/fan_only spell - is not what the
+        # unit is working with, and the unit never reports the injected value
+        # back (it keeps reporting its own return-air reading in a separate
+        # segment), so this is the only place that can tell the two apart.
+        # Deliberately diverges from the Indoor Temperature sensor, which
+        # always shows the unit's own reading.
+        if (
+            self._external_temperature_override is not None
+            and self._device.external_temperature_applied
+            and is_external_temperature_mode(airco.Operation, airco.OperationMode)
+        ):
+            self._attr_current_temperature = self._external_temperature_override
+        else:
+            self._attr_current_temperature = airco.IndoorTemp + indoor_offset
         self._attr_fan_mode = list(FAN_MODE_TRANSLATION.keys())[airco.AirFlow]
         self._attr_swing_mode = (
             SWING_3D_AUTO

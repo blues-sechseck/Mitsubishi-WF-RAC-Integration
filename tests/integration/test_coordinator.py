@@ -120,7 +120,8 @@ async def device(hass):
         swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()
-    return dev
+    yield dev
+    await dev.async_shutdown()
 
 
 # --- update() -------------------------------------------------------------
@@ -298,6 +299,76 @@ async def test_set_airco_merges_params_with_current_state(device):
     # request" behavior the whole coalescing/locking design exists for.
     assert sent.PresetTemp == original_preset_temp
     assert device.airco.Operation is True
+
+
+async def test_set_airco_includes_stored_external_temperature_override(device):
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._external_temperature_override = 18.7
+
+    captured = {}
+
+    async def _capture_and_echo(airco_id, command, **_kwargs):
+        captured["command"] = command
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    await device.set_airco({AirconCommands.Operation: True})
+
+    raw = base64.b64decode(captured["command"])
+
+    assert raw[5] == int(round(18.7 * 4)) + 61
+
+
+async def test_set_airco_explicitly_clears_external_temperature_override(device):
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._external_temperature_override = 18.7
+
+    captured = {}
+
+    async def _capture_and_echo(airco_id, command, **_kwargs):
+        captured["command"] = command
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    device.set_external_temperature_override(None)
+    await device.set_airco({AirconCommands.PresetTemp: 22})
+
+    raw = base64.b64decode(captured["command"])
+
+    assert raw[5] == 0xFF
+
+
+async def test_external_temperature_counts_as_applied_once_a_frame_carried_it(device):
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    # Arming alone says nothing about what the unit holds.
+    assert device.external_temperature_applied is False
+
+    await device.set_airco({AirconCommands.PresetTemp: 22})
+
+    assert device.external_temperature_applied is True
+
+
+async def test_external_temperature_stops_counting_as_applied_in_fan_only(device):
+    # fan_only sends 0xFF in byte 5, which puts the unit back on its own
+    # sensor - the override stays armed but is no longer in effect.
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.set_airco({AirconCommands.PresetTemp: 22})
+    await device.set_airco({AirconCommands.OperationMode: 3})
+
+    assert device.external_temperature_applied is False
+    assert device.external_temperature_override == 18.7
 
 
 async def test_set_airco_raises_and_logs_on_send_failure(device):

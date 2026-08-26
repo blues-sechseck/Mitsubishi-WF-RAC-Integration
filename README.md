@@ -95,7 +95,7 @@ This integration creates one device per airco with the following entities.
 
 ## Sensors
 
-The diagnostic operation-data sensors below are disabled by default. Enabling a sensor makes the integration request its value; leaving all of them disabled makes no extra request at all.
+The diagnostic operation-data sensors below are disabled by default. Enabling a sensor makes the integration request its value; leaving all of them disabled makes no extra request at all - unless an external temperature override is armed, which asks for one segment on its own behalf (see [External temperature override](#external-temperature-override)).
 
 Any one of them switches the request on, so pick one that always has something to show. **Indoor Coil Temperature** is the safest choice: it is per indoor unit and reads a temperature whatever the system is doing. **Compressor Frequency** is the more telling value where it works, but reads a constant 0 on older firmware ([#207](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/207)). **Hot Gas Temperature** is a poor first choice: it reads unknown whenever the outdoor unit is idle, which looks like a broken sensor rather than a resting one.
 
@@ -284,6 +284,31 @@ There's no way to predict which case applies to your unit from its mode alone - 
 Target Temp. Offset corrects for this bias: `true_room ≈ PresetTemp + offset`. To land the *room* on the temperature you actually requested, the setpoint sent to the unit is `commanded PresetTemp = requested − offset`. Concretely: **a negative offset raises the setpoint actually sent to the unit** (a positive offset lowers it).
 
 **Measuring it:** place a reference sensor away from the unit's own airflow, then average `current_temperature` (the Indoor Temperature sensor) minus that reference, split by the climate entity's `hvac_action`. Use the average while `cooling` (or `heating`) as your starting point for Target Temp. Offset (Cooling) / (Heating) - that's the state the thermostat loop actually regulates in, and it's not interchangeable with `idle` or `off`: on the installation above, the same unit's average bias moved by more than a kelvin between `cooling` and `off`. This is also why no single value is correct for both cool and heat at once, and why the offset isn't a fixed mounting/calibration error you can look up - it calibrates your installation's operating regime, and only a measurement of *your* unit, in the state it's actually controlling in, gets it right.
+
+# Services
+
+The climate entity exposes the following entity services (use as `mitsubishi_wf_rac.<service>`).
+
+| Service | Fields | Description |
+|---|---|---|
+| `set_horizontal_swing_mode` | `swing_mode` | Set the horizontal (left/right) louver position. |
+| `set_vertical_swing_mode` | `swing_mode` | Set the vertical (up/down) louver position. |
+| `request_home_leave_mode_status` | — | Ask the unit to report its Home Leave Mode thresholds/airflow (only on supporting models). |
+| `set_home_leave_mode` | `temp_rule_cooling`, `temp_setting_cooling`, `air_flow_cooling`, `temp_rule_heating`, `temp_setting_heating`, `air_flow_heating` | Write new Home Leave Mode thresholds/airflow (only on supporting models). |
+| `set_external_temperature` | `temperature` (optional) | Provide an external room temperature to the AC, overriding its own indoor sensor. Omit `temperature` or pass `null` to revert to the internal sensor. See below. |
+
+## External temperature override
+
+`set_external_temperature` hands the unit a room temperature measured somewhere you actually care about, and it regulates on that instead of its own return-air sensor.
+
+The value is not a setting the unit stores under a flag of its own. It has no set-bit, which means it can only travel inside a frame sent for some other reason - and any frame that leaves it out sends the unit back to its internal sensor. Two things follow from that.
+
+- **The action arms the value, it does not send it.** What carries it is the operation-data request, which the integration starts making for as long as an override is armed - the same request an enabled diagnostic sensor triggers, asked for on the override's own behalf, so nothing has to be switched on by hand. The value reaches the unit within a minute, or sooner if a command goes out for another reason in the meantime. Clearing takes effect the same way: the next frame carries "internal sensor" again.
+- **Nothing is written just for the override.** A frame carrying it also re-asserts power, mode, fan speed, setpoint and both louver axes, and it takes the unit's 60-second write lock. Sending one per sensor reading would end any running self-clean cycle and keep the official app locked out for as long as the override is in use.
+
+Feeding the value from an automation on every sensor update is fine and costs nothing extra - each call just replaces the armed value. What an armed override does cost is that one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
+
+The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out, which is why the climate entity's `current_temperature` keeps showing the unit's own reading until then, and shows the injected value afterwards. The Indoor Temperature sensor always shows the unit's own reading - the two are meant to differ while an override is in effect.
 
 # Known limitations
 

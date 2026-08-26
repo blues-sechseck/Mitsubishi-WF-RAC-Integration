@@ -166,8 +166,79 @@ def _empty_stat_bytes() -> bytearray:
     return bytearray([0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 
 
+# Byte 5 carries the room temperature as round(T * 4) + 61, with 0xFF reserved
+# for "use the internal sensor" - so 0x00..0xFE is the whole encodable span.
+# Anything outside it makes encode_external_temperature() raise, which would
+# take down the write path on every single frame, so the range is enforced
+# wherever a value enters the integration (service schema, restored state).
+EXTERNAL_TEMPERATURE_MIN: Final = -15.25
+EXTERNAL_TEMPERATURE_MAX: Final = 48.25
+
+
+def is_external_temperature_mode(operation: bool, operation_mode: int) -> bool:
+    """Return whether the unit is in a mode that can use an external
+    temperature override.
+
+    Off and fan_only do not regulate temperature, so writing byte 5 there
+    is pointless at best and risks colliding with other frame features.
+    """
+    if not operation:
+        return False
+    return operation_mode in (0, 1, 2, 4)
+
+
 class RacParser:
     """Parser class that is used to parse WF-RAC data"""
+
+    @staticmethod
+    def encode_external_temperature(temperature: float | None) -> int | None:
+        """Encode an external-temperature override to the MHI byte-5 format.
+
+        0xFF means "use the internal room sensor"; the override value is stored
+        in the same byte slot as the command's sensor selection field.
+        """
+        if temperature is None:
+            return None
+        raw_temperature = round(temperature * 4) + 61
+        if raw_temperature < 0 or raw_temperature >= 0xFF:
+            raise ValueError(
+                "ExternalTemperature must encode to a byte in range 0x00..0xFE"
+            )
+        return raw_temperature
+
+    @staticmethod
+    def _should_encode_external_temperature(aircon_stat: AirconStat) -> bool:
+        """Only inject the external temperature when the unit is in a mode
+        that actually regulates temperature.
+
+        Off and fan_only do not use a room-temperature input for control, so
+        there is nothing for the value to do there. Note what "don't write it"
+        means on this byte: it has no set-bit of its own, so the frame carries
+        0xFF instead and the unit actively falls back to its internal sensor -
+        skipping the injection is a write, not an omission. The override is
+        kept integration-side and re-applied automatically once the unit
+        switches back to a temperature-controlling mode.
+
+        This is a mode decision, not a collision one: the self-clean bits sit
+        in bytes 10 and 12 and never touch byte 5.
+        """
+        return is_external_temperature_mode(aircon_stat.Operation, aircon_stat.OperationMode)
+
+    @classmethod
+    def carries_external_temperature(cls, aircon_stat: AirconStat) -> bool:
+        """Whether the frame built from this state writes the override into
+        byte 5 - i.e. whether the unit ends up holding it.
+
+        Status requests carry it unconditionally (they exist to keep it
+        alive); ordinary commands only in a temperature-controlling mode.
+        The coordinator uses this to tell an armed override from one the unit
+        has actually been told about.
+        """
+        if aircon_stat.ExternalTemperature is None:
+            return False
+        return cls._is_status_request(aircon_stat) or cls._should_encode_external_temperature(
+            aircon_stat
+        )
 
     def to_base64(self, aircon_stat: AirconStat) -> str:
         """Convert AirconStat to Base64 string."""
@@ -278,10 +349,27 @@ class RacParser:
         with the full operation-data trailer and result 0, while power, mode,
         fan speed, setpoint and both vane axes stay untouched - with the unit
         running and with it switched off.
+
+        The external-room-temperature override is different: it is not a normal
+        read/write setting toggled by the command bitmask, but a byte-5 sensor-
+        selection field that is still part of the live state the unit keeps. A
+        service-data status request must not send 0xFF here, because that would
+        silently revert the override back to the internal sensor for the next
+        poll cycle. That means this "read" request is no longer write-free:
+        it writes byte 5 back to preserve the override, which is the property
+        service-data requests were previously fixed on (see #250).
         """
         stat_byte = _empty_stat_bytes()
         if not aircon_stat.CoolHotJudge:
             stat_byte[8] |= 8
+        # Status requests preserve any active override regardless of the
+        # current operating mode: the unit stores byte 5 as live state, and
+        # a plain poll while off or in fan_only would otherwise revert it.
+        raw_temperature = self.encode_external_temperature(
+            aircon_stat.ExternalTemperature
+        )
+        if raw_temperature is not None:
+            stat_byte[5] = raw_temperature
         return stat_byte
 
     def command_to_byte(self, aircon_stat: AirconStat) -> bytearray:
@@ -309,6 +397,19 @@ class RacParser:
 
         # Preset temp
         stat_byte[4] |= int(aircon_stat.PresetTemp / 0.5) + 128
+
+        # External temperature override (DB3 / command[5]). 0xFF means "use
+        # the internal room sensor" in the MHI external-room-temp protocol.
+        # Only write it when the unit is in a temperature-controlling mode;
+        # off and fan_only do not use a room input, and writing the byte there
+        # could interfere with other frame features (see
+        # _should_encode_external_temperature).
+        if self._should_encode_external_temperature(aircon_stat):
+            raw_temperature = self.encode_external_temperature(
+                aircon_stat.ExternalTemperature
+            )
+            if raw_temperature is not None:
+                stat_byte[5] = raw_temperature
 
         # Entrust (3D auto)
         stat_byte[12] |= 12 if aircon_stat.Entrust else 8
@@ -444,6 +545,13 @@ class RacParser:
                 )
         ac_device.Vacant = (content[10] & 1) != 0
         ac_device.CompressorRunning = (content[9] & COMPRESSOR_RUNNING_MASK) != 0
+        # content[5] is deliberately NOT decoded here. On the read path that
+        # byte reports the temperature the controller is currently working
+        # with, whatever its source - the 0xFF "internal sensor" convention
+        # only applies to the write direction. Every unit always reports a
+        # value, so a decoded float cannot distinguish an active external-
+        # temperature override from an ordinary reading. Override state is
+        # tracked integration-side instead (Device._external_temperature_override).
         if ac_device.ModelNr in (1, 2):
             # Mirrors the self-clean bit written in receive_to_bytes() above.
             # No longer exposed as an entity: the real cycle can only be
