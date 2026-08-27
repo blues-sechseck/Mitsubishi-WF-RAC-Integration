@@ -14,7 +14,14 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, MIN_TIME_BETWEEN_UPDATES
+from .const import (
+    CONF_OVERSHOOT_COOL,
+    CONF_OVERSHOOT_HEAT,
+    DOMAIN,
+    MIN_TIME_BETWEEN_UPDATES,
+    OPERATION_MODE_COOL,
+    OPERATION_MODE_HEAT,
+)
 from .wfrac.firmware_check import fetch_latest_firmware
 from .wfrac.models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
 from .wfrac.rac_parser import (
@@ -387,6 +394,60 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
             return
         self._release_external_temperature_carrier()
+
+    def _corrected_external_temperature(
+        self, temperature: float | None, operation_mode: int
+    ) -> float | None:
+        """Bend the room temperature we hand the unit by its overshoot.
+
+        The unit's thermostat band sits below the setting in cooling (measured
+        across four units: it keeps calling for cooling until roughly 1-2 K
+        under it, see issue #218). Telling it the room is that much colder than
+        it is moves its stop point to where the room actually reaches the
+        setting - and unlike the setpoint, which the unit rounds to whole
+        degrees, this lever has the protocol's 0.25 K resolution.
+
+        Heating is the mirror image, and zero - the default - changes nothing.
+        """
+        if temperature is None:
+            return None
+        overshoot = self._resolve_overshoot(operation_mode)
+        if not overshoot:
+            return temperature
+        if operation_mode == OPERATION_MODE_COOL:
+            return temperature - overshoot
+        if operation_mode == OPERATION_MODE_HEAT:
+            return temperature + overshoot
+        return temperature
+
+    def _resolve_overshoot(self, operation_mode: int) -> float:
+        """The configured overshoot for the mode a frame is going out in."""
+        if operation_mode == OPERATION_MODE_COOL:
+            key = CONF_OVERSHOOT_COOL
+        elif operation_mode == OPERATION_MODE_HEAT:
+            key = CONF_OVERSHOOT_HEAT
+        else:
+            return 0.0
+        value = self.options.get(key, 0.0)
+        return float(value) if isinstance(value, (int, float)) else 0.0
+
+    @property
+    def external_temperature_room_value(self) -> float | None:
+        """The room temperature behind an override the unit is being lied to
+        about, or None when nothing is being bent.
+
+        With an overshoot configured, what the unit reports back is the value
+        it was handed, which is deliberately not the room. The number the user
+        supplied is - so that is what the climate entity shows, while the
+        Indoor Temperature sensor keeps reporting the unit verbatim.
+        """
+        if self._external_temperature_override is None or self._airco is None:
+            return None
+        if not self.external_temperature_applied:
+            return None
+        if not self._resolve_overshoot(self._airco.OperationMode):
+            return None
+        return self._external_temperature_override
 
     @property
     def external_temperature_applied(self) -> bool:
@@ -994,6 +1055,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
             for key, value in params.items():
                 setattr(airco_stat, key, value)
+
+            # After the parameters, not before: the correction depends on the
+            # mode this frame is putting the unit into, which a command in
+            # params may just have changed.
+            airco_stat.ExternalTemperature = self._corrected_external_temperature(
+                airco_stat.ExternalTemperature, airco_stat.OperationMode
+            )
 
             try:
                 command = self._parser.to_base64(airco_stat)

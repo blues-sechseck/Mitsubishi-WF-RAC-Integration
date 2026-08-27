@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable
 from functools import partial
 from typing import Any
@@ -21,10 +22,14 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import selector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     DEFAULT_PORT,
+    CONF_OVERSHOOT_COOL,
+    CONF_OVERSHOOT_HEAT,
+    OVERSHOOT_MAX,
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_FIRMWARE_UPDATE_CHECK,
@@ -413,6 +418,17 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return name if isinstance(name, str) else None
 
 
+def _to_whole_degrees(value: Any) -> Any:
+    """Round a target offset to what the unit can actually hold.
+
+    Away from zero, so a correction a user entered never comes out smaller
+    than they asked for.
+    """
+    if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return value
+    return math.copysign(math.ceil(abs(value)), value)
+
+
 class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
     """Base class for options handling."""
 
@@ -428,7 +444,25 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
             data = {**user_input, CONF_HOST: self.config_entry.options[CONF_HOST]}
             return self.async_create_entry(title="", data=data)
 
-        offset_range_validator = vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0))
+        # Whole degrees, because that is all the unit has: a half degree sent
+        # to it is rounded up, so a 0.5 step here promises a fineness that
+        # silently becomes 1.0 (measured on hardware, see issue #218). A value
+        # stored from an earlier version still applies as it always did; the
+        # form just rounds it when next opened rather than offering steps that
+        # do not exist.
+        offset_range_validator = vol.All(
+            vol.Coerce(float), vol.Range(min=-5.0, max=5.0), _to_whole_degrees
+        )
+        overshoot_validator = vol.All(
+            vol.Coerce(float), vol.Range(min=0.0, max=OVERSHOOT_MAX)
+        )
+        overshoot_fields: dict[Any, Any] = {
+            vol.Optional(
+                key,
+                default=self.config_entry.options.get(key, 0.0),
+            ): overshoot_validator
+            for key in (CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_HEAT)
+        }
         # target_offset_cool/heat are optional per-mode overrides that must
         # stay "unset" (None) unless the user explicitly fills them in - a
         # default= here would coerce a blank field to 0.0 and defeat the
@@ -438,7 +472,11 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
         per_mode_offset_fields: dict[Any, Any] = {
             vol.Optional(
                 key,
-                description={"suggested_value": self.config_entry.options.get(key)},
+                description={
+                    "suggested_value": _to_whole_degrees(
+                        self.config_entry.options.get(key)
+                    )
+                },
             ): vol.Any(None, offset_range_validator)
             for key in (CONF_TARGET_OFFSET_COOL, CONF_TARGET_OFFSET_HEAT)
         }
@@ -470,9 +508,14 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                     ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
                     vol.Optional(
                         CONF_TARGET_OFFSET,
-                        default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0),
+                        description={
+                            "suggested_value": _to_whole_degrees(
+                                self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0)
+                            )
+                        },
                     ): offset_range_validator,
                     **per_mode_offset_fields,
+                    **overshoot_fields,
                 },
             ),
         )
