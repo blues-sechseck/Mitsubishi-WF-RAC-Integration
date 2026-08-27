@@ -531,6 +531,33 @@ async def test_external_temperature_source_ignores_a_repeated_protocol_value(dev
     entity._call_on_remove_callbacks()
 
 
+@pytest.mark.parametrize(
+    "bad_state",
+    [
+        "not a number",
+        # Encodable range is -15.25..48.25 °C; anything else raises in the
+        # encoder on every frame it would go into.
+        "120",
+    ],
+)
+async def test_external_temperature_source_clears_on_an_unusable_value(device, bad_state):
+    # Deliberately the same outcome as unavailable: a source producing garbage
+    # is not measuring the room either, and holding the last good value would
+    # leave the unit regulating on a reading nothing stands behind.
+    source = _with_external_temperature_source(device)
+    device.hass.states.async_set(source, "20", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+    assert entity._external_temperature_override == 20.0
+
+    device.hass.states.async_set(source, bad_state, {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    await device.hass.async_block_till_done()
+
+    assert entity._external_temperature_override is None
+    assert device.external_temperature_override is None
+    entity._call_on_remove_callbacks()
+
+
 async def test_set_external_temperature_refuses_values_with_configured_source(device):
     _with_external_temperature_source(device)
     entity = _service_entity(device)

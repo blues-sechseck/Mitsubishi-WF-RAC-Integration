@@ -10,7 +10,8 @@ import pytest
 from homeassistant import config_entries
 from homeassistant.const import CONF_DEVICE_ID
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -531,6 +532,59 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
     # host isn't a form field anymore (moved to the reconfigure flow), but
     # the entry's existing value must survive an options save regardless.
     assert result["data"]["host"] == "192.168.1.50"
+
+
+async def test_options_flow_refuses_its_own_entity_as_source(hass: HomeAssistant):
+    # An armed override makes the unit report the injected value back, so this
+    # integration's own temperature sensors follow it. Feeding one back in
+    # would walk the override away from the room half a kelvin per poll, so
+    # the selector excludes them - and rejects one on submit, not just in the
+    # picker.
+    import voluptuous as vol
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+    own = er.async_get(hass).async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "own-indoor-temperature",
+        suggested_object_id="living_room_ac_indoor_temperature",
+        config_entry=entry,
+    )
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with pytest.raises((vol.Invalid, InvalidData)):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {CONF_EXTERNAL_TEMPERATURE_SOURCE: own.entity_id},
+        )
+
+    assert entry.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE) is None
+
+
+async def test_options_flow_accepts_a_foreign_temperature_sensor(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+    er.async_get(hass).async_get_or_create(
+        "sensor", DOMAIN, "own-indoor-temperature", config_entry=entry
+    )
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature"},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_EXTERNAL_TEMPERATURE_SOURCE] == "sensor.hallway_temperature"
 
 
 @pytest.mark.parametrize(

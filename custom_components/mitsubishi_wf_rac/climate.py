@@ -186,9 +186,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                     self.hass, source, self._handle_external_temperature_source_change
                 )
             )
-        # No async_write_ha_state() here: the platform writes the state itself
-        # once this returns, and until then the entity is still being added,
-        # which makes the call a no-op.
+        # No async_write_ha_state() of its own here: the platform writes the
+        # state itself once this returns. (The source path above goes through
+        # _set_external_temperature_override, whose write is harmless for the
+        # same reason.)
         self._update_state()
 
     @property
@@ -208,7 +209,13 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                 UnitOfTemperature.CELSIUS,
             )
         except (TypeError, ValueError):
-            _LOGGER.warning("Ignoring unusable external temperature source state: %s", state.state)
+            # Returning None clears the override rather than holding the last
+            # good value: a source producing garbage is a source that is not
+            # measuring the room, which is the same situation as unavailable.
+            _LOGGER.warning(
+                "Clearing the external temperature override: source state %s is unusable",
+                state.state,
+            )
             return None
 
         # Compare protocol values, not raw sensor precision: otherwise tiny
@@ -216,8 +223,8 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         value = round(value * 4) / 4
         if not EXTERNAL_TEMPERATURE_MIN <= value <= EXTERNAL_TEMPERATURE_MAX:
             _LOGGER.warning(
-                "Ignoring external temperature source value %s °C: outside the "
-                "encodable range of %s..%s °C",
+                "Clearing the external temperature override: source value %s °C is "
+                "outside the encodable range of %s..%s °C",
                 value,
                 EXTERNAL_TEMPERATURE_MIN,
                 EXTERNAL_TEMPERATURE_MAX,
