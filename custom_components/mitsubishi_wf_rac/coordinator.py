@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections import deque
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from collections.abc import Callable
@@ -275,7 +276,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._foreign_activity_since: datetime | None = None
         self._service_data_task: asyncio.Task[None] | None = None
         self._external_temperature_override: float | None = None
-        self._external_temperature_applied = False
+        # The byte-5 values recent frames actually carried. Two, not one: a
+        # frame carrying a new value goes out before the unit reports it back,
+        # so during that one cycle the previous value is still the one the
+        # unit is regulating on. Comparing against only the newest would make
+        # external_temperature_applied - and with it the indoor offset - flip
+        # off and on again on every value a source sensor feeds in.
+        self._external_temperature_written: deque[int] = deque(maxlen=2)
         self._external_temperature_carrier: Callable[[], None] | None = None
         self._consecutive_failures = 0
         # Clamped rather than validated: an entry can carry a lower value from
@@ -338,14 +345,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         it: a restored value says what we intend to send, not what the unit
         currently regulates on.
 
-        Replacing one override with another leaves that standing, though. The
-        unit is holding an override either way, and the new reading reaches it
-        on the next frame; resetting the flag for every value a source sensor
-        reports would make anything keyed to it flip back and forth at the
-        rate of the automation feeding it.
+        Nothing here says the unit has been told - see
+        external_temperature_applied, which reads that off the wire.
         """
-        if (value is None) != (self._external_temperature_override is None):
-            self._external_temperature_applied = False
+        if value is None:
+            self._external_temperature_written.clear()
         self._external_temperature_override = value
         self._sync_external_temperature_carrier()
 
@@ -386,15 +390,25 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def external_temperature_applied(self) -> bool:
-        """Whether a frame carrying the override has actually reached the unit
-        since it was armed.
+        """Whether the unit is currently regulating on a value we supplied.
 
-        False after a restart or reload until the next command or operation-data
-        request goes out, and again whenever a frame writes 0xFF instead (any
-        command sent while off or in fan_only does). Best effort: a command from
-        another controller can revert byte 5 without us seeing it.
+        Read off the wire rather than remembered: the unit echoes an injected
+        value back in byte 5 unchanged, so the byte it reports matching one a
+        recent frame carried is exactly the question - false after a restart
+        until a frame has gone out, false while the unit is off or in fan_only
+        (nothing writes the byte there), and false once another controller
+        takes the unit off the override without telling us.
+
+        One blind spot, and it is harmless: if the room happens to sit within
+        a quarter kelvin of the armed value, the unit's own reading encodes to
+        the same byte and this reads true early. Both branches show the same
+        temperature then, and the calibration offset it suppresses is at most
+        that far from being right anyway.
         """
-        return self._external_temperature_applied
+        if self._external_temperature_override is None or self._airco is None:
+            return False
+        raw = self._airco.ControllerRoomTempRaw
+        return raw is not None and raw in self._external_temperature_written
 
     def _subscribed_service_data_codes(self) -> tuple[int, ...]:
         """Operation-data codes currently subscribed, sorted: one per enabled
@@ -1015,12 +1029,14 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self._carry_forward_home_leave_mode(new_airco)
                 self._carry_forward_service_data(new_airco)
                 self._airco = new_airco
-                # After the write, not before: until the unit has answered,
-                # nothing says it holds the value (see
-                # external_temperature_applied).
-                self._external_temperature_applied = (
-                    self._parser.carries_external_temperature(airco_stat)
-                )
+                # After the write, and only for what the frame really carried:
+                # a command sent while the unit is off writes the sentinel, not
+                # the override.
+                written = self._parser.external_temperature_raw_in_frame(airco_stat)
+                if written is None:
+                    self._external_temperature_written.clear()
+                else:
+                    self._external_temperature_written.append(written)
             except (AirconApiError, KeyError, TypeError, ValueError) as ex:
                 if log_failure:
                     _LOGGER.warning("Could not send airco data: %s", str(ex))

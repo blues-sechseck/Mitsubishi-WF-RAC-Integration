@@ -74,6 +74,10 @@ class Aircon(AirconBase):
     """Aircon (receive) class extends AirconBase class"""
 
     IndoorTemp: float = 0.0
+    # Raw byte 5 of the receive half: the room temperature the controller is
+    # working with, in 0.25 K steps (raw = round(T * 4) + 61). Compared as a
+    # byte, never displayed - see rac_parser._parse_basic_settings().
+    ControllerRoomTempRaw: int | None = None
     OutdoorTemp: float = 0.0
     Electric: float | None = None
     ErrorCode: str = ""
