@@ -21,10 +21,14 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import selector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     DEFAULT_PORT,
+    CONF_OVERSHOOT_COOL,
+    CONF_OVERSHOOT_HEAT,
+    OVERSHOOT_MAX,
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_FIRMWARE_UPDATE_CHECK,
@@ -429,6 +433,16 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=data)
 
         offset_range_validator = vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0))
+        overshoot_validator = vol.All(
+            vol.Coerce(float), vol.Range(min=0.0, max=OVERSHOOT_MAX)
+        )
+        overshoot_fields: dict[Any, Any] = {
+            vol.Optional(
+                key,
+                default=self.config_entry.options.get(key, 0.0),
+            ): overshoot_validator
+            for key in (CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_HEAT)
+        }
         # target_offset_cool/heat are optional per-mode overrides that must
         # stay "unset" (None) unless the user explicitly fills them in - a
         # default= here would coerce a blank field to 0.0 and defeat the
@@ -473,6 +487,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                         default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0),
                     ): offset_range_validator,
                     **per_mode_offset_fields,
+                    **overshoot_fields,
                 },
             ),
         )

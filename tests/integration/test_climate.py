@@ -21,6 +21,7 @@ from custom_components.mitsubishi_wf_rac.sensor import TemperatureSensor
 from custom_components.mitsubishi_wf_rac.const import (
     ATTR_TARGET_TEMPERATURE,
     CONF_INDOOR_OFFSET,
+    CONF_OVERSHOOT_COOL,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -415,6 +416,38 @@ async def test_set_external_temperature_arms_while_the_unit_is_off(device):
 
     assert entity._external_temperature_override == 20.0
     device.async_queue_command.assert_not_awaited()
+
+
+async def test_current_temperature_shows_the_room_not_the_bent_value(device):
+    # With an overshoot configured the unit is handed a value that is
+    # deliberately not the room, and it reports that value back. The card has
+    # to show the room the user supplied instead - otherwise the correction
+    # would look like the room got colder.
+    _set_options(device, {CONF_OVERSHOOT_COOL: 1.0})
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    entity = _service_entity(device)
+
+    await entity.async_set_external_temperature(temperature=22.0)
+    # What a frame carrying the bent value leaves behind.
+    _mark_reached_the_unit(device, 21.0)
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 22.0
+
+
+async def test_current_temperature_follows_the_unit_without_an_overshoot(device):
+    # Nothing is being bent, so there is nothing to correct back: both the
+    # card and the Indoor Temperature sensor mirror the unit.
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    entity = _service_entity(device)
+
+    await entity.async_set_external_temperature(temperature=22.0)
+    _mark_reached_the_unit(device, 22.0)
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 22.5
 
 
 def _restoring_entity(device, restored: dict[str, float | str | None]) -> AircoClimate:

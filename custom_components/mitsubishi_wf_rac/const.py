@@ -75,6 +75,16 @@ CONF_OUTDOOR_OFFSET = "outdoor_offset"
 CONF_TARGET_OFFSET = "target_offset"
 CONF_TARGET_OFFSET_COOL = "target_offset_cool"
 CONF_TARGET_OFFSET_HEAT = "target_offset_heat"
+# How far past the setting the room actually goes before the unit stops. Not a
+# display correction like the offsets above: it shifts the room temperature fed
+# to the unit, which is the only lever fine enough to correct this (0.25 K, vs
+# whole degrees for the setpoint - the unit rounds half degrees up).
+# Protocol mode numbers, mirroring HVAC_TRANSLATION below.
+OPERATION_MODE_COOL = 1
+OPERATION_MODE_HEAT = 2
+CONF_OVERSHOOT_COOL = "overshoot_cool"
+CONF_OVERSHOOT_HEAT = "overshoot_heat"
+OVERSHOOT_MAX = 3.0
 
 SENSOR_TYPE_TEMPERATURE = "temperature"
 

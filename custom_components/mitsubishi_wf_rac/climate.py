@@ -478,9 +478,18 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         # return-air sensor, which is out of the loop while the unit is
         # regulating on a value the user supplied. Applying it there would
         # correct a reading that needs no correcting.
-        self._attr_current_temperature = airco.IndoorTemp + (
-            0.0 if self._device.external_temperature_applied else indoor_offset
-        )
+        # One exception to reporting the unit verbatim: with an overshoot
+        # correction configured, the value the unit reports is the bent one it
+        # was handed on purpose. The room is what the user supplied, so that is
+        # what the card shows - the Indoor Temperature sensor still mirrors the
+        # unit, which is what makes the two disagree exactly then and only then.
+        room = self._device.external_temperature_room_value
+        if room is not None:
+            self._attr_current_temperature = room
+        else:
+            self._attr_current_temperature = airco.IndoorTemp + (
+                0.0 if self._device.external_temperature_applied else indoor_offset
+            )
         self._attr_fan_mode = list(FAN_MODE_TRANSLATION.keys())[airco.AirFlow]
         self._attr_swing_mode = (
             SWING_3D_AUTO

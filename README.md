@@ -270,6 +270,8 @@ device before saving it.
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
+| Cooling overshoot | 0..3 °C | How far past your setting the room actually goes before the unit stops. Set 22 °C, room settles at 21 °C: enter 1. Only has an effect while an external room temperature is in use. |
+| Heating overshoot | 0..3 °C | The same for heating: how far above your setting the room ends up. Positive in both cases. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 
 ### Target Temp. Offset sign convention
@@ -312,6 +314,16 @@ Feeding the value from an automation on every sensor update is fine and costs no
 **While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; keep your own sensor for that. Clearing the override brings the real reading back within a cycle.
 
 The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. Both `current_temperature` and the Indoor Temperature sensor show what the unit reports throughout, so they agree with each other and with the official app at every point.
+
+### When the room ends up past your setting
+
+With an external room temperature in use, most units cool the room further than asked before stopping - measured between 0.6 and 2 K across four different models, and the same figure repeats every cycle. Heating has so far looked correct.
+
+Set **Cooling overshoot** to how far it goes: aim for 22 °C, watch where the room settles, and enter the difference as a positive number. The integration then hands the unit a room temperature that much lower, so the unit reaches its own stopping point exactly when your room is on target. Your setpoint and everything shown in Home Assistant stay the number you asked for.
+
+Why here and not in Target Temp. Offset: on the units measured so far, a half-degree setpoint is rounded up to the next whole one, so that field is too coarse for a correction of less than a degree (owners of ZT and ZTL units report their models do take half degrees). The room temperature the unit is fed has 0.25 °C steps on every model, so correcting there is the finer of the two - and it leaves the setpoint matching what the official app shows.
+
+While a correction is active, the climate entity's `current_temperature` shows your room temperature, and the Indoor Temperature sensor keeps showing what the unit reports - which is the lowered value, on purpose. That is the one situation where the two differ.
 
 # Known limitations
 
