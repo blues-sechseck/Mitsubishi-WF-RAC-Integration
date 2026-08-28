@@ -35,6 +35,7 @@ async def async_setup_entry(
         ProblemBinarySensor(device),
         CompressorBinarySensor(device),
         ExternalControlBinarySensor(device),
+        ExternalTemperatureActiveBinarySensor(device),
     ]
     # Occupancy ("vacant") detection is only reported by units whose capability
     # table has VacantProperty=true - includes ZT-2025 (raw=3), which the
@@ -118,6 +119,30 @@ class ExternalControlBinarySensor(WfRacEntity, BinarySensorEntity):
 
     def _update_state(self) -> None:
         self._attr_is_on = self._device.foreign_activity
+
+
+class ExternalTemperatureActiveBinarySensor(WfRacEntity, BinarySensorEntity):
+    """Reports whether the unit is regulating on a temperature we supplied.
+
+    Armed is not the same as in effect: nothing is written while the unit is
+    off or in fan_only (see is_external_temperature_mode), and after a restart
+    the value waits for the next outgoing frame. Both cases used to be visible
+    only in the README, which is where people went looking after their
+    override appeared to do nothing.
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = "external_temperature_active"
+
+    def __init__(self, device: Device) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(device)
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-external-temperature-active"
+        self._update_state()
+
+    def _update_state(self) -> None:
+        self._attr_is_on = self._device.external_temperature_applied
 
 
 class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):

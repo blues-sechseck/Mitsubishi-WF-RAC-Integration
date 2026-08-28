@@ -97,7 +97,8 @@
           "overshoot_cool": "How far the room goes past your setting before the unit stops. Set 22 °C and the room settles at 21 °C: enter 1. Only has an effect while an external room temperature is in use, and 0 changes nothing.",
           "overshoot_heat": "The same for heating: how far above your setting the room ends up. Enter a positive number in both cases.",
           "target_offset": "Most units round a half degree up to the next whole one, so 0.5 here often acts as 1.",
-          "external_temperature_source": "The selected sensor controls the external temperature override. Unavailable or unknown states return the unit to its internal sensor."        }
+          "external_temperature_source": "The selected sensor controls the external temperature override. Unavailable or unknown states return the unit to its internal sensor."
+        }
       }
     }
   },
@@ -329,6 +330,9 @@
       },
       "external_control": {
         "name": "External Control"
+      },
+      "external_temperature_active": {
+        "name": "External Temperature Active"
       }
     },
     "switch": {},
