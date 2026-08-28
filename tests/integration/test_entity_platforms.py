@@ -183,6 +183,29 @@ async def test_external_control_sensor_follows_the_backoff(platform_device):
     assert entity.is_on is False
 
 
+async def test_external_temperature_active_sensor_shows_when_it_took_effect(platform_device):
+    """Arming is not the same as in effect: nothing is written while the unit
+    is off, and after a restart the value waits for the next frame. Both used
+    to be invisible, which is what sent people to the README."""
+    entity = binary_sensor.ExternalTemperatureActiveBinarySensor(platform_device)
+    assert entity.is_on is False
+
+    platform_device.set_external_temperature_override(21.0)
+    entity._update_state()
+    # Armed, but no frame has carried it yet.
+    assert entity.is_on is False
+
+    raw = round(21.0 * 4) + 61
+    platform_device._external_temperature_written.append(raw)
+    platform_device.airco.ControllerRoomTempRaw = raw
+    entity._update_state()
+    assert entity.is_on is True
+
+    platform_device.set_external_temperature_override(None)
+    entity._update_state()
+    assert entity.is_on is False
+
+
 @pytest.mark.parametrize("capture, mode, action", [
     ("off", HVACMode.OFF, HVACAction.OFF),
     ("on_cool", HVACMode.COOL, HVACAction.IDLE),
