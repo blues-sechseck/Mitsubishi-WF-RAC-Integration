@@ -267,9 +267,9 @@ device before saving it.
 | Retry limit | 3 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link; it cannot be set lower. |
 | Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. Suspended while an external temperature override is in effect: the unit is reporting the value it was given rather than measuring, so there is nothing to calibrate. |
 | Outdoor Temp. Sensor Offset | -15..15 °C | Same, for the Outdoor Temperature sensor. |
-| Target Temp. Offset | -5..5 °C, whole degrees | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
-| Target Temp. Offset (Cooling) | -5..5 °C, whole degrees, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
-| Target Temp. Offset (Heating) | -5..5 °C, whole degrees, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
+| Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
+| Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
+| Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
 | Cooling overshoot | 0..3 °C | How far past your setting the room actually goes before the unit stops. Set 22 °C, room settles at 21 °C: enter 1. Only has an effect while an external room temperature is in use. |
 | Heating overshoot | 0..3 °C | The same for heating: how far above your setting the room ends up. Positive in both cases. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
@@ -321,7 +321,7 @@ With an external room temperature in use, most units cool the room further than 
 
 Set **Cooling overshoot** to how far it goes: aim for 22 °C, watch where the room settles, and enter the difference as a positive number. The integration then hands the unit a room temperature that much lower, so the unit reaches its own stopping point exactly when your room is on target. Your setpoint and everything shown in Home Assistant stay the number you asked for.
 
-Why here and not in Target Temp. Offset: the unit only accepts whole-degree setpoints and rounds half a degree up, while the room temperature it is fed has 0.25 °C steps. Correcting through the room temperature is simply the finer of the two, and it leaves the setpoint matching what the official app shows.
+Why here and not in Target Temp. Offset: on the units measured so far, a half-degree setpoint is rounded up to the next whole one, so that field is too coarse for a correction of less than a degree (owners of ZT and ZTL units report their models do take half degrees). The room temperature the unit is fed has 0.25 °C steps on every model, so correcting there is the finer of the two - and it leaves the setpoint matching what the official app shows.
 
 While a correction is active, the climate entity's `current_temperature` shows your room temperature, and the Indoor Temperature sensor keeps showing what the unit reports - which is the lowered value, on purpose. That is the one situation where the two differ.
 

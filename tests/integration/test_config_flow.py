@@ -519,12 +519,12 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
         {
             CONF_INDOOR_OFFSET: 1.0,
             CONF_OUTDOOR_OFFSET: -1.0,
-            CONF_TARGET_OFFSET: 1.0,
+            CONF_TARGET_OFFSET: 0.5,
         },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_TARGET_OFFSET] == 1.0
+    assert result["data"][CONF_TARGET_OFFSET] == 0.5
     # host isn't a form field anymore (moved to the reconfigure flow), but
     # the entry's existing value must survive an options save regardless.
     assert result["data"]["host"] == "192.168.1.50"
@@ -636,41 +636,15 @@ async def test_options_flow_saves_submitted_per_mode_offsets(hass: HomeAssistant
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            CONF_TARGET_OFFSET: 1.0,
-            CONF_TARGET_OFFSET_COOL: 2.0,
-            CONF_TARGET_OFFSET_HEAT: -2.0,
+            CONF_TARGET_OFFSET: 0.5,
+            CONF_TARGET_OFFSET_COOL: 1.5,
+            CONF_TARGET_OFFSET_HEAT: -1.5,
         },
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_TARGET_OFFSET_COOL] == 2.0
-    assert result["data"][CONF_TARGET_OFFSET_HEAT] == -2.0
-
-
-@pytest.mark.parametrize(
-    "submitted,stored",
-    [(0.5, 1.0), (-0.5, -1.0), (1.25, 2.0), (-1.75, -2.0), (0.0, 0.0), (2.0, 2.0)],
-)
-async def test_options_flow_rounds_target_offsets_to_whole_degrees(
-    hass: HomeAssistant, submitted, stored
-):
-    # The unit only holds whole degrees and rounds a half up, so a fractional
-    # setting here silently became a bigger one (#218). Rounding away from zero
-    # keeps a correction from coming out smaller than the user asked for.
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"name": "Living Room AC"},
-        options={"host": "192.168.1.50"},
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_TARGET_OFFSET: submitted}
-    )
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_TARGET_OFFSET] == stored
+    assert result["data"][CONF_TARGET_OFFSET_COOL] == 1.5
+    assert result["data"][CONF_TARGET_OFFSET_HEAT] == -1.5
 
 
 async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: HomeAssistant):
