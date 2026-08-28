@@ -55,6 +55,7 @@
         "data": {
           "availability_retry_limit": "Retry limit (minimum 3)",
           "firmware_update_check": "Firmware Update Check (Online)",
+          "external_temperature_source": "External temperature source",
           "indoor_offset": "Indoor Temp. Sensor Offset",
           "outdoor_offset": "Outdoor Temp. Sensor Offset",
           "target_offset": "Target Temp. Offset",
@@ -69,8 +70,8 @@
           "target_offset_heat": "Leave empty to use the general target temperature offset.",
           "overshoot_cool": "How far the room goes past your setting before the unit stops. Set 22 °C and the room settles at 21 °C: enter 1. Only has an effect while an external room temperature is in use, and 0 changes nothing.",
           "overshoot_heat": "The same for heating: how far above your setting the room ends up. Enter a positive number in both cases.",
-          "target_offset": "Most units round a half degree up to the next whole one, so 0.5 here often acts as 1."
-        }
+          "target_offset": "Most units round a half degree up to the next whole one, so 0.5 here often acts as 1.",
+          "external_temperature_source": "The selected sensor controls the external temperature override. Unavailable or unknown states return the unit to its internal sensor."        }
       }
     }
   },
@@ -89,6 +90,9 @@
     },
     "home_leave_mode_not_supported": {
       "message": "This model does not report the Home Leave Mode capability."
+    },
+    "external_temperature_source_configured": {
+      "message": "External temperature is controlled by the configured source entity."
     },
     "home_leave_mode_status_unknown": {
       "message": "Home Leave Mode values are unknown yet. Call the climate entity's \"Request Home Leave Mode status\" action once first - the unit doesn't include them in a plain poll."

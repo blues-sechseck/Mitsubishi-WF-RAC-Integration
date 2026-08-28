@@ -309,11 +309,13 @@ The value is not a setting the unit stores under a flag of its own. It has no se
 - **Nothing is written just for the override.** A frame carrying it also re-asserts power, mode, fan speed, setpoint and both louver axes, and it takes the unit's 60-second write lock. Sending one per sensor reading would end any running self-clean cycle and keep the official app locked out for as long as the override is in use.
 - **While the unit is off or in `fan_only`, the override is not written.** Neither mode regulates on a room temperature, and a request carrying the value ends a self-clean cycle started from the remote - self-clean runs from the off state. The unit falls back to its own sensor there, and the first frame after it returns to a regulating mode writes the value again.
 
-Feeding the value from an automation on every sensor update is fine and costs nothing extra - each call just replaces the armed value. What an armed override does cost is that one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
+You can select an **External temperature source** in the integration options. The integration reads that temperature sensor immediately after setup and follows its state changes itself, converting its unit to °C and rounding to the protocol's 0.25 °C steps. If the source becomes `unavailable`, `unknown`, or disappears, it clears the override on the next frame so the unit returns to its internal sensor. When a source is configured, use of `set_external_temperature` with a value is refused to avoid two competing writers; calling it without `temperature` still clears the override, though only until the source reports again. The source cannot be one of this integration's own temperature sensors: while an override is armed those report the injected value back, so feeding one in would walk the override away from the room. Without a configured source, automations using the action remain supported as before.
+
+What an armed override costs is one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
 
 **While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; keep your own sensor for that. Clearing the override brings the real reading back within a cycle.
 
-The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. Both `current_temperature` and the Indoor Temperature sensor show what the unit reports throughout, so they agree with each other and with the official app at every point.
+An action-driven override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. With a configured source, its current state is used instead of a restored value. Both `current_temperature` and the Indoor Temperature sensor show what the unit reports throughout, so they agree with each other and with the official app - with the one exception described next.
 
 ### When the room ends up past your setting
 
@@ -331,10 +333,6 @@ While a correction is active, the climate entity's `current_temperature` shows y
   trigger it either - the unit's self-clean cycle can only be started from its own IR remote, and
   nothing on the wire distinguishes "self-clean running" from "off" (see
   [§6.4 of the protocol reference](docs/wf-rac-module-reference.md#64-self-clean-cannot-be-started-remotely)).
-- **No external temperature sensor input.** The unit always controls off its own built-in
-  return-air sensor; there is currently no way to feed it a reading from an external Home Assistant
-  sensor instead. The Indoor/Outdoor Temp. Sensor Offset options only correct what's *displayed*,
-  not what the unit's own control loop uses.
 - **The Firmware Update entity is read-only.** It reports whether newer WF-RAC module firmware is
   available; installing it isn't offered through this integration - the module updates itself via
   the official app.

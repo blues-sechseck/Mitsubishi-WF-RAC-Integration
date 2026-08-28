@@ -71,6 +71,7 @@ ATTR_PROTECTION_RAW = "protection_raw"
 
 # New offset constants
 CONF_INDOOR_OFFSET = "indoor_offset"
+CONF_EXTERNAL_TEMPERATURE_SOURCE = "external_temperature_source"
 CONF_OUTDOOR_OFFSET = "outdoor_offset"
 CONF_TARGET_OFFSET = "target_offset"
 CONF_TARGET_OFFSET_COOL = "target_offset_cool"

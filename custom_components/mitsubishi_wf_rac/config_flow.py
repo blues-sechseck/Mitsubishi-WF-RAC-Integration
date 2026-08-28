@@ -21,7 +21,7 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import selector
+from homeassistant.helpers import entity_registry as er, selector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
@@ -32,6 +32,7 @@ from .const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_FIRMWARE_UPDATE_CHECK,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OPERATOR_ID,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
@@ -420,6 +421,16 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
     """Base class for options handling."""
 
+    def _own_entity_ids(self) -> list[str]:
+        """Entity IDs this entry owns - the ones a source must never be."""
+        registry = er.async_get(self.hass)
+        return sorted(
+            entry.entity_id
+            for entry in er.async_entries_for_config_entry(
+                registry, self.config_entry.entry_id
+            )
+        )
+
     async def async_step_init(
             self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -478,6 +489,31 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_INDOOR_OFFSET,
                         default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0),
                     ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
+                    # Keep this optional without a default: an omitted source
+                    # must stay omitted, rather than becoming a falsey value
+                    # that unnecessarily changes the saved options shape.
+                    vol.Optional(
+                        CONF_EXTERNAL_TEMPERATURE_SOURCE,
+                        description={
+                            "suggested_value": self.config_entry.options.get(
+                                CONF_EXTERNAL_TEMPERATURE_SOURCE
+                            )
+                        },
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="sensor",
+                            device_class="temperature",
+                            # This integration's own temperature sensors report
+                            # the injected value back while an override is
+                            # armed, so picking one would feed the override
+                            # into itself and walk it away from the room half a
+                            # kelvin per poll. EntitySelector rejects an
+                            # excluded entity on submit, not just in the
+                            # picker, so this is the enforcement and not only a
+                            # convenience.
+                            exclude_entities=self._own_entity_ids(),
+                        )
+                    ),
                     vol.Optional(
                         CONF_OUTDOOR_OFFSET,
                         default=self.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0),

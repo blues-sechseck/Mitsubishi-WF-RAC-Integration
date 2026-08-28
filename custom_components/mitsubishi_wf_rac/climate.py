@@ -15,12 +15,20 @@ from homeassistant.components.climate.const import (
     HVACAction,
     FAN_AUTO,
 )
-from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
-from homeassistant.core import HomeAssistant
+from homeassistant.const import (
+    ATTR_TEMPERATURE,
+    ATTR_UNIT_OF_MEASUREMENT,
+    STATE_UNKNOWN,
+    STATE_UNAVAILABLE,
+    UnitOfTemperature,
+)
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
+from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .entity import WfRacEntity
 from .coordinator import Device
@@ -50,6 +58,7 @@ from .const import (
     SWING_HORIZONTAL_MODE_TRANSLATION,
     SUPPORT_SWING_HORIZONTAL_MODES,
     CONF_INDOOR_OFFSET,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -165,11 +174,84 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        self._restore_external_temperature_override(await self.async_get_last_extra_data())
-        # No async_write_ha_state() here: the platform writes the state itself
-        # once this returns, and until then the entity is still being added,
-        # which makes the call a no-op.
+        source = self._external_temperature_source
+        if source is None:
+            self._restore_external_temperature_override(await self.async_get_last_extra_data())
+        else:
+            # A source's current state is more authoritative than restore data:
+            # the latter can be stale precisely when the source stopped reporting.
+            self._set_external_temperature_from_source_state(self.hass.states.get(source))
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, source, self._handle_external_temperature_source_change
+                )
+            )
+        # No async_write_ha_state() of its own here: the platform writes the
+        # state itself once this returns. (The source path above goes through
+        # _set_external_temperature_override, whose write is harmless for the
+        # same reason.)
         self._update_state()
+
+    @property
+    def _external_temperature_source(self) -> str | None:
+        """Return the configured source, treating a legacy blank as unset."""
+        source = self._device.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
+        return source if isinstance(source, str) and source else None
+
+    def _external_temperature_from_source_state(self, state: State | None) -> float | None:
+        """Convert a usable source state to the quarter-degree protocol grid."""
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return None
+        try:
+            value = TemperatureConverter.convert(
+                float(state.state),
+                state.attributes.get(ATTR_UNIT_OF_MEASUREMENT, UnitOfTemperature.CELSIUS),
+                UnitOfTemperature.CELSIUS,
+            )
+        except (TypeError, ValueError):
+            # Returning None clears the override rather than holding the last
+            # good value: a source producing garbage is a source that is not
+            # measuring the room, which is the same situation as unavailable.
+            _LOGGER.warning(
+                "Clearing the external temperature override: source state %s is unusable",
+                state.state,
+            )
+            return None
+
+        # Compare protocol values, not raw sensor precision: otherwise tiny
+        # changes which encode identically would keep waking the write carrier.
+        value = round(value * 4) / 4
+        if not EXTERNAL_TEMPERATURE_MIN <= value <= EXTERNAL_TEMPERATURE_MAX:
+            _LOGGER.warning(
+                "Clearing the external temperature override: source value %s °C is "
+                "outside the encodable range of %s..%s °C",
+                value,
+                EXTERNAL_TEMPERATURE_MIN,
+                EXTERNAL_TEMPERATURE_MAX,
+            )
+            return None
+        return value
+
+    def _set_external_temperature_override(self, temperature: float | None) -> None:
+        """Arm an override and immediately publish its integration-side state."""
+        self._external_temperature_override = temperature
+        self._device.set_external_temperature_override(temperature)
+        self._update_state()
+        self.async_write_ha_state()
+
+    def _set_external_temperature_from_source_state(self, state: State | None) -> None:
+        """Apply a source state only when its encoded value changes."""
+        temperature = self._external_temperature_from_source_state(state)
+        if temperature == self._external_temperature_override:
+            return
+        self._set_external_temperature_override(temperature)
+
+    @callback
+    def _handle_external_temperature_source_change(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Keep the override tied to the source's availability and value."""
+        self._set_external_temperature_from_source_state(event.data["new_state"])
 
     def _restore_external_temperature_override(self, stored: ExtraStoredData | None) -> None:
         """Re-arm the override recorded before the last restart or reload.
@@ -404,13 +486,15 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         override subscribes to a segment itself, exactly like an enabled
         diagnostic sensor does (see Device._sync_external_temperature_carrier).
         """
-        self._external_temperature_override = temperature
-        self._device.set_external_temperature_override(temperature)
-        # Nothing else refreshes the entity here - no command goes out, so
-        # there is no response to update from, and the next poll is up to a
-        # minute away.
-        self._update_state()
-        self.async_write_ha_state()
+        if temperature is not None and self._external_temperature_source is not None:
+            # Two writers would make the service result immediately temporary
+            # and leave users guessing which one controls the unit.
+            raise ServiceValidationError(
+                "External temperature is controlled by the configured source entity",
+                translation_domain=DOMAIN,
+                translation_key="external_temperature_source_configured",
+            )
+        self._set_external_temperature_override(temperature)
 
     async def async_turn_off(self) -> None:
         """Turn the entity off."""
