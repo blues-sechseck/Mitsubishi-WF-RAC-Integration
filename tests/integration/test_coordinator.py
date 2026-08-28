@@ -342,33 +342,55 @@ async def test_set_airco_explicitly_clears_external_temperature_override(device)
     assert raw[5] == 0xFF
 
 
-async def test_external_temperature_counts_as_applied_once_a_frame_carried_it(device):
+async def test_external_temperature_applied_reads_the_echoed_byte(device):
+    # The unit echoes an injected value back in byte 5 unchanged, so the byte
+    # it reports matching one a recent frame carried is the whole question.
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
-    device.set_external_temperature_override(18.7)
-    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
 
-    # Arming alone says nothing about what the unit holds.
     assert device.external_temperature_applied is False
 
-    await device.set_airco({AirconCommands.PresetTemp: 22})
+    device.set_external_temperature_override(18.7)
+    raw = round(18.7 * 4) + 61
 
+    # Armed, but nothing has carried it yet - the unit is still on its own
+    # sensor even if that happens to read the same.
+    device.airco.ControllerRoomTempRaw = raw
+    assert device.external_temperature_applied is False
+
+    device._external_temperature_written.append(raw)
     assert device.external_temperature_applied is True
 
+    # 0xFF: the unit is back on its own sensor, whatever is still armed here.
+    device.airco.ControllerRoomTempRaw = 0xFF
+    assert device.external_temperature_applied is False
 
-async def test_external_temperature_stops_counting_as_applied_in_fan_only(device):
-    # fan_only sends 0xFF in byte 5, which puts the unit back on its own
-    # sensor - the override stays armed but is no longer in effect.
+    device.airco.ControllerRoomTempRaw = raw
+    device.set_external_temperature_override(None)
+    assert device.external_temperature_applied is False
+
+
+async def test_external_temperature_applied_survives_a_value_change(device):
+    # A source sensor feeding new values must not make the flag - and with it
+    # the indoor offset - flicker: the frame carrying a new value goes out a
+    # cycle before the unit reports it back, and until then the previous value
+    # is what the unit is regulating on.
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     device.set_external_temperature_override(18.7)
-    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+    old_raw = round(18.7 * 4) + 61
+    device._external_temperature_written.append(old_raw)
+    device.airco.ControllerRoomTempRaw = old_raw
 
-    await device.set_airco({AirconCommands.PresetTemp: 22})
-    await device.set_airco({AirconCommands.OperationMode: 3})
+    device.set_external_temperature_override(19.0)
+    new_raw = round(19.0 * 4) + 61
+    device._external_temperature_written.append(new_raw)
 
-    assert device.external_temperature_applied is False
-    assert device.external_temperature_override == 18.7
+    # The frame is out, the unit still reports the previous value.
+    assert device.external_temperature_applied is True
+
+    device.airco.ControllerRoomTempRaw = new_raw
+    assert device.external_temperature_applied is True
 
 
 async def test_set_airco_raises_and_logs_on_send_failure(device):

@@ -265,7 +265,7 @@ device before saving it.
 | Option | Range | Description |
 |---|---|---|
 | Retry limit | 3 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link; it cannot be set lower. |
-| Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. |
+| Indoor Temp. Sensor Offset | -15..15 °C | Added to the unit's own indoor-sensor reading before it's shown as `current_temperature` / the Indoor Temperature sensor - display-only, doesn't change what the unit does. Suspended while an external temperature override is in effect: the unit is reporting the value it was given rather than measuring, so there is nothing to calibrate. |
 | Outdoor Temp. Sensor Offset | -15..15 °C | Same, for the Outdoor Temperature sensor. |
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
@@ -311,7 +311,7 @@ Feeding the value from an automation on every sensor update is fine and costs no
 
 **While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; keep your own sensor for that. Clearing the override brings the real reading back within a cycle.
 
-The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out, which is why the climate entity's `current_temperature` keeps showing the unit's reported reading until then, and the injected value afterwards.
+The override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. Both `current_temperature` and the Indoor Temperature sensor show what the unit reports throughout, so they agree with each other and with the official app at every point.
 
 # Known limitations
 

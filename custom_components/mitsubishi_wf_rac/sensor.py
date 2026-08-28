@@ -284,7 +284,13 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
     def _update_state(self) -> None:
         if self._custom_type == ATTR_INSIDE_TEMPERATURE:
             indoor_offset = self._device.options.get(CONF_INDOOR_OFFSET, 0.0)
-            self._attr_native_value = self._device.airco.IndoorTemp + indoor_offset
+            # Same rule as the climate entity: the offset calibrates the unit's
+            # own return-air sensor, so it is suspended while the unit is
+            # regulating on an injected value instead (the unit reports that
+            # value back here, see Device.external_temperature_applied).
+            self._attr_native_value = self._device.airco.IndoorTemp + (
+                0.0 if self._device.external_temperature_applied else indoor_offset
+            )
         elif self._custom_type == ATTR_OUTSIDE_TEMPERATURE:
             outdoor_offset = self._device.options.get(CONF_OUTDOOR_OFFSET, 0.0)
             self._attr_native_value = self._device.airco.OutdoorTemp + outdoor_offset

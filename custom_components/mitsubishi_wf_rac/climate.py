@@ -470,24 +470,17 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         target_offset = self._resolve_target_offset(mode_from_operation)
 
         self._attr_target_temperature = airco.PresetTemp + target_offset
-        # Report the override once the unit demonstrably holds one and is in a
-        # mode that regulates on it. The unit never echoes the injected value
-        # back - it keeps reporting its own return-air reading in a separate
-        # segment - so this is the only place that can tell an override the
-        # unit has from one that is merely armed and waiting for a frame, as
-        # after a restart. A newer value replacing a live override does not
-        # reset that (see Device.set_external_temperature_override), so this
-        # does not flicker while a sensor feeds it.
-        # Deliberately diverges from the Indoor Temperature sensor, which
-        # always shows the unit's own reading.
-        if (
-            self._external_temperature_override is not None
-            and self._device.external_temperature_applied
-            and is_external_temperature_mode(airco.Operation, airco.OperationMode)
-        ):
-            self._attr_current_temperature = self._external_temperature_override
-        else:
-            self._attr_current_temperature = airco.IndoorTemp + indoor_offset
+        # Always what the unit reports, including while an external override
+        # is in effect - it echoes the injected value back, so the reading
+        # follows the override on its own and the climate entity agrees with
+        # the Indoor Temperature sensor either way.
+        # The calibration offset is what changes: it corrects the unit's own
+        # return-air sensor, which is out of the loop while the unit is
+        # regulating on a value the user supplied. Applying it there would
+        # correct a reading that needs no correcting.
+        self._attr_current_temperature = airco.IndoorTemp + (
+            0.0 if self._device.external_temperature_applied else indoor_offset
+        )
         self._attr_fan_mode = list(FAN_MODE_TRANSLATION.keys())[airco.AirFlow]
         self._attr_swing_mode = (
             SWING_3D_AUTO

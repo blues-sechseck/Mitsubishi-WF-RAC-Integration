@@ -260,10 +260,14 @@ def _service_entity(device) -> AircoClimate:
     return entity
 
 
-def _mark_reached_the_unit(device) -> None:
-    """Stand in for a frame that carried the override, without sending one.
-    The write path's own bookkeeping is covered in test_coordinator.py."""
-    device._external_temperature_applied = True
+def _mark_reached_the_unit(device, temperature: float) -> None:
+    """Put the device in the state that follows a frame carrying the override:
+    the frame recorded what it wrote, byte 5 echoes it back, and the 0.1 K
+    segment carries the same reading."""
+    raw = round(temperature * 4) + 61
+    device._external_temperature_written.append(raw)
+    device.airco.ControllerRoomTempRaw = raw
+    device.airco.IndoorTemp = temperature + 0.5
 
 
 async def test_set_external_temperature_arms_without_sending_anything(device):
@@ -307,7 +311,10 @@ async def test_update_state_uses_indoor_temp_without_override(device):
     assert entity._attr_current_temperature == 23.5
 
 
-async def test_update_state_uses_override_once_the_unit_has_it(device):
+async def test_update_state_shows_what_the_unit_reports_under_an_override(device):
+    # The unit echoes the injected value back, so the reading follows it on its
+    # own. The calibration offset drops out: it corrects the unit's own sensor,
+    # which is not what the unit is regulating on any more.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
@@ -315,10 +322,10 @@ async def test_update_state_uses_override_once_the_unit_has_it(device):
     entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=20.0)
-    _mark_reached_the_unit(device)
+    _mark_reached_the_unit(device, 20.0)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.0
+    assert entity._attr_current_temperature == 20.5
 
 
 async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device):
@@ -336,25 +343,32 @@ async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device)
     assert entity._attr_current_temperature == 23.5
 
 
-async def test_update_state_keeps_showing_the_override_when_the_value_changes(device):
-    # A source sensor feeding the action reports a new value every cycle. That
-    # replaces a live override rather than starting a new one, so the display
-    # must not fall back to the unit's reading in between.
+async def test_update_state_reapplies_the_offset_while_a_new_value_is_in_flight(device):
+    # A source sensor feeding the action reports a new value every cycle. Until
+    # the unit confirms the new one, it is still regulating on the old - and
+    # the display follows the unit rather than what has merely been armed.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
-    device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
     entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=20.0)
-    _mark_reached_the_unit(device)
+    _mark_reached_the_unit(device, 20.0)
     await entity.async_set_external_temperature(temperature=20.25)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.25
+    assert entity._attr_current_temperature == 20.5
+
+    _mark_reached_the_unit(device, 20.25)
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 20.75
 
 
-async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
+async def test_update_state_keeps_the_offset_while_the_unit_is_off_or_fan_only(device):
+    # Nothing writes byte 5 in those modes, so the unit is on its own sensor
+    # however the override is armed - and its own sensor is what the offset
+    # calibrates.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
@@ -362,7 +376,6 @@ async def test_update_state_falls_back_to_indoor_when_off_or_fan_only(device):
     entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=20.0)
-    _mark_reached_the_unit(device)
 
     for operation, mode in (
         (False, HVAC_TRANSLATION[HVACMode.COOL]),
