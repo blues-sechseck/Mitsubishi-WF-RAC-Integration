@@ -582,6 +582,36 @@ def _restoring_entity(device, restored: dict[str, float | str | None]) -> AircoC
     return entity
 
 
+async def test_removing_the_source_clears_what_it_had_armed(device):
+    # Reported in #218: taking the source back out of the options reloads the
+    # entry, and the restore path used to re-arm the value the source had left
+    # behind - so the unit went on regulating on a reading nobody was updating
+    # any more, and only an explicit empty call cleared it.
+    entity = _service_entity(device)
+    entity.async_get_last_extra_data = AsyncMock(
+        return_value=RestoredExtraData(
+            {"external_temperature_override": 19.25, "from_source": True}
+        )
+    )
+
+    await _add_and_remove(entity)
+
+    assert entity._external_temperature_override is None
+    assert device._external_temperature_override is None
+
+
+async def test_an_action_driven_override_still_survives_a_restart(device):
+    # The other half of the same rule: what an automation armed is the user's
+    # standing intent and must come back, because nothing else re-sends it.
+    entity = _restoring_entity(
+        device, {"external_temperature_override": 19.25, "from_source": False}
+    )
+
+    await _add_and_remove(entity)
+
+    assert entity._external_temperature_override == 19.25
+
+
 async def _add_and_remove(entity: AircoClimate) -> None:
     await entity.async_added_to_hass()
     # Added by hand rather than through a platform, so the coordinator
