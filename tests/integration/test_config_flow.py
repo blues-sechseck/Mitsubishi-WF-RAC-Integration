@@ -24,6 +24,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_INDOOR_OFFSET,
     CONF_OPERATOR_ID,
     CONF_OUTDOOR_OFFSET,
+    CONF_OVERSHOOT_COOL,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -702,6 +703,26 @@ async def test_options_flow_saves_submitted_per_mode_offsets(hass: HomeAssistant
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_TARGET_OFFSET_COOL] == 1.5
     assert result["data"][CONF_TARGET_OFFSET_HEAT] == -1.5
+
+
+@pytest.mark.parametrize("value", [1.25, -1.25, 0.0, 3.0, -3.0])
+async def test_options_flow_accepts_a_signed_overshoot(hass: HomeAssistant, value):
+    # Overshooting is what everyone has measured, but a unit that stops short
+    # of the setting needs the correction the other way.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_OVERSHOOT_COOL: value}
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_OVERSHOOT_COOL] == value
 
 
 async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: HomeAssistant):
