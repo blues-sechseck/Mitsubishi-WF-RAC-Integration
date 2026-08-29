@@ -141,10 +141,18 @@ class ExternalTemperatureOverrideData(ExtraStoredData):
     """
 
     external_temperature_override: float | None
+    # Whether a configured source put it there, rather than the action. Only
+    # the latter is a standing intent worth restoring: a value a source left
+    # behind belongs to a source that may since have been removed, and
+    # re-arming it would leave the unit regulating on a reading nobody updates.
+    from_source: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         """Serialise for the restore-state store."""
-        return {"external_temperature_override": self.external_temperature_override}
+        return {
+            "external_temperature_override": self.external_temperature_override,
+            "from_source": self.from_source,
+        }
 
 
 class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
@@ -262,8 +270,19 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         """
         if stored is None:
             return
-        restored = stored.as_dict().get("external_temperature_override")
+        as_dict = stored.as_dict()
+        restored = as_dict.get("external_temperature_override")
         if restored is None:
+            return
+        if as_dict.get("from_source"):
+            # Reached only when no source is configured now, so the source that
+            # armed this is gone - taking it out of the options is how a user
+            # hands control back to the unit, and re-arming here would ignore
+            # that (#218).
+            _LOGGER.debug(
+                "Dropping the restored external temperature override: it came "
+                "from a source entity that is no longer configured"
+            )
             return
         try:
             value = float(restored)
@@ -292,7 +311,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     @property
     def extra_restore_state_data(self) -> ExtraStoredData:
         """What async_added_to_hass() reads back after a restart or reload."""
-        return ExternalTemperatureOverrideData(self._external_temperature_override)
+        return ExternalTemperatureOverrideData(
+            self._external_temperature_override,
+            self._external_temperature_source is not None,
+        )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
