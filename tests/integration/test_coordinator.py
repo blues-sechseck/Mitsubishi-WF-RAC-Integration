@@ -372,6 +372,30 @@ async def test_set_airco_bends_the_override_by_the_configured_overshoot(
     assert raw[5] == int(round(expected * 4)) + 61
 
 
+async def test_set_airco_bends_the_override_the_other_way_when_negative(device):
+    # A unit that stops short of the setting rather than past it needs the
+    # correction reversed: it is told the room is warmer, so it keeps cooling.
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    _set_options(device, {CONF_OVERSHOOT_COOL: -0.75})
+    device._external_temperature_override = 18.7
+
+    captured = {}
+
+    async def _capture_and_echo(airco_id, command, **_kwargs):
+        captured["command"] = command
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    await device.set_airco(
+        {AirconCommands.Operation: True, AirconCommands.OperationMode: 1}
+    )
+
+    raw = base64.b64decode(captured["command"])
+    assert raw[5] == int(round((18.7 + 0.75) * 4)) + 61
+
+
 async def test_set_airco_leaves_the_override_alone_in_other_modes(device):
     # Dry and auto have no measured overshoot of their own, and applying the
     # cooling figure there would be a guess dressed as a correction.

@@ -444,8 +444,12 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=data)
 
         offset_range_validator = vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0))
+        # Negative allowed, though overshooting is what everyone has measured
+        # so far: a unit that stops short of the setting instead needs the
+        # correction the other way, and there is no reason to make that
+        # impossible before anyone has looked.
         overshoot_validator = vol.All(
-            vol.Coerce(float), vol.Range(min=0.0, max=OVERSHOOT_MAX)
+            vol.Coerce(float), vol.Range(min=-OVERSHOOT_MAX, max=OVERSHOOT_MAX)
         )
         overshoot_fields: dict[Any, Any] = {
             vol.Optional(

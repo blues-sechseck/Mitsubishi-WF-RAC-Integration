@@ -79,7 +79,9 @@ CONF_TARGET_OFFSET_HEAT = "target_offset_heat"
 # How far past the setting the room actually goes before the unit stops. Not a
 # display correction like the offsets above: it shifts the room temperature fed
 # to the unit, which is the only lever fine enough to correct this (0.25 K, vs
-# whole degrees for the setpoint - the unit rounds half degrees up).
+# whole degrees for the setpoint - the unit rounds half degrees up). Signed:
+# positive for a room that goes past the setting, negative for one that stops
+# short of it.
 # Protocol mode numbers, mirroring HVAC_TRANSLATION below.
 OPERATION_MODE_COOL = 1
 OPERATION_MODE_HEAT = 2
