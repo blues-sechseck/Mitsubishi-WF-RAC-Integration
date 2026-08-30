@@ -86,7 +86,7 @@ This integration creates one device per airco with the following entities.
 | Entity | Attribute | Available values | Description |
 |---|---|---|---|
 | `climate.<name>` | `hvac_mode` | `off`, `auto`, `cool`, `heat`, `dry`, `fan_only` | Operating mode of the unit. |
-| | `fan_mode` | `auto`, `quiet`, `low`, `medium`, `high` | Fan speed. |
+| | `fan_mode` | `auto`, `quiet`, `low`, `medium`, `high` | Fan speed. `quiet` is the lowest of the four steps, not the remote's ECO setting - ECO can't be set or read through the WLAN module, and while the remote has it running the unit reports the lowest step. |
 | | `swing_mode` | `up_down_auto`, `highest`, `middle`, `normal`, `lowest`, `3d_auto` | Vertical louver position. `3d_auto` hands vertical *and* horizontal swing over to the unit's own automatic mode. |
 | | `swing_horizontal_mode` | `left_right_auto`, `left_left`, `left_center`, `center_center`, `center_right`, `right_right`, `left_right`, `right_left`, `3d_auto` | Horizontal louver position. `3d_auto` behaves as above. |
 | | `target_temperature` | 16–30 °C (cool), 18–30 °C (other modes) | Setpoint. Cooling accepts a lower minimum than heating/auto/dry in practice; heating below 18 °C isn't a reliable plain setpoint (see Home Leave Mode for that instead). |
