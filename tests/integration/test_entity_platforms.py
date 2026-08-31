@@ -261,6 +261,21 @@ async def test_climate_commands_and_state_branches(platform_device):
     with pytest.raises(ServiceValidationError, match="above maximum"):
         await entity.async_set_temperature(temperature=34, hvac_mode=HVACMode.COOL)
 
+    # A setpoint set while the unit is off belongs to the mode that comes
+    # next, so it is held to what the unit accepts anywhere rather than to the
+    # 18C floor of a mode nobody asked for (#317).
+    entity._attr_hvac_mode = HVACMode.OFF
+    assert (entity.min_temp, entity.max_temp) == (16, 30)
+    await entity.async_set_temperature(temperature=16)
+    assert platform_device.async_queue_command.await_args.args[0][AirconCommands.PresetTemp] == 16
+    entity._attr_hvac_mode = HVACMode.FAN_ONLY
+    assert entity.min_temp == 16
+    entity._attr_hvac_mode = HVACMode.HEAT
+    assert entity.min_temp == 18
+    with pytest.raises(ServiceValidationError, match="below minimum"):
+        await entity.async_set_temperature(temperature=16)
+    entity._attr_hvac_mode = HVACMode.COOL
+
     platform_device.airco.Operation = True
     platform_device.airco.CompressorRunning = True
     for mode, expected in ((0, HVACAction.COOLING), (1, HVACAction.COOLING), (2, HVACAction.HEATING), (3, HVACAction.FAN), (4, HVACAction.DRYING)):
