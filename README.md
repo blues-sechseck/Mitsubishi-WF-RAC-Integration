@@ -101,7 +101,7 @@ Any one of them switches the request on, so pick one that always has something t
 
 | Entity | Values | Description |
 |---|---|---|
-| Indoor Temperature | °C | The room temperature the unit reports, exposed as its own sensor. Normally the same value as the climate entity's `current_temperature`; while an external temperature override is in effect it follows that override rather than the room (see [External temperature override](#indoor-temperature-override)). |
+| Indoor Temperature | °C | What the unit reports as the room temperature, exposed as its own sensor. Normally the same value as the climate entity's `current_temperature`; while an override is in effect the two part company, because this one keeps following the unit while the climate entity shows the temperature the unit was handed (see [Indoor temperature override](#indoor-temperature-override)). |
 | Outdoor Temperature *(shared on multi-split)* | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. On multi-split systems this is an outdoor-unit-level value - reads identically on every indoor unit sharing one outdoor unit, since there's only one outdoor sensor. |
 | Target Temperature *(disabled by default)* | °C | Current setpoint, exposed as its own sensor. Off by default because the climate entity already carries the same value as its `target_temperature` attribute. |
 | Energy Usage (current run) | kWh, increasing | Energy consumption of the **current run**, as reported by the unit in **0.25 kWh steps**. The unit clears this counter to 0 every time it is switched on, and holds the last value while it is off — so a low or zero reading is normal, not a fault, and a run consuming less than 0.25 kWh reads 0 throughout. For a lifetime figure use Energy Usage Total below. Only created if the unit actually reports this value — not all models do. |
@@ -321,9 +321,9 @@ You can select a sensor under **Indoor temperature source** in the integration o
 
 What an armed override costs is one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
 
-**While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; keep your own sensor for that. Clearing the override brings the real reading back within a cycle.
+**While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; the climate entity shows the value you supplied instead, and your own sensor remains the measurement. Clearing the override brings the real reading back within a cycle.
 
-An action-driven override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. With a configured source, its current state is used instead of a restored value. Both `current_temperature` and the Indoor Temperature sensor show what the unit reports throughout, so they agree with each other and with the official app - with the one exception described next.
+An action-driven override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. With a configured source, its current state is used instead of a restored value. The Indoor Temperature sensor shows what the unit reports throughout, so it keeps agreeing with the official app. `current_temperature` does not: while the unit is regulating on a value you supplied, the climate entity shows that value.
 
 ### When the room ends up past your setting
 
@@ -333,7 +333,7 @@ Set **Cooling overshoot** to how far it goes: aim for 22 °C, watch where the ro
 
 Why here and not in Target Temp. Offset: on the units measured so far, a half-degree setpoint is rounded up to the next whole one, so that field is too coarse for a correction of less than a degree (owners of ZT and ZTL units report their models do take half degrees). The room temperature the unit is fed has 0.25 °C steps on every model, so correcting there is the finer of the two - and it leaves the setpoint matching what the official app shows.
 
-While a correction is active, the climate entity's `current_temperature` shows your room temperature, and the Indoor Temperature sensor keeps showing what the unit reports - the value it was handed, on purpose. The two therefore differ by the correction, minus the half kelvin the unit adds on the way back: at exactly 0.5 the two cancel out and both read the same, which is not a sign that the correction is doing nothing.
+While an override is in effect, the climate entity's `current_temperature` shows the room temperature you supplied and the Indoor Temperature sensor keeps showing what the unit reports - which is the value it was handed, plus the half kelvin it adds on the way back, minus any correction. The two therefore differ, and how far apart they sit is not a measurement of anything: it is the correction and that half kelvin, which cancel out at exactly 0.5.
 
 # Known limitations
 

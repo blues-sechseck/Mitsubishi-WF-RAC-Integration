@@ -433,19 +433,27 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def external_temperature_room_value(self) -> float | None:
-        """The room temperature behind an override the unit is being lied to
-        about, or None when nothing is being bent.
+        """The room temperature we handed the unit, or None while it is
+        regulating on its own sensor.
 
-        With an overshoot configured, what the unit reports back is the value
-        it was handed, which is deliberately not the room. The number the user
-        supplied is - so that is what the climate entity shows, while the
-        Indoor Temperature sensor keeps reporting the unit verbatim.
+        Whoever supplies a room temperature has said what "the room" means for
+        this unit, so that is what the climate entity shows for as long as the
+        unit is actually using it. What comes back from the unit is not it: an
+        overshoot correction hands it a value that is deliberately not the
+        room, and even without one the echo sits half a kelvin off in the
+        protocol's coarser segment. Deciding this per overshoot - as this did
+        until the reading was found to move half a kelvin when an unrelated
+        option changed - makes the displayed room temperature depend on a
+        setting that has nothing to do with it, and every automation comparing
+        it against a threshold inherits that silently.
+
+        The Indoor Temperature sensor keeps reporting the unit verbatim, so
+        what the unit thinks is still visible - the two disagree exactly while
+        the unit is being fed.
         """
         if self._external_temperature_override is None or self._airco is None:
             return None
         if not self.external_temperature_applied:
-            return None
-        if not self._resolve_overshoot(self._airco.OperationMode):
             return None
         return self._external_temperature_override
 

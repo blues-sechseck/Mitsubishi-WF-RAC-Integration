@@ -406,6 +406,11 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         target_hvac_mode = HVACMode.OFF if target_hvac_mode is None else target_hvac_mode
         min_temp, max_temp = self._setpoint_range_for_mode(target_hvac_mode)
 
+        # Naming the mode is the whole message: the range depends on it, and
+        # an automation that sets a setpoint before switching mode gets
+        # measured against the mode it is leaving. Saying so - and that
+        # hvac_mode belongs in the same call - is the difference between a
+        # rejection and a fix (#317).
         if set_temp < min_temp:
             raise ServiceValidationError(
                 f"Temperature {set_temp} is below minimum {min_temp}",
@@ -414,6 +419,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                 translation_placeholders={
                     "temperature": str(set_temp),
                     "min_temp": str(min_temp),
+                    "hvac_mode": str(target_hvac_mode),
                 },
             )
 
@@ -425,6 +431,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                 translation_placeholders={
                     "temperature": str(set_temp),
                     "max_temp": str(max_temp),
+                    "hvac_mode": str(target_hvac_mode),
                 },
             )
 
@@ -598,19 +605,16 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         target_offset = self._resolve_target_offset(mode_from_operation)
 
         self._attr_target_temperature = airco.PresetTemp + target_offset
-        # Always what the unit reports, including while an external override
-        # is in effect - it echoes the injected value back, so the reading
-        # follows the override on its own and the climate entity agrees with
-        # the Indoor Temperature sensor either way.
-        # The calibration offset is what changes: it corrects the unit's own
-        # return-air sensor, which is out of the loop while the unit is
-        # regulating on a value the user supplied. Applying it there would
-        # correct a reading that needs no correcting.
-        # One exception to reporting the unit verbatim: with an overshoot
-        # correction configured, the value the unit reports is the bent one it
-        # was handed on purpose. The room is what the user supplied, so that is
-        # what the card shows - the Indoor Temperature sensor still mirrors the
-        # unit, which is what makes the two disagree exactly then and only then.
+        # While the unit is regulating on a temperature someone supplied, that
+        # value is the room and the card shows it - see
+        # Device.external_temperature_room_value. What the unit reports back
+        # is its own rendering of what it was handed, which is why the Indoor
+        # Temperature sensor (still verbatim) and the card disagree exactly
+        # then and only then.
+        # Otherwise the reading is the unit's, plus the calibration offset -
+        # which is suspended while an override is in effect, because it
+        # corrects the unit's own return-air sensor and that sensor is out of
+        # the loop just then.
         room = self._device.external_temperature_room_value
         if room is not None:
             self._attr_current_temperature = room

@@ -315,10 +315,12 @@ async def test_update_state_uses_indoor_temp_without_override(device):
     assert entity._attr_current_temperature == 23.5
 
 
-async def test_update_state_shows_what_the_unit_reports_under_an_override(device):
-    # The unit echoes the injected value back, so the reading follows it on its
-    # own. The calibration offset drops out: it corrects the unit's own sensor,
-    # which is not what the unit is regulating on any more.
+async def test_update_state_shows_the_value_the_unit_is_being_fed(device):
+    # Whoever supplied the value has said what the room is, so that is what the
+    # card shows - not the unit's echo of it, which lands half a kelvin off in
+    # the protocol's coarser segment. The calibration offset drops out too: it
+    # corrects the unit's own sensor, which is not what the unit is regulating
+    # on any more.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.IndoorTemp = 22.0
     device.airco.Operation = True
@@ -329,7 +331,7 @@ async def test_update_state_shows_what_the_unit_reports_under_an_override(device
     _mark_reached_the_unit(device, 20.0)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.5
+    assert entity._attr_current_temperature == 20.0
 
 
 async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device):
@@ -347,10 +349,12 @@ async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device)
     assert entity._attr_current_temperature == 23.5
 
 
-async def test_update_state_reapplies_the_offset_while_a_new_value_is_in_flight(device):
-    # A source sensor feeding the action reports a new value every cycle. Until
-    # the unit confirms the new one, it is still regulating on the old - and
-    # the display follows the unit rather than what has merely been armed.
+async def test_update_state_follows_the_newest_value_while_one_is_in_flight(device):
+    # A source sensor feeding the action reports a new value every cycle, and
+    # the unit only picks it up on the next frame. The card is showing the
+    # room, not the unit's progress towards it, so it follows the newest value
+    # rather than waiting a cycle - and the calibration offset stays out of it
+    # throughout, because the unit's own sensor is out of the loop.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
@@ -361,12 +365,12 @@ async def test_update_state_reapplies_the_offset_while_a_new_value_is_in_flight(
     await entity.async_set_external_temperature(temperature=20.25)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.5
+    assert entity._attr_current_temperature == 20.25
 
     _mark_reached_the_unit(device, 20.25)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.75
+    assert entity._attr_current_temperature == 20.25
 
 
 async def test_update_state_keeps_the_offset_while_the_unit_is_off_or_fan_only(device):
@@ -439,18 +443,23 @@ async def test_current_temperature_shows_the_room_not_the_bent_value(device):
     assert entity._attr_current_temperature == 22.0
 
 
-async def test_current_temperature_follows_the_unit_without_an_overshoot(device):
-    # Nothing is being bent, so there is nothing to correct back: both the
-    # card and the Indoor Temperature sensor mirror the unit.
+@pytest.mark.parametrize("overshoot", [0.0, 1.0])
+async def test_current_temperature_does_not_move_with_the_overshoot(device, overshoot):
+    # The reading used to switch source depending on whether an overshoot was
+    # set, which moved the displayed room temperature by half a kelvin when an
+    # unrelated option changed - and every automation comparing it against a
+    # threshold inherited that silently.
+    _set_options(device, {CONF_OVERSHOOT_COOL: overshoot})
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
     entity = _service_entity(device)
 
     await entity.async_set_external_temperature(temperature=22.0)
-    _mark_reached_the_unit(device, 22.0)
+    # What a frame carrying the value - bent or not - leaves behind.
+    _mark_reached_the_unit(device, 22.0 - overshoot)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 22.5
+    assert entity._attr_current_temperature == 22.0
 def _with_external_temperature_source(device: Device) -> str:
     source = "sensor.living_room_temperature"
     _set_options(device, {CONF_EXTERNAL_TEMPERATURE_SOURCE: source})

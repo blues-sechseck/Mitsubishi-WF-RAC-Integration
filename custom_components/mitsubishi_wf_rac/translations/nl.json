@@ -50,10 +50,10 @@
       "message": "Een doeltemperatuur is verplicht."
     },
     "temperature_below_minimum": {
-      "message": "{temperature} °C is lager dan het minimum van {min_temp} °C voor deze modus."
+      "message": "{temperature} °C is lager dan het minimum van {min_temp} °C voor hvac_mode {hvac_mode}. Geef hvac_mode mee in dezelfde aanroep om te toetsen aan de modus waarnaar je overschakelt."
     },
     "temperature_above_maximum": {
-      "message": "{temperature} °C is hoger dan het maximum van {max_temp} °C voor deze modus."
+      "message": "{temperature} °C is hoger dan het maximum van {max_temp} °C voor hvac_mode {hvac_mode}. Geef hvac_mode mee in dezelfde aanroep om te toetsen aan de modus waarnaar je overschakelt."
     },
     "home_leave_mode_not_supported": {
       "message": "Dit model rapporteert de Home Leave Mode functie niet."

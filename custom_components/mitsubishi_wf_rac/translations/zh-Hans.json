@@ -50,10 +50,10 @@
       "message": "需要指定目标温度。"
     },
     "temperature_below_minimum": {
-      "message": "{temperature}°C 低于此模式下的最低温度 {min_temp}°C。"
+      "message": "{temperature}°C 低于 hvac_mode {hvac_mode} 的最低温度 {min_temp}°C。在同一次调用中一并给出 hvac_mode，即可按你要切换到的模式来判断。"
     },
     "temperature_above_maximum": {
-      "message": "{temperature}°C 高于此模式下的最高温度 {max_temp}°C。"
+      "message": "{temperature}°C 高于 hvac_mode {hvac_mode} 的最高温度 {max_temp}°C。在同一次调用中一并给出 hvac_mode，即可按你要切换到的模式来判断。"
     },
     "home_leave_mode_not_supported": {
       "message": "此型号未报告支持离家模式（Home Leave Mode）功能。"

@@ -50,10 +50,10 @@
       "message": "Eine Zieltemperatur ist erforderlich."
     },
     "temperature_below_minimum": {
-      "message": "{temperature} °C liegt unter dem Minimum von {min_temp} °C für diesen Modus."
+      "message": "{temperature} °C liegt unter dem Minimum von {min_temp} °C für hvac_mode {hvac_mode}. Geben Sie hvac_mode im selben Aufruf mit an, damit gegen den Modus geprüft wird, in den Sie wechseln."
     },
     "temperature_above_maximum": {
-      "message": "{temperature} °C liegt über dem Maximum von {max_temp} °C für diesen Modus."
+      "message": "{temperature} °C liegt über dem Maximum von {max_temp} °C für hvac_mode {hvac_mode}. Geben Sie hvac_mode im selben Aufruf mit an, damit gegen den Modus geprüft wird, in den Sie wechseln."
     },
     "home_leave_mode_not_supported": {
       "message": "Dieses Modell meldet die Home-Leave-Mode-Fähigkeit nicht."
