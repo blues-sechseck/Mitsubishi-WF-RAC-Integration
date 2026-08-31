@@ -50,10 +50,10 @@
       "message": "目標温度を指定してください。"
     },
     "temperature_below_minimum": {
-      "message": "{temperature}°Cはこのモードの最低温度{min_temp}°Cを下回っています。"
+      "message": "{temperature}°Cは hvac_mode {hvac_mode} の最低温度{min_temp}°Cを下回っています。同じ呼び出しで hvac_mode を指定すると、切り替え先のモードで判定されます。"
     },
     "temperature_above_maximum": {
-      "message": "{temperature}°Cはこのモードの最高温度{max_temp}°Cを超えています。"
+      "message": "{temperature}°Cは hvac_mode {hvac_mode} の最高温度{max_temp}°Cを上回っています。同じ呼び出しで hvac_mode を指定すると、切り替え先のモードで判定されます。"
     },
     "home_leave_mode_not_supported": {
       "message": "この機種はHome Leave Mode機能を報告していません。"

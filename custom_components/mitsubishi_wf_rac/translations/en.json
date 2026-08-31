@@ -50,10 +50,10 @@
       "message": "A target temperature is required."
     },
     "temperature_below_minimum": {
-      "message": "{temperature} °C is below the {min_temp} °C minimum for this mode."
+      "message": "{temperature} °C is below the {min_temp} °C minimum for hvac_mode {hvac_mode}. Include hvac_mode in the same action call to check against the mode you are switching to instead."
     },
     "temperature_above_maximum": {
-      "message": "{temperature} °C is above the {max_temp} °C maximum for this mode."
+      "message": "{temperature} °C is above the {max_temp} °C maximum for hvac_mode {hvac_mode}. Include hvac_mode in the same action call to check against the mode you are switching to instead."
     },
     "external_temperature_source_configured": {
       "message": "The indoor temperature is controlled by the configured source entity."

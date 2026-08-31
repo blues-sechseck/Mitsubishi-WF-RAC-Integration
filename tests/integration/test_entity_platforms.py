@@ -256,10 +256,16 @@ async def test_climate_commands_and_state_branches(platform_device):
 
     with pytest.raises(ServiceValidationError, match="required"):
         await entity.async_set_temperature()
-    with pytest.raises(ServiceValidationError, match="below minimum"):
+    with pytest.raises(ServiceValidationError, match="below minimum") as below:
         await entity.async_set_temperature(temperature=9, hvac_mode=HVACMode.HEAT)
-    with pytest.raises(ServiceValidationError, match="above maximum"):
+    with pytest.raises(ServiceValidationError, match="above maximum") as above:
         await entity.async_set_temperature(temperature=34, hvac_mode=HVACMode.COOL)
+
+    # The message names the mode the range came from - without the
+    # placeholder it renders as a literal {hvac_mode} and the one useful part
+    # of the message is gone.
+    assert below.value.translation_placeholders["hvac_mode"] == HVACMode.HEAT
+    assert above.value.translation_placeholders["hvac_mode"] == HVACMode.COOL
 
     # A setpoint set while the unit is off belongs to the mode that comes
     # next, so it is held to what the unit accepts anywhere rather than to the

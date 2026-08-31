@@ -50,10 +50,10 @@
       "message": "Būtina nurodyti norimą temperatūrą."
     },
     "temperature_below_minimum": {
-      "message": "{temperature} °C yra žemiau šio režimo minimumo ({min_temp} °C)."
+      "message": "{temperature} °C yra žemiau hvac_mode {hvac_mode} minimumo ({min_temp} °C). Nurodykite hvac_mode tame pačiame kvietime, kad būtų tikrinama pagal režimą, į kurį persijungiate."
     },
     "temperature_above_maximum": {
-      "message": "{temperature} °C yra virš šio režimo maksimumo ({max_temp} °C)."
+      "message": "{temperature} °C viršija hvac_mode {hvac_mode} maksimumą ({max_temp} °C). Nurodykite hvac_mode tame pačiame kvietime, kad būtų tikrinama pagal režimą, į kurį persijungiate."
     },
     "home_leave_mode_not_supported": {
       "message": "Šis modelis nepraneša apie Home Leave Mode galimybę."

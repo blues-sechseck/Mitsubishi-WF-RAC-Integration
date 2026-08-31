@@ -406,6 +406,11 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         target_hvac_mode = HVACMode.OFF if target_hvac_mode is None else target_hvac_mode
         min_temp, max_temp = self._setpoint_range_for_mode(target_hvac_mode)
 
+        # Naming the mode is the whole message: the range depends on it, and
+        # an automation that sets a setpoint before switching mode gets
+        # measured against the mode it is leaving. Saying so - and that
+        # hvac_mode belongs in the same call - is the difference between a
+        # rejection and a fix (#317).
         if set_temp < min_temp:
             raise ServiceValidationError(
                 f"Temperature {set_temp} is below minimum {min_temp}",
@@ -414,6 +419,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                 translation_placeholders={
                     "temperature": str(set_temp),
                     "min_temp": str(min_temp),
+                    "hvac_mode": str(target_hvac_mode),
                 },
             )
 
@@ -425,6 +431,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                 translation_placeholders={
                     "temperature": str(set_temp),
                     "max_temp": str(max_temp),
+                    "hvac_mode": str(target_hvac_mode),
                 },
             )
 
