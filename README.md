@@ -95,13 +95,13 @@ This integration creates one device per airco with the following entities.
 
 ## Sensors
 
-The diagnostic operation-data sensors below are disabled by default. Enabling a sensor makes the integration request its value; leaving all of them disabled makes no extra request at all - unless an external temperature override is armed, which asks for one segment on its own behalf (see [External temperature override](#external-temperature-override)).
+The diagnostic operation-data sensors below are disabled by default. Enabling a sensor makes the integration request its value; leaving all of them disabled makes no extra request at all - unless an external temperature override is armed, which asks for one segment on its own behalf (see [External temperature override](#indoor-temperature-override)).
 
 Any one of them switches the request on, so pick one that always has something to show. **Indoor Coil Temperature** is the safest choice: it is per indoor unit and reads a temperature whatever the system is doing. **Compressor Frequency** is the more telling value where it works, but reads a constant 0 on older firmware ([#207](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/207)). **Hot Gas Temperature** is a poor first choice: it reads unknown whenever the outdoor unit is idle, which looks like a broken sensor rather than a resting one.
 
 | Entity | Values | Description |
 |---|---|---|
-| Indoor Temperature | °C | The room temperature the unit reports, exposed as its own sensor. Normally the same value as the climate entity's `current_temperature`; while an external temperature override is in effect it follows that override rather than the room (see [External temperature override](#external-temperature-override)). |
+| Indoor Temperature | °C | The room temperature the unit reports, exposed as its own sensor. Normally the same value as the climate entity's `current_temperature`; while an external temperature override is in effect it follows that override rather than the room (see [External temperature override](#indoor-temperature-override)). |
 | Outdoor Temperature *(shared on multi-split)* | °C | Outdoor unit temperature, corrected by the "Outdoor Temp. Sensor Offset" option if set. On multi-split systems this is an outdoor-unit-level value - reads identically on every indoor unit sharing one outdoor unit, since there's only one outdoor sensor. |
 | Target Temperature *(disabled by default)* | °C | Current setpoint, exposed as its own sensor. Off by default because the climate entity already carries the same value as its `target_temperature` attribute. |
 | Energy Usage (current run) | kWh, increasing | Energy consumption of the **current run**, as reported by the unit in **0.25 kWh steps**. The unit clears this counter to 0 every time it is switched on, and holds the last value while it is off — so a low or zero reading is normal, not a fault, and a run consuming less than 0.25 kWh reads 0 throughout. For a lifetime figure use Energy Usage Total below. Only created if the unit actually reports this value — not all models do. |
@@ -262,6 +262,12 @@ address itself isn't here - it's connection-critical, so changing it goes
 through "Reconfigure" instead, which re-validates the new address against the
 device before saving it.
 
+The dialog groups these into three sections: **Indoor temperature source**
+(the source sensor and its two overshoot corrections), **Setpoint offsets**
+(what gets sent to the unit) and **Sensor offsets** (what Home Assistant
+shows). The overshoot fields only appear once a source is picked and saved -
+without one there is no room temperature for them to correct.
+
 | Option | Range | Description |
 |---|---|---|
 | Retry limit | 3 or higher, default 3 | Consecutive failed polls before the device is marked unavailable. At the 60 s poll interval, `3` is about 3 minutes - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link; it cannot be set lower. |
@@ -270,7 +276,7 @@ device before saving it.
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
-| Cooling overshoot | -3..3 °C | How far past your setting the room actually goes before the unit stops. Set 22 °C, room settles at 21 °C: enter 1. Only has an effect while an external room temperature is in use. |
+| Cooling overshoot | -3..3 °C | How far past your setting the room actually goes before the unit stops. Set 22 °C, room settles at 21 °C: enter 1. Only shown, and only has an effect, while an Indoor temperature source is configured. |
 | Heating overshoot | -3..3 °C | The same for heating: how far above your setting the room ends up. Positive in both cases. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 
@@ -297,9 +303,9 @@ The climate entity exposes the following entity services (use as `mitsubishi_wf_
 | `set_vertical_swing_mode` | `swing_mode` | Set the vertical (up/down) louver position. |
 | `request_home_leave_mode_status` | — | Ask the unit to report its Home Leave Mode thresholds/airflow (only on supporting models). |
 | `set_home_leave_mode` | `temp_rule_cooling`, `temp_setting_cooling`, `air_flow_cooling`, `temp_rule_heating`, `temp_setting_heating`, `air_flow_heating` | Write new Home Leave Mode thresholds/airflow (only on supporting models). |
-| `set_external_temperature` | `temperature` (optional) | Provide an external room temperature to the AC, overriding its own indoor sensor. Omit `temperature` or pass `null` to revert to the internal sensor. See below. |
+| `set_external_temperature` | `temperature` (optional) | Provide a room temperature to the AC, overriding the one its own indoor sensor reads. Omit `temperature` or pass `null` to revert to the internal sensor. See below. |
 
-## External temperature override
+## Indoor temperature override
 
 `set_external_temperature` hands the unit a room temperature measured somewhere you actually care about, and it regulates on that instead of its own return-air sensor.
 
@@ -309,9 +315,9 @@ The value is not a setting the unit stores under a flag of its own. It has no se
 - **Nothing is written just for the override.** A frame carrying it also re-asserts power, mode, fan speed, setpoint and both louver axes, and it takes the unit's 60-second write lock. Sending one per sensor reading would end any running self-clean cycle and keep the official app locked out for as long as the override is in use.
 - **While the unit is off or in `fan_only`, the override is not written.** Neither mode regulates on a room temperature, and a request carrying the value ends a self-clean cycle started from the remote - self-clean runs from the off state. The unit falls back to its own sensor there, and the first frame after it returns to a regulating mode writes the value again.
 
-The **External Temperature Active** sensor (diagnostic) says whether the unit is actually regulating on your value right now, so an override that is armed but not yet in effect - after a restart, or while the unit is off - is visible rather than something to deduce.
+The **Indoor temperature override** sensor (diagnostic) says whether the unit is actually regulating on your value right now, so an override that is armed but not yet in effect - after a restart, or while the unit is off - is visible rather than something to deduce.
 
-You can select an **External temperature source** in the integration options. The integration reads that temperature sensor immediately after setup and follows its state changes itself, converting its unit to °C and rounding to the protocol's 0.25 °C steps. If the source becomes `unavailable`, `unknown`, or disappears, it clears the override on the next frame so the unit returns to its internal sensor. When a source is configured, use of `set_external_temperature` with a value is refused to avoid two competing writers; calling it without `temperature` still clears the override, though only until the source reports again. The source cannot be one of this integration's own temperature sensors: while an override is armed those report the injected value back, so feeding one in would walk the override away from the room. Without a configured source, automations using the action remain supported as before. Clearing that option hands control back: the value it had armed is dropped rather than restored, and the unit is back on its own sensor.
+You can select a sensor under **Indoor temperature source** in the integration options. The integration reads that temperature sensor immediately after setup and follows its state changes itself, converting its unit to °C and rounding to the protocol's 0.25 °C steps. If the source becomes `unavailable`, `unknown`, or disappears, it clears the override on the next frame so the unit returns to its internal sensor. When a source is configured, use of `set_external_temperature` with a value is refused to avoid two competing writers; calling it without `temperature` still clears the override, though only until the source reports again. The source cannot be one of this integration's own temperature sensors: while an override is armed those report the injected value back, so feeding one in would walk the override away from the room. Without a configured source, automations using the action remain supported as before. Clearing that option hands control back: the value it had armed is dropped rather than restored, and the unit is back on its own sensor.
 
 What an armed override costs is one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
 

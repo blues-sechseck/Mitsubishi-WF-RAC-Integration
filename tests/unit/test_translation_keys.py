@@ -55,6 +55,47 @@ def test_step_data_keys_match_english_translation():
             assert actual == expected, f"{section}.{step}"
 
 
+def test_step_section_keys_match_english_translation():
+    """Fields moved into sections leave step.data empty, so the check above
+    would compare two empty sets and pass while saying nothing.
+    """
+    for section in ("config", "options"):
+        for step, body in ENGLISH[section]["step"].items():
+            sections = body.get("sections", {})
+            mirror = STRINGS[section]["step"].get(step, {}).get("sections", {})
+            assert set(mirror) == set(sections), f"{section}.{step}"
+            for name, group in sections.items():
+                assert set(mirror[name].get("data", {})) == set(group.get("data", {})), name
+
+
+def test_sections_cover_every_field_the_options_form_shows():
+    """A field the form renders but no section names shows up unlabelled."""
+    from custom_components.mitsubishi_wf_rac import config_flow
+
+    init = ENGLISH["options"]["step"]["init"]
+    labelled = set(init.get("data", {}))
+    for group in init.get("sections", {}).values():
+        labelled |= set(group.get("data", {}))
+
+    handler = config_flow.WfRacOptionsFlowHandler
+    rendered = config_flow.WfRacOptionsFlowHandler._rendered_option_keys
+    assert handler and rendered  # imported, not just referenced
+    # _rendered_option_keys() is the form's own answer to "what does this
+    # dialog collect", so the labels have to cover exactly that.
+    assert labelled == {
+        config_flow.CONF_AVAILABILITY_RETRY_LIMIT,
+        config_flow.CONF_FIRMWARE_UPDATE_CHECK,
+        config_flow.CONF_EXTERNAL_TEMPERATURE_SOURCE,
+        config_flow.CONF_OVERSHOOT_COOL,
+        config_flow.CONF_OVERSHOOT_HEAT,
+        config_flow.CONF_TARGET_OFFSET,
+        config_flow.CONF_TARGET_OFFSET_COOL,
+        config_flow.CONF_TARGET_OFFSET_HEAT,
+        config_flow.CONF_INDOOR_OFFSET,
+        config_flow.CONF_OUTDOOR_OFFSET,
+    }
+
+
 def test_setup_and_options_steps_have_distinct_titles():
     """The options form grew out of a copy of the setup step and kept its
     heading while the fields diverged - it now holds offsets and polling
@@ -70,12 +111,20 @@ def test_per_mode_offsets_explain_that_blank_means_the_general_offset():
     general target offset (see climate.py). Without a description the form
     gives the user no way to know that.
     """
-    described = STRINGS["options"]["step"]["init"]["data_description"]
+    described = _described_option_keys()
     assert "target_offset_cool" in described
     assert "target_offset_heat" in described
 
 
 def test_external_temperature_source_explains_its_failsafe():
-    described = STRINGS["options"]["step"]["init"]["data_description"]
-    assert "external_temperature_source" in described
+    assert "external_temperature_source" in _described_option_keys()
+
+
+def _described_option_keys() -> set[str]:
+    """Every option field carrying a description, wherever it now sits."""
+    init = STRINGS["options"]["step"]["init"]
+    described = set(init.get("data_description", {}))
+    for group in init.get("sections", {}).values():
+        described |= set(group.get("data_description", {}))
+    return described
 

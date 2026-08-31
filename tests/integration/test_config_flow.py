@@ -10,7 +10,7 @@ import pytest
 from homeassistant import config_entries
 from homeassistant.const import CONF_DEVICE_ID
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType, InvalidData
+from homeassistant.data_entry_flow import FlowResultType, InvalidData, section
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -25,10 +25,16 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_OPERATOR_ID,
     CONF_OUTDOOR_OFFSET,
     CONF_OVERSHOOT_COOL,
+    CONF_OVERSHOOT_HEAT,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
     DOMAIN,
+)
+from custom_components.mitsubishi_wf_rac.config_flow import (
+    SECTION_INDOOR_TEMPERATURE_SOURCE,
+    SECTION_SENSOR_OFFSETS,
+    SECTION_SETPOINT_OFFSETS,
 )
 from custom_components.mitsubishi_wf_rac.wfrac.repository import AirconApiError
 
@@ -495,6 +501,38 @@ async def test_zeroconf_discovery_confirm_port_can_be_overridden(hass: HomeAssis
 # --- options flow --------------------------------------------------------
 
 
+_OPTION_SECTIONS = {
+    CONF_EXTERNAL_TEMPERATURE_SOURCE: SECTION_INDOOR_TEMPERATURE_SOURCE,
+    CONF_OVERSHOOT_COOL: SECTION_INDOOR_TEMPERATURE_SOURCE,
+    CONF_OVERSHOOT_HEAT: SECTION_INDOOR_TEMPERATURE_SOURCE,
+    CONF_TARGET_OFFSET: SECTION_SETPOINT_OFFSETS,
+    CONF_TARGET_OFFSET_COOL: SECTION_SETPOINT_OFFSETS,
+    CONF_TARGET_OFFSET_HEAT: SECTION_SETPOINT_OFFSETS,
+    CONF_INDOOR_OFFSET: SECTION_SENSOR_OFFSETS,
+    CONF_OUTDOOR_OFFSET: SECTION_SENSOR_OFFSETS,
+}
+
+
+def _form_input(values: dict | None = None) -> dict:
+    """Shape flat option values the way the sectioned form hands them back.
+
+    Every section is present even when empty: they are vol.Required, so a
+    submission that leaves one out is rejected before any field is looked at.
+    """
+    nested: dict = {
+        SECTION_INDOOR_TEMPERATURE_SOURCE: {},
+        SECTION_SETPOINT_OFFSETS: {},
+        SECTION_SENSOR_OFFSETS: {},
+    }
+    for key, value in (values or {}).items():
+        section = _OPTION_SECTIONS.get(key)
+        if section is None:
+            nested[key] = value
+        else:
+            nested[section][key] = value
+    return nested
+
+
 async def test_options_flow_shows_form_with_current_defaults(hass: HomeAssistant):
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -519,12 +557,14 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            CONF_INDOOR_OFFSET: 1.0,
-            CONF_OUTDOOR_OFFSET: -1.0,
-            CONF_TARGET_OFFSET: 0.5,
-            CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.living_room_temperature",
-        },
+        _form_input(
+            {
+                CONF_INDOOR_OFFSET: 1.0,
+                CONF_OUTDOOR_OFFSET: -1.0,
+                CONF_TARGET_OFFSET: 0.5,
+                CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.living_room_temperature",
+            }
+        ),
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -561,7 +601,7 @@ async def test_options_flow_refuses_its_own_entity_as_source(hass: HomeAssistant
     with pytest.raises((vol.Invalid, InvalidData)):
         await hass.config_entries.options.async_configure(
             result["flow_id"],
-            {CONF_EXTERNAL_TEMPERATURE_SOURCE: own.entity_id},
+            _form_input({CONF_EXTERNAL_TEMPERATURE_SOURCE: own.entity_id}),
         )
 
     assert entry.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE) is None
@@ -581,7 +621,7 @@ async def test_options_flow_accepts_a_foreign_temperature_sensor(hass: HomeAssis
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature"},
+        _form_input({CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature"}),
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -616,7 +656,7 @@ async def test_options_flow_enforces_offset_range(hass: HomeAssistant, key, valu
     schema = result["data_schema"]
 
     with pytest.raises(vol.MultipleInvalid):
-        schema({key: value})
+        schema(_form_input({key: value}))
 
 
 async def test_options_flow_rejects_a_retry_limit_below_the_floor(hass: HomeAssistant):
@@ -635,9 +675,9 @@ async def test_options_flow_rejects_a_retry_limit_below_the_floor(hass: HomeAssi
     schema = result["data_schema"]
 
     with pytest.raises(vol.MultipleInvalid):
-        schema({CONF_AVAILABILITY_RETRY_LIMIT: 1})
+        schema(_form_input({CONF_AVAILABILITY_RETRY_LIMIT: 1}))
 
-    assert schema({CONF_AVAILABILITY_RETRY_LIMIT: 5})[
+    assert schema(_form_input({CONF_AVAILABILITY_RETRY_LIMIT: 5}))[
         CONF_AVAILABILITY_RETRY_LIMIT
     ] == 5
 
@@ -658,7 +698,7 @@ async def test_options_flow_defaults_firmware_update_check_to_off(hass: HomeAssi
     result = await hass.config_entries.options.async_init(entry.entry_id)
     schema = result["data_schema"]
 
-    validated = schema({})
+    validated = schema(_form_input())
     assert validated[CONF_FIRMWARE_UPDATE_CHECK] is False
 
 
@@ -673,9 +713,7 @@ async def test_options_flow_saves_submitted_firmware_update_check(hass: HomeAssi
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            CONF_FIRMWARE_UPDATE_CHECK: True,
-        },
+        _form_input({CONF_FIRMWARE_UPDATE_CHECK: True}),
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -693,11 +731,13 @@ async def test_options_flow_saves_submitted_per_mode_offsets(hass: HomeAssistant
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            CONF_TARGET_OFFSET: 0.5,
-            CONF_TARGET_OFFSET_COOL: 1.5,
-            CONF_TARGET_OFFSET_HEAT: -1.5,
-        },
+        _form_input(
+            {
+                CONF_TARGET_OFFSET: 0.5,
+                CONF_TARGET_OFFSET_COOL: 1.5,
+                CONF_TARGET_OFFSET_HEAT: -1.5,
+            }
+        ),
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -708,17 +748,22 @@ async def test_options_flow_saves_submitted_per_mode_offsets(hass: HomeAssistant
 @pytest.mark.parametrize("value", [1.25, -1.25, 0.0, 3.0, -3.0])
 async def test_options_flow_accepts_a_signed_overshoot(hass: HomeAssistant, value):
     # Overshooting is what everyone has measured, but a unit that stops short
-    # of the setting needs the correction the other way.
+    # of the setting needs the correction the other way. The fields only exist
+    # while a source is configured - there is no room temperature to bend
+    # without one.
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"name": "Living Room AC"},
-        options={"host": "192.168.1.50"},
+        options={
+            "host": "192.168.1.50",
+            CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature",
+        },
     )
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_OVERSHOOT_COOL: value}
+        result["flow_id"], _form_input({CONF_OVERSHOOT_COOL: value})
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -741,9 +786,7 @@ async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: Hom
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            CONF_TARGET_OFFSET: 0.5,
-        },
+        _form_input({CONF_TARGET_OFFSET: 0.5}),
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -751,6 +794,98 @@ async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: Hom
     assert CONF_TARGET_OFFSET_HEAT not in result["data"]
     assert result["data"].get(CONF_TARGET_OFFSET_COOL) is None
     assert result["data"].get(CONF_TARGET_OFFSET_HEAT) is None
+
+
+async def test_options_flow_only_offers_the_overshoots_with_a_source(hass: HomeAssistant):
+    """They bend the room temperature handed to the unit, so without a source
+    there is nothing for them to act on and they would sit there doing
+    nothing.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={"host": "192.168.1.50"},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    source_section = next(
+        value
+        for key, value in result["data_schema"].schema.items()
+        if str(key.schema) == SECTION_INDOOR_TEMPERATURE_SOURCE
+    )
+    assert {str(key.schema) for key in source_section.schema.schema} == {
+        CONF_EXTERNAL_TEMPERATURE_SOURCE
+    }
+
+    hass.config_entries.async_update_entry(
+        entry,
+        options={
+            **entry.options,
+            CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature",
+        },
+    )
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    source_section = next(
+        value
+        for key, value in result["data_schema"].schema.items()
+        if str(key.schema) == SECTION_INDOOR_TEMPERATURE_SOURCE
+    )
+    assert {str(key.schema) for key in source_section.schema.schema} == {
+        CONF_EXTERNAL_TEMPERATURE_SOURCE,
+        CONF_OVERSHOOT_COOL,
+        CONF_OVERSHOOT_HEAT,
+    }
+
+
+async def test_options_flow_keeps_values_it_never_showed(hass: HomeAssistant):
+    """async_create_entry replaces the options wholesale, so a field the form
+    did not render is dropped unless it is carried over by hand. Without that,
+    saving anything at all after removing a source would also throw away the
+    overshoot figures the user measured.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={
+            "host": "192.168.1.50",
+            CONF_OVERSHOOT_COOL: 1.0,
+            CONF_OVERSHOOT_HEAT: -0.5,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], _form_input({CONF_TARGET_OFFSET: 0.5})
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_OVERSHOOT_COOL] == 1.0
+    assert result["data"][CONF_OVERSHOOT_HEAT] == -0.5
+
+
+async def test_options_flow_clears_a_source_the_form_did_show(hass: HomeAssistant):
+    """The carry-over must not resurrect a field that was shown and left
+    empty - clearing the source is how a user turns the override off.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={
+            "host": "192.168.1.50",
+            CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], _form_input()
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert CONF_EXTERNAL_TEMPERATURE_SOURCE not in result["data"]
 
 
 async def test_options_form_fields_all_have_a_label(hass: HomeAssistant):
@@ -767,11 +902,24 @@ async def test_options_form_fields_all_have_a_label(hass: HomeAssistant):
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    fields = {str(key.schema) for key in result["data_schema"].schema}
+    schema = result["data_schema"].schema
+    fields = set()
+    for key, value in schema.items():
+        if isinstance(value, section):
+            fields |= {str(inner.schema) for inner in value.schema.schema}
+        else:
+            fields.add(str(key.schema))
 
     strings_file = Path(mitsubishi_wf_rac.__file__).parent / "strings.json"
     strings = json.loads(strings_file.read_text(encoding="utf-8"))
-    assert set(strings["options"]["step"]["init"]["data"]) == fields
+    init = strings["options"]["step"]["init"]
+    labelled = set(init["data"])
+    for group in init["sections"].values():
+        labelled |= set(group["data"])
+    # This entry has no source, so the overshoot fields are not rendered -
+    # they are still labelled, and must be.
+    assert fields <= labelled
+    assert labelled - fields == {CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_HEAT}
 
 
 # --- WfRacConfigFlow.is_matching() / _name ------------------------------
