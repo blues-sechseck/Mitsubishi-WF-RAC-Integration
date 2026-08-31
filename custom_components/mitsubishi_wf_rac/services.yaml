@@ -183,7 +183,7 @@ set_home_leave_mode:
               value: "4"
 # Service ID
 set_external_temperature:
-  name: Set indoor temperature override
+  name: Set indoor temperature
   description: >-
     Arms a room temperature for the AC to regulate on instead of the one its
     own indoor sensor reads. The value is not sent by this action; it rides along on

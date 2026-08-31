@@ -15,6 +15,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_HEAT,
     DOMAIN,
@@ -450,9 +451,24 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         The Indoor Temperature sensor keeps reporting the unit verbatim, so
         what the unit thinks is still visible - the two disagree exactly while
         the unit is being fed.
+
+        With a source entity configured this holds even while the unit is not
+        using the value - off, in fan_only, or a restart away from having sent
+        one. A source keeps measuring the room whatever the unit is doing, and
+        deciding whether to switch the unit on is exactly when someone reads
+        that number (#218). The unit's own reading is at its least meaningful
+        then anyway: nothing is drawing air past its sensor.
+
+        A value armed from an automation is different and keeps the stricter
+        rule. There is no source behind it, so it is a number someone pushed
+        once, and showing it as the room while the unit is not even using it
+        would be showing an intention rather than a measurement.
         """
         if self._external_temperature_override is None or self._airco is None:
             return None
+        source = self.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
+        if isinstance(source, str) and source:
+            return self._external_temperature_override
         if not self.external_temperature_applied:
             return None
         return self._external_temperature_override
