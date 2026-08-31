@@ -838,6 +838,39 @@ async def test_options_flow_only_offers_the_overshoots_with_a_source(hass: HomeA
     }
 
 
+async def test_options_flow_opens_the_cooling_overshoot_on_the_measured_figure(
+    hass: HomeAssistant,
+):
+    """Four units land 0.6-1.3 K past the setting, so a fresh field opening on
+    0 opens on a number that is certainly wrong. It is a pre-fill: a stored
+    value wins, and nothing is corrected until the form is saved.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={
+            "host": "192.168.1.50",
+            CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    validated = result["data_schema"](_form_input())[SECTION_INDOOR_TEMPERATURE_SOURCE]
+    assert validated[CONF_OVERSHOOT_COOL] == 1.0
+    # Heating has looked symmetric wherever it was measured - no figure to offer.
+    assert validated[CONF_OVERSHOOT_HEAT] == 0.0
+    # Nothing is applied by opening the form: the resolver still reads 0.
+    assert entry.options.get(CONF_OVERSHOOT_COOL) is None
+
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, CONF_OVERSHOOT_COOL: 0.0}
+    )
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    validated = result["data_schema"](_form_input())[SECTION_INDOOR_TEMPERATURE_SOURCE]
+    assert validated[CONF_OVERSHOOT_COOL] == 0.0
+
+
 async def test_options_flow_keeps_values_it_never_showed(hass: HomeAssistant):
     """async_create_entry replaces the options wholesale, so a field the form
     did not render is dropped unless it is carried over by hand. Without that,

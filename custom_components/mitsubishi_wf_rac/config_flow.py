@@ -537,8 +537,23 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
         if self._source_configured:
             source_fields.update(
                 {
-                    vol.Optional(key, default=options.get(key, 0.0)): overshoot_validator
-                    for key in (CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_HEAT)
+                    # Cooling starts at the figure four units have measured
+                    # (0.6-1.3 K past the setting, three of them 1.0-1.2), so
+                    # the field opens on a number that is roughly right
+                    # instead of on one that is certainly wrong. It is a
+                    # pre-fill and nothing more: the correction applies once
+                    # the form is saved, and _resolve_overshoot still reads 0
+                    # until then, so nobody's regulation moves without them
+                    # seeing the value first. Heating has looked symmetric
+                    # around the setting wherever it has been measured, so
+                    # there is no figure to offer.
+                    vol.Optional(
+                        key, default=options.get(key, suggested)
+                    ): overshoot_validator
+                    for key, suggested in (
+                        (CONF_OVERSHOOT_COOL, 1.0),
+                        (CONF_OVERSHOOT_HEAT, 0.0),
+                    )
                 }
             )
 

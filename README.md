@@ -327,9 +327,9 @@ An action-driven override survives a restart and a reload. It is re-armed, not r
 
 ### When the room ends up past your setting
 
-With an external room temperature in use, most units cool the room further than asked before stopping - measured between 0.6 and 2 K across four different models, and the same figure repeats every cycle. Heating has so far looked correct.
+With a room temperature supplied, most units cool the room further than asked before stopping - measured between 0.6 and 1.3 K across four different models, three of them between 1.0 and 1.2, and the same figure repeats every cycle. That is the unit's own thermostat band, not a sensor error: its return-air sensor is out of the loop while it regulates on your value. Heating has so far looked correct.
 
-Set **Cooling overshoot** to how far it goes: aim for 22 °C, watch where the room settles, and enter the difference as a positive number. If your unit stops short instead and never quite gets there, a negative number corrects that the other way. The integration then hands the unit a room temperature that much lower, so the unit reaches its own stopping point exactly when your room is on target. Your setpoint and everything shown in Home Assistant stay the number you asked for.
+Set **Cooling overshoot** to how far it goes: aim for 22 °C, watch where the room settles, and enter the difference as a positive number. The field opens on 1 because that is what the units measured so far need; it is a starting point, not a measurement of yours, and it only takes effect once you save the options. If your unit stops short instead and never quite gets there, a negative number corrects that the other way. The integration then hands the unit a room temperature that much lower, so the unit reaches its own stopping point exactly when your room is on target. Your setpoint and everything shown in Home Assistant stay the number you asked for.
 
 Why here and not in Target Temp. Offset: on the units measured so far, a half-degree setpoint is rounded up to the next whole one, so that field is too coarse for a correction of less than a degree (owners of ZT and ZTL units report their models do take half degrees). The room temperature the unit is fed has 0.25 °C steps on every model, so correcting there is the finer of the two - and it leaves the setpoint matching what the official app shows.
 

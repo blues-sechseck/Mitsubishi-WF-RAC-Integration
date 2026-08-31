@@ -68,7 +68,7 @@
             },
             "data_description": {
               "external_temperature_source": "The unit regulates on this sensor. Leave it empty to put the unit back on its own sensor. Unavailable or unknown states do the same on the next frame.",
-              "overshoot_cool": "How far the room goes past your setting before the unit stops. Set 22 °C and the room settles at 21 °C: enter 1. If it stops short instead and never gets cold enough, enter a negative number.",
+              "overshoot_cool": "How far the room goes past your setting before the unit stops. Set 22 °C and the room settles at 21 °C: enter 1. Starts at 1 because that is what the units measured so far need - check where your own room settles and adjust. If it stops short instead and never gets cold enough, enter a negative number.",
               "overshoot_heat": "The same for heating: positive if the room ends up above your setting, negative if it stops short of it."
             }
           },
@@ -81,7 +81,7 @@
               "target_offset_heat": "Target Temp. Offset (Heating)"
             },
             "data_description": {
-              "target_offset": "Positive lowers the setting sent to the unit, negative raises it - the card keeps showing yours either way. Most units round a half degree up to the next whole one, so 0.5 here often acts as 1.",
+              "target_offset": "Positive lowers the setting sent to the unit, negative raises it - the card keeps showing yours either way. Most units round a half degree up to the next whole one, so 0.5 here often acts as 1. With an Indoor temperature source in use, the cooling overshoot above is the lever for a unit that overshoots - it is finer, and it leaves the setpoint matching the app.",
               "target_offset_cool": "Leave empty to use the general target temperature offset.",
               "target_offset_heat": "Leave empty to use the general target temperature offset."
             }
