@@ -83,7 +83,17 @@
         "sections": {
           "indoor_temperature_source": {
             "name": "室內溫度來源",
-            "description": "把你真正在意的位置量到的室溫交給空調，取代它自己回風口處的讀數。"
+            "description": "把你真正在意的位置量到的室溫交給空調，取代它自己回風口處的讀數。",
+            "data": {
+              "external_temperature_source": "感測器",
+              "overshoot_cool": "製冷過衝",
+              "overshoot_heat": "製熱過衝"
+            },
+            "data_description": {
+              "external_temperature_source": "空調依這個感測器的讀數調節。留空即可讓它回到自己的感測器；讀數為 unavailable 或 unknown 時，也會在下一個訊框回復。",
+              "overshoot_cool": "空調停機前房間越過設定值的幅度。設為 22 °C，房間穩定在 21 °C：填 1。預設從 1 開始，因為目前量測過的機器都需要這個值——看看你自己的房間穩定在哪裡再調整。若反而停得太早、始終不夠涼，請填負數。",
+              "overshoot_heat": "製熱同理：房間高於設定值填正數，低於設定值填負數。"
+            }
           },
           "setpoint_offsets": {
             "name": "設定溫度修正",
@@ -338,6 +348,9 @@
       },
       "external_control": {
         "name": "外部控制"
+      },
+      "external_temperature_active": {
+        "name": "室內溫度指定"
       }
     },
     "update": {

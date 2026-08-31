@@ -83,7 +83,17 @@
         "sections": {
           "indoor_temperature_source": {
             "name": "Bron voor de binnentemperatuur",
-            "description": "Geeft de airco een kamertemperatuur die gemeten is waar het je om gaat, in plaats van die bij zijn eigen aanzuigrooster."
+            "description": "Geeft de airco een kamertemperatuur die gemeten is waar het je om gaat, in plaats van die bij zijn eigen aanzuigrooster.",
+            "data": {
+              "external_temperature_source": "Sensor",
+              "overshoot_cool": "Overshoot koelen",
+              "overshoot_heat": "Overshoot verwarmen"
+            },
+            "data_description": {
+              "external_temperature_source": "De airco regelt op deze sensor. Laat leeg om hem terug te zetten op zijn eigen sensor; bij 'unavailable' of 'unknown' gebeurt hetzelfde bij het volgende frame.",
+              "overshoot_cool": "Hoe ver de kamer voorbij je instelling gaat voordat de airco stopt. Ingesteld op 22 °C, kamer blijft op 21 °C staan: vul 1 in. Begint op 1, want dat is wat de tot nu toe gemeten toestellen nodig hebben — kijk waar jouw kamer uitkomt en pas aan. Blijft hij er juist boven en wordt het nooit koud genoeg, vul dan een negatief getal in.",
+              "overshoot_heat": "Hetzelfde voor verwarmen: positief als de kamer boven je instelling uitkomt, negatief als hij eronder blijft."
+            }
           },
           "setpoint_offsets": {
             "name": "Correcties op het instelpunt",
@@ -338,6 +348,9 @@
       },
       "external_control": {
         "name": "Externe bediening"
+      },
+      "external_temperature_active": {
+        "name": "Opgegeven binnentemperatuur"
       }
     },
     "update": {

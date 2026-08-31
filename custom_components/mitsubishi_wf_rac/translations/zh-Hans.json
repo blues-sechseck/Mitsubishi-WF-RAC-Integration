@@ -83,7 +83,17 @@
         "sections": {
           "indoor_temperature_source": {
             "name": "室内温度来源",
-            "description": "把你真正在意的位置测得的室温交给空调，取代它自己回风口处的读数。"
+            "description": "把你真正在意的位置测得的室温交给空调，取代它自己回风口处的读数。",
+            "data": {
+              "external_temperature_source": "传感器",
+              "overshoot_cool": "制冷过冲",
+              "overshoot_heat": "制热过冲"
+            },
+            "data_description": {
+              "external_temperature_source": "空调按这个传感器的读数调节。留空即可让它回到自己的传感器；读数为 unavailable 或 unknown 时，也会在下一帧回退。",
+              "overshoot_cool": "空调停机前房间越过设定值的幅度。设为 22 °C，房间稳定在 21 °C：填 1。默认从 1 开始，因为目前测过的机器都需要这个值——看看你自己的房间稳定在哪里再调整。若反而停得太早、始终不够凉，请填负数。",
+              "overshoot_heat": "制热同理：房间高于设定值填正数，低于设定值填负数。"
+            }
           },
           "setpoint_offsets": {
             "name": "设定温度修正",
@@ -338,6 +348,9 @@
       },
       "external_control": {
         "name": "外部控制"
+      },
+      "external_temperature_active": {
+        "name": "室内温度指定"
       }
     },
     "update": {

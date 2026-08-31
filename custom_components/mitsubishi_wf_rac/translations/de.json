@@ -83,7 +83,17 @@
         "sections": {
           "indoor_temperature_source": {
             "name": "Quelle der Innentemperatur",
-            "description": "Gibt dem Gerät eine Raumtemperatur, die dort gemessen wird, wo es darauf ankommt, statt der am eigenen Ansauggitter."
+            "description": "Gibt dem Gerät eine Raumtemperatur, die dort gemessen wird, wo es darauf ankommt, statt der am eigenen Ansauggitter.",
+            "data": {
+              "external_temperature_source": "Sensor",
+              "overshoot_cool": "Überschwingen Kühlen",
+              "overshoot_heat": "Überschwingen Heizen"
+            },
+            "data_description": {
+              "external_temperature_source": "Das Gerät regelt auf diesen Sensor. Leer lassen, damit es wieder seinen eigenen benutzt; bei „unavailable“ oder „unknown“ geschieht dasselbe mit dem nächsten Frame.",
+              "overshoot_cool": "Wie weit der Raum über Ihre Einstellung hinausschießt, bevor das Gerät abschaltet. 22 °C eingestellt, Raum pendelt sich bei 21 °C ein: 1 eintragen. Startet bei 1, weil die bisher gemessenen Geräte das brauchen — prüfen Sie, wo Ihr Raum landet, und passen Sie an. Bleibt er stattdessen darüber und wird nie kalt genug, tragen Sie eine negative Zahl ein.",
+              "overshoot_heat": "Dasselbe fürs Heizen: positiv, wenn der Raum über Ihrer Einstellung landet, negativ, wenn er darunter bleibt."
+            }
           },
           "setpoint_offsets": {
             "name": "Sollwert-Korrekturen",
@@ -338,6 +348,9 @@
       },
       "external_control": {
         "name": "Externe Steuerung"
+      },
+      "external_temperature_active": {
+        "name": "Innentemperatur-Vorgabe"
       }
     },
     "update": {
