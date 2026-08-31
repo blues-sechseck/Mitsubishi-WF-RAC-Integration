@@ -198,7 +198,7 @@ set_external_temperature:
   fields:
     temperature:
       name: Temperature
-      description: Room temperature in °C, measured wherever you care about it. Leave blank to use the unit's own sensor.
+      description: Room temperature in °C. Leave blank to use the unit's own sensor.
       required: false
       selector:
         number:

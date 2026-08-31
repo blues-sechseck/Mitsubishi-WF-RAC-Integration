@@ -307,7 +307,7 @@ The climate entity exposes the following entity services (use as `mitsubishi_wf_
 
 ## Indoor temperature override
 
-`set_external_temperature` hands the unit a room temperature measured somewhere you actually care about, and it regulates on that instead of its own return-air sensor.
+`set_external_temperature` hands the unit a room temperature measured out in the room, and it regulates on that instead of the one its own return-air sensor reads.
 
 The value is not a setting the unit stores under a flag of its own. It has no set-bit, which means it can only travel inside a frame sent for some other reason - and any frame that leaves it out sends the unit back to its internal sensor. Three things follow from that.
 

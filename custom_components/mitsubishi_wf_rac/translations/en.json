@@ -86,7 +86,7 @@
         "sections": {
           "indoor_temperature_source": {
             "name": "Indoor temperature source",
-            "description": "Hand the unit a room temperature measured where you care about it, instead of the one it reads at its own return air grille.",
+            "description": "Hand the unit a room temperature measured out in the room, instead of the one it reads at its own return air grille.",
             "data": {
               "external_temperature_source": "Sensor",
               "overshoot_cool": "Cooling overshoot",
