@@ -96,6 +96,26 @@ def test_sections_cover_every_field_the_options_form_shows():
     }
 
 
+def test_a_translated_section_labels_every_field_in_it():
+    """A section whose fields carry no label in that language renders them as
+    their raw keys - `overshoot_cool` where a label belongs. Nothing else
+    catches it: the file is valid JSON, hassfest is happy, and it only shows
+    up to someone running Home Assistant in that language.
+
+    Translating a section at all therefore means translating its fields.
+    Leaving the whole section out stays fine - that falls back wholesale.
+    """
+    english = ENGLISH["options"]["step"]["init"]["sections"]
+    for path in (COMPONENT / "translations").glob("*.json"):
+        if path.stem == "en":
+            continue
+        body = json.loads(path.read_text(encoding="utf-8"))
+        sections = body.get("options", {}).get("step", {}).get("init", {}).get("sections", {})
+        for name, group in sections.items():
+            expected = set(english[name].get("data", {}))
+            assert set(group.get("data", {})) == expected, f"{path.stem}: {name}"
+
+
 def test_setup_and_options_steps_have_distinct_titles():
     """The options form grew out of a copy of the setup step and kept its
     heading while the fields diverged - it now holds offsets and polling

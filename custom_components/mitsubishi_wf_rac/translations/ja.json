@@ -83,7 +83,17 @@
         "sections": {
           "indoor_temperature_source": {
             "name": "室内温度の取得元",
-            "description": "エアコン自身の吸込口ではなく、実際に気になる場所で測った室温をエアコンに渡します。"
+            "description": "エアコン自身の吸込口ではなく、実際に気になる場所で測った室温をエアコンに渡します。",
+            "data": {
+              "external_temperature_source": "センサー",
+              "overshoot_cool": "冷房のオーバーシュート",
+              "overshoot_heat": "暖房のオーバーシュート"
+            },
+            "data_description": {
+              "external_temperature_source": "エアコンはこのセンサーの値で制御されます。空欄にすると自身のセンサーに戻ります。unavailable や unknown のときも次のフレームで同じように戻ります。",
+              "overshoot_cool": "エアコンが止まるまでに室温が設定値をどれだけ行き過ぎるかです。22 °C に設定して室温が 21 °C に落ち着くなら 1 と入力します。これまで測定した機器に必要な値が 1 のため、初期値は 1 です。ご自宅の室温がどこに落ち着くかを確認して調整してください。逆に手前で止まって十分に冷えない場合は負の値を入力します。",
+              "overshoot_heat": "暖房でも同じです。室温が設定値を超えて落ち着くなら正の値、届かないなら負の値にします。"
+            }
           },
           "setpoint_offsets": {
             "name": "設定温度の補正",
@@ -338,6 +348,9 @@
       },
       "external_control": {
         "name": "外部からの操作"
+      },
+      "external_temperature_active": {
+        "name": "室内温度の指定"
       }
     },
     "update": {

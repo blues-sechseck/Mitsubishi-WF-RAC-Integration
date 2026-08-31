@@ -83,7 +83,17 @@
         "sections": {
           "indoor_temperature_source": {
             "name": "Vidaus temperatūros šaltinis",
-            "description": "Kondicionieriui perduodama kambario temperatūra, išmatuota ten, kur jums svarbu, o ne prie jo paties oro įsiurbimo grotelių."
+            "description": "Kondicionieriui perduodama kambario temperatūra, išmatuota ten, kur jums svarbu, o ne prie jo paties oro įsiurbimo grotelių.",
+            "data": {
+              "external_temperature_source": "Jutiklis",
+              "overshoot_cool": "Perviršis vėsinant",
+              "overshoot_heat": "Perviršis šildant"
+            },
+            "data_description": {
+              "external_temperature_source": "Kondicionierius reguliuoja pagal šį jutiklį. Palikite tuščią, kad grįžtų prie savojo; esant „unavailable“ ar „unknown“ tas pat įvyks su kitu kadru.",
+              "overshoot_cool": "Kiek kambarys peršoka jūsų nustatymą, kol kondicionierius sustoja. Nustatyta 22 °C, kambarys nusistovi ties 21 °C: įrašykite 1. Pradinė reikšmė 1, nes tiek reikia iki šiol išmatuotiems įrenginiams — pasižiūrėkite, kur nusistovi jūsų kambarys, ir pakoreguokite. Jei, priešingai, taip ir neatvėsta, įrašykite neigiamą skaičių.",
+              "overshoot_heat": "Tas pat šildant: teigiamas, jei kambarys lieka virš jūsų nustatymo, neigiamas — jei žemiau."
+            }
           },
           "setpoint_offsets": {
             "name": "Nustatytos temperatūros pataisos",
@@ -338,6 +348,9 @@
       },
       "external_control": {
         "name": "Išorinis valdymas"
+      },
+      "external_temperature_active": {
+        "name": "Nurodyta vidaus temperatūra"
       }
     },
     "update": {
