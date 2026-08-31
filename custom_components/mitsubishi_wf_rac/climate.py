@@ -64,6 +64,10 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
 
+# The modes whose setpoint the unit actually regulates on. Off and fan-only
+# have no setpoint of their own - see _setpoint_range_for_mode.
+REGULATING_HVAC_MODES = (HVACMode.AUTO, HVACMode.COOL, HVACMode.HEAT, HVACMode.DRY)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -359,13 +363,32 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             return 33
         return 30
 
+    def _setpoint_range_for_mode(self, hvac_mode: HVACMode) -> tuple[float, float]:
+        """The range a setpoint is held to, for display and before sending.
+
+        A regulating mode is held to its own range. Off and fan-only have none:
+        the value applies to whichever regulating mode is turned on next, often
+        in the very next step of the same automation. Holding it to the default
+        18C floor there rejects a cooling setpoint the unit takes happily once
+        it is cooling, which is what it did until #317.
+        """
+        if hvac_mode in REGULATING_HVAC_MODES:
+            return (
+                self._min_temp_for_mode(hvac_mode),
+                self._max_temp_for_mode(hvac_mode),
+            )
+        return (
+            min(self._min_temp_for_mode(mode) for mode in REGULATING_HVAC_MODES),
+            max(self._max_temp_for_mode(mode) for mode in REGULATING_HVAC_MODES),
+        )
+
     @property
     def min_temp(self) -> float:
-        return self._min_temp_for_mode(self._attr_hvac_mode)
+        return self._setpoint_range_for_mode(self._attr_hvac_mode)[0]
 
     @property
     def max_temp(self) -> float:
-        return self._max_temp_for_mode(self._attr_hvac_mode)
+        return self._setpoint_range_for_mode(self._attr_hvac_mode)[1]
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
@@ -381,8 +404,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         # being switched to, not the (still stale until the next poll) current one.
         target_hvac_mode = kwargs.get("hvac_mode", self._attr_hvac_mode)
         target_hvac_mode = HVACMode.OFF if target_hvac_mode is None else target_hvac_mode
-        min_temp = self._min_temp_for_mode(target_hvac_mode)
-        max_temp = self._max_temp_for_mode(target_hvac_mode)
+        min_temp, max_temp = self._setpoint_range_for_mode(target_hvac_mode)
 
         if set_temp < min_temp:
             raise ServiceValidationError(
