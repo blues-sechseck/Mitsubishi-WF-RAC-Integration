@@ -54,24 +54,46 @@
         "description": "Below are the options you can change for this airco.",
         "data": {
           "availability_retry_limit": "Retry limit (minimum 3)",
-          "firmware_update_check": "Firmware Update Check (Online)",
-          "external_temperature_source": "External temperature source",
-          "indoor_offset": "Indoor Temp. Sensor Offset",
-          "outdoor_offset": "Outdoor Temp. Sensor Offset",
-          "target_offset": "Target Temp. Offset",
-          "target_offset_cool": "Target Temp. Offset (Cooling)",
-          "target_offset_heat": "Target Temp. Offset (Heating)",
-          "overshoot_cool": "Cooling overshoot",
-          "overshoot_heat": "Heating overshoot"
+          "firmware_update_check": "Firmware Update Check (Online)"
         },
         "title": "WF-RAC options",
-        "data_description": {
-          "target_offset_cool": "Leave empty to use the general target temperature offset.",
-          "target_offset_heat": "Leave empty to use the general target temperature offset.",
-          "overshoot_cool": "How far the room goes past your setting before the unit stops. Set 22 °C and the room settles at 21 °C: enter 1. If it stops short instead and never gets cold enough, enter a negative number. Only has an effect while an external room temperature is in use.",
-          "overshoot_heat": "The same for heating: positive if the room ends up above your setting, negative if it stops short of it.",
-          "target_offset": "Most units round a half degree up to the next whole one, so 0.5 here often acts as 1.",
-          "external_temperature_source": "The selected sensor controls the external temperature override. Unavailable or unknown states return the unit to its internal sensor."
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Indoor temperature source",
+            "description": "Hand the unit a room temperature measured out in the room, instead of the one it reads at its own return air grille.",
+            "data": {
+              "external_temperature_source": "Sensor",
+              "overshoot_cool": "Cooling overshoot",
+              "overshoot_heat": "Heating overshoot"
+            },
+            "data_description": {
+              "external_temperature_source": "The unit regulates on this sensor. Leave it empty to put the unit back on its own sensor. Unavailable or unknown states do the same on the next frame.",
+              "overshoot_cool": "How far the room goes past your setting before the unit stops. Set 22 °C and the room settles at 21 °C: enter 1. If it stops short instead and never gets cold enough, enter a negative number.",
+              "overshoot_heat": "The same for heating: positive if the room ends up above your setting, negative if it stops short of it."
+            }
+          },
+          "setpoint_offsets": {
+            "name": "Setpoint offsets",
+            "description": "Change the setting sent to the unit while the card keeps showing yours. With a source in use the overshoot above is the better lever, and setting both applies both.",
+            "data": {
+              "target_offset": "Target Temp. Offset",
+              "target_offset_cool": "Target Temp. Offset (Cooling)",
+              "target_offset_heat": "Target Temp. Offset (Heating)"
+            },
+            "data_description": {
+              "target_offset": "Positive lowers the setting sent to the unit, negative raises it - the card keeps showing yours either way. Most units round a half degree up to the next whole one, so 0.5 here often acts as 1.",
+              "target_offset_cool": "Leave empty to use the general target temperature offset.",
+              "target_offset_heat": "Leave empty to use the general target temperature offset."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Sensor offsets",
+            "description": "Correct the readings shown in Home Assistant. Display only - neither changes what the unit does.",
+            "data": {
+              "indoor_offset": "Indoor Temp. Sensor Offset",
+              "outdoor_offset": "Outdoor Temp. Sensor Offset"
+            }
+          }
         }
       }
     }
@@ -93,7 +115,7 @@
       "message": "This model does not report the Home Leave Mode capability."
     },
     "external_temperature_source_configured": {
-      "message": "External temperature is controlled by the configured source entity."
+      "message": "The indoor temperature is controlled by the configured source entity."
     },
     "home_leave_mode_status_unknown": {
       "message": "Home Leave Mode values are unknown yet. Call the climate entity's \"Request Home Leave Mode status\" action once first - the unit doesn't include them in a plain poll."
@@ -337,7 +359,7 @@
         "name": "External Control"
       },
       "external_temperature_active": {
-        "name": "External Temperature Active"
+        "name": "Indoor temperature override"
       }
     },
     "button": {

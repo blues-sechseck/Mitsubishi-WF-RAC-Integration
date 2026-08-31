@@ -77,17 +77,35 @@
         "description": "Žemiau pateikiamos parinktys, kurias galite keisti šiam oro kondicionieriui.",
         "data": {
           "availability_retry_limit": "Pakartotinio bandymo limitas (min. 3)",
-          "firmware_update_check": "Programinės įrangos atnaujinimų tikrinimas (internetu)",
-          "indoor_offset": "Vidaus poslinkis",
-          "outdoor_offset": "Lauko poslinkis",
-          "target_offset": "Tikslinis poslinkis",
-          "target_offset_cool": "Tikslinis poslinkis (vėsinimas)",
-          "target_offset_heat": "Tikslinis poslinkis (šildymas)"
+          "firmware_update_check": "Programinės įrangos atnaujinimų tikrinimas (internetu)"
         },
         "title": "WF-RAC parinktys",
-        "data_description": {
-          "target_offset_cool": "Palikite tuščią, jei norite naudoti bendrą tikslinės temperatūros poslinkį.",
-          "target_offset_heat": "Palikite tuščią, jei norite naudoti bendrą tikslinės temperatūros poslinkį."
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Vidaus temperatūros šaltinis",
+            "description": "Kondicionieriui perduodama kambario temperatūra, išmatuota ten, kur jums svarbu, o ne prie jo paties oro įsiurbimo grotelių."
+          },
+          "setpoint_offsets": {
+            "name": "Nustatytos temperatūros pataisos",
+            "description": "Pakeičia kondicionieriui siunčiamą reikšmę, o kortelėje toliau rodoma jūsų nustatytoji. Naudojant šaltinį, geriau tinka viršuje esanti perviršio pataisa; nustačius abi, veikia abi.",
+            "data": {
+              "target_offset": "Tikslinis poslinkis",
+              "target_offset_cool": "Tikslinis poslinkis (vėsinimas)",
+              "target_offset_heat": "Tikslinis poslinkis (šildymas)"
+            },
+            "data_description": {
+              "target_offset_cool": "Palikite tuščią, jei norite naudoti bendrą tikslinės temperatūros poslinkį.",
+              "target_offset_heat": "Palikite tuščią, jei norite naudoti bendrą tikslinės temperatūros poslinkį."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Jutiklių rodmenų pataisos",
+            "description": "Pataiso tik Home Assistant rodomus rodmenis, o ne paties kondicionieriaus veikimą.",
+            "data": {
+              "indoor_offset": "Vidaus poslinkis",
+              "outdoor_offset": "Lauko poslinkis"
+            }
+          }
         }
       }
     }

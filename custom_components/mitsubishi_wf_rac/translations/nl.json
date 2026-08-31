@@ -77,17 +77,35 @@
         "description": "Hieronder zijn instellingen die je kan aanpassen voor deze airco.",
         "data": {
           "availability_retry_limit": "Herhaal limiet (minimaal 3)",
-          "firmware_update_check": "Firmware-updatecontrole (online)",
-          "indoor_offset": "Binnen offset",
-          "outdoor_offset": "Buiten offset",
-          "target_offset": "Doel offset",
-          "target_offset_cool": "Doel offset (Koelen)",
-          "target_offset_heat": "Doel offset (Verwarmen)"
+          "firmware_update_check": "Firmware-updatecontrole (online)"
         },
         "title": "WF-RAC opties",
-        "data_description": {
-          "target_offset_cool": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken.",
-          "target_offset_heat": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken."
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Bron voor de binnentemperatuur",
+            "description": "Geeft de airco een kamertemperatuur die gemeten is waar het je om gaat, in plaats van die bij zijn eigen aanzuigrooster."
+          },
+          "setpoint_offsets": {
+            "name": "Correcties op het instelpunt",
+            "description": "Verschuiven de waarde die naar de airco gaat, terwijl de kaart die van jou blijft tonen. Met een bron in gebruik is de overshoot hierboven de betere knop; staan ze allebei ingesteld, dan werken ze allebei.",
+            "data": {
+              "target_offset": "Doel offset",
+              "target_offset_cool": "Doel offset (Koelen)",
+              "target_offset_heat": "Doel offset (Verwarmen)"
+            },
+            "data_description": {
+              "target_offset_cool": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken.",
+              "target_offset_heat": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Correcties op sensorwaarden",
+            "description": "Corrigeren alleen wat Home Assistant toont, niet wat de airco doet.",
+            "data": {
+              "indoor_offset": "Binnen offset",
+              "outdoor_offset": "Buiten offset"
+            }
+          }
         }
       }
     }

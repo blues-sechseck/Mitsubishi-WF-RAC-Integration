@@ -21,6 +21,7 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import entity_registry as er, selector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
@@ -45,6 +46,12 @@ from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN
 from .wfrac.repository import AirconApiError, Repository
 
 _LOGGER = logging.getLogger(__name__)
+
+# Form-only keys: sections group the fields in the dialog, they are not
+# options themselves and never reach entry.options - see async_step_init.
+SECTION_INDOOR_TEMPERATURE_SOURCE = "indoor_temperature_source"
+SECTION_SETPOINT_OFFSETS = "setpoint_offsets"
+SECTION_SENSOR_OFFSETS = "sensor_offsets"
 
 
 class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -431,18 +438,65 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
             )
         )
 
+    @property
+    def _source_configured(self) -> bool:
+        """Whether a temperature source entity is picked for this entry."""
+        return bool(self.config_entry.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE))
+
+    def _rendered_option_keys(self) -> set[str]:
+        """The option keys this form shows for the current configuration.
+
+        Deliberately derived from the saved options - the same input the
+        schema is built from - rather than recorded while building it: the
+        save path needs to know what the form could not have collected, and
+        answering that from state carried between the two halves is one
+        forgotten assignment away from silently dropping settings.
+        """
+        keys = {
+            CONF_AVAILABILITY_RETRY_LIMIT,
+            CONF_FIRMWARE_UPDATE_CHECK,
+            CONF_EXTERNAL_TEMPERATURE_SOURCE,
+            CONF_TARGET_OFFSET,
+            CONF_TARGET_OFFSET_COOL,
+            CONF_TARGET_OFFSET_HEAT,
+            CONF_INDOOR_OFFSET,
+            CONF_OUTDOOR_OFFSET,
+        }
+        if self._source_configured:
+            keys |= {CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_HEAT}
+        return keys
+
     async def async_step_init(
             self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
+            # Sections hand their fields back nested under the section key,
+            # while everything that reads an option reads it flat off
+            # entry.options - so the shape is flattened straight back out and
+            # the stored options stay exactly what they have always been.
+            data: dict[str, Any] = {}
+            for key, value in user_input.items():
+                if isinstance(value, dict):
+                    data.update(value)
+                else:
+                    data[key] = value
+            # A field the form did not show cannot be collected from it, and
+            # async_create_entry replaces the options wholesale rather than
+            # merging - so an unrendered value has to be carried over by hand
+            # or it is dropped. That is how the overshoot figures survive
+            # removing the source that hides them. A field that was shown and
+            # left empty is meant to be empty and is not carried over.
+            for key, value in self.config_entry.options.items():
+                if key not in self._rendered_option_keys():
+                    data.setdefault(key, value)
             # Host moved to the reconfigure flow (validated against the
             # device) - keep the entry's existing value, since this form no
-            # longer collects it and async_create_entry replaces options
-            # wholesale rather than merging.
-            data = {**user_input, CONF_HOST: self.config_entry.options[CONF_HOST]}
+            # longer collects it.
+            data[CONF_HOST] = self.config_entry.options[CONF_HOST]
             return self.async_create_entry(title="", data=data)
 
+        options = self.config_entry.options
         offset_range_validator = vol.All(vol.Coerce(float), vol.Range(min=-5.0, max=5.0))
         # Negative allowed, though overshooting is what everyone has measured
         # so far: a unit that stops short of the setting instead needs the
@@ -451,12 +505,48 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
         overshoot_validator = vol.All(
             vol.Coerce(float), vol.Range(min=-OVERSHOOT_MAX, max=OVERSHOOT_MAX)
         )
-        overshoot_fields: dict[Any, Any] = {
+
+        source_fields: dict[Any, Any] = {
+            # Keep this optional without a default: an omitted source must
+            # stay omitted, rather than becoming a falsey value that
+            # unnecessarily changes the saved options shape.
             vol.Optional(
-                key,
-                default=self.config_entry.options.get(key, 0.0),
-            ): overshoot_validator
-            for key in (CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_HEAT)
+                CONF_EXTERNAL_TEMPERATURE_SOURCE,
+                description={
+                    "suggested_value": options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
+                },
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain="sensor",
+                    device_class="temperature",
+                    # This integration's own temperature sensors report the
+                    # injected value back while an override is armed, so
+                    # picking one would feed the override into itself and walk
+                    # it away from the room half a kelvin per poll.
+                    # EntitySelector rejects an excluded entity on submit, not
+                    # just in the picker, so this is the enforcement and not
+                    # only a convenience.
+                    exclude_entities=self._own_entity_ids(),
+                )
+            ),
+        }
+        # The overshoot corrections act on the room temperature handed to the
+        # unit, so without a source there is no value to bend and the fields
+        # do nothing at all. They appear once a source is picked and saved -
+        # a form cannot rebuild itself while it is open.
+        if self._source_configured:
+            source_fields.update(
+                {
+                    vol.Optional(key, default=options.get(key, 0.0)): overshoot_validator
+                    for key in (CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_HEAT)
+                }
+            )
+
+        setpoint_fields: dict[Any, Any] = {
+            vol.Optional(
+                CONF_TARGET_OFFSET,
+                default=options.get(CONF_TARGET_OFFSET, 0.0),
+            ): offset_range_validator,
         }
         # target_offset_cool/heat are optional per-mode overrides that must
         # stay "unset" (None) unless the user explicitly fills them in - a
@@ -464,12 +554,22 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
         # fallback-to-target_offset resolution in climate.py. suggested_value
         # (not default=) pre-fills the displayed value without forcing one
         # when absent.
-        per_mode_offset_fields: dict[Any, Any] = {
+        setpoint_fields.update(
+            {
+                vol.Optional(
+                    key,
+                    description={"suggested_value": options.get(key)},
+                ): vol.Any(None, offset_range_validator)
+                for key in (CONF_TARGET_OFFSET_COOL, CONF_TARGET_OFFSET_HEAT)
+            }
+        )
+
+        sensor_fields: dict[Any, Any] = {
             vol.Optional(
                 key,
-                description={"suggested_value": self.config_entry.options.get(key)},
-            ): vol.Any(None, offset_range_validator)
-            for key in (CONF_TARGET_OFFSET_COOL, CONF_TARGET_OFFSET_HEAT)
+                default=options.get(key, 0.0),
+            ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0))
+            for key in (CONF_INDOOR_OFFSET, CONF_OUTDOOR_OFFSET)
         }
 
         return self.async_show_form(
@@ -481,53 +581,29 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlow):
                     # migrations. Raising it stays available for weak links.
                     vol.Required(
                         CONF_AVAILABILITY_RETRY_LIMIT,
-                        default=self.config_entry.options.get(
+                        default=options.get(
                             CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=AVAILABILITY_FAILURE_LIMIT_MIN)),
                     vol.Required(
                         CONF_FIRMWARE_UPDATE_CHECK,
-                        default=self.config_entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False),
+                        default=options.get(CONF_FIRMWARE_UPDATE_CHECK, False),
                     ): bool,
-                    vol.Optional(
-                        CONF_INDOOR_OFFSET,
-                        default=self.config_entry.options.get(CONF_INDOOR_OFFSET, 0.0),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
-                    # Keep this optional without a default: an omitted source
-                    # must stay omitted, rather than becoming a falsey value
-                    # that unnecessarily changes the saved options shape.
-                    vol.Optional(
-                        CONF_EXTERNAL_TEMPERATURE_SOURCE,
-                        description={
-                            "suggested_value": self.config_entry.options.get(
-                                CONF_EXTERNAL_TEMPERATURE_SOURCE
-                            )
-                        },
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain="sensor",
-                            device_class="temperature",
-                            # This integration's own temperature sensors report
-                            # the injected value back while an override is
-                            # armed, so picking one would feed the override
-                            # into itself and walk it away from the room half a
-                            # kelvin per poll. EntitySelector rejects an
-                            # excluded entity on submit, not just in the
-                            # picker, so this is the enforcement and not only a
-                            # convenience.
-                            exclude_entities=self._own_entity_ids(),
-                        )
+                    vol.Required(SECTION_INDOOR_TEMPERATURE_SOURCE): section(
+                        vol.Schema(source_fields), {"collapsed": False}
                     ),
-                    vol.Optional(
-                        CONF_OUTDOOR_OFFSET,
-                        default=self.config_entry.options.get(CONF_OUTDOOR_OFFSET, 0.0),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=-15.0, max=15.0)),
-                    vol.Optional(
-                        CONF_TARGET_OFFSET,
-                        default=self.config_entry.options.get(CONF_TARGET_OFFSET, 0.0),
-                    ): offset_range_validator,
-                    **per_mode_offset_fields,
-                    **overshoot_fields,
+                    # Collapsed once a source is in use: the overshoot above is
+                    # the right lever then, and these two stack with it if both
+                    # are set. Still shown, because they keep working - what
+                    # they correct is the unit's own sensor bias, which is out
+                    # of the loop while the unit regulates on a supplied value.
+                    vol.Required(SECTION_SETPOINT_OFFSETS): section(
+                        vol.Schema(setpoint_fields),
+                        {"collapsed": self._source_configured},
+                    ),
+                    vol.Required(SECTION_SENSOR_OFFSETS): section(
+                        vol.Schema(sensor_fields), {"collapsed": True}
+                    ),
                 },
             ),
         )

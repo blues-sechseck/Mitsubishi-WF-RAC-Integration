@@ -77,17 +77,35 @@
         "description": "以下是你可以為此空調更改的選項。",
         "data": {
           "availability_retry_limit": "重試次數上限（最少 3）",
-          "firmware_update_check": "韌體更新檢查（線上）",
-          "indoor_offset": "室內偏移",
-          "outdoor_offset": "室外偏移",
-          "target_offset": "目標偏移",
-          "target_offset_cool": "目標偏移（製冷）",
-          "target_offset_heat": "目標偏移（製熱）"
+          "firmware_update_check": "韌體更新檢查（線上）"
         },
         "title": "WF-RAC 選項",
-        "data_description": {
-          "target_offset_cool": "留空以使用通用的目標溫度偏移。",
-          "target_offset_heat": "留空以使用通用的目標溫度偏移。"
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "室內溫度來源",
+            "description": "把你真正在意的位置量到的室溫交給空調，取代它自己回風口處的讀數。"
+          },
+          "setpoint_offsets": {
+            "name": "設定溫度修正",
+            "description": "改變送往空調的數值，卡片上仍顯示你設定的值。使用來源時，上面的過衝修正更合適；兩者都設定則兩者都會生效。",
+            "data": {
+              "target_offset": "目標偏移",
+              "target_offset_cool": "目標偏移（製冷）",
+              "target_offset_heat": "目標偏移（製熱）"
+            },
+            "data_description": {
+              "target_offset_cool": "留空以使用通用的目標溫度偏移。",
+              "target_offset_heat": "留空以使用通用的目標溫度偏移。"
+            }
+          },
+          "sensor_offsets": {
+            "name": "感測器讀數修正",
+            "description": "只修正 Home Assistant 中顯示的讀數，不改變空調的行為。",
+            "data": {
+              "indoor_offset": "室內偏移",
+              "outdoor_offset": "室外偏移"
+            }
+          }
         }
       }
     }

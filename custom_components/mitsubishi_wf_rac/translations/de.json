@@ -77,17 +77,35 @@
         "description": "Nachfolgend finden Sie die Optionen, die Sie für diese Klimaanlage ändern können.",
         "data": {
           "availability_retry_limit": "max. Anzahl Wiederholungen (mind. 3)",
-          "firmware_update_check": "Firmware-Update-Prüfung (Online)",
-          "indoor_offset": "Innentemperatur Sensor-Offset",
-          "outdoor_offset": "Außentemperatur Sensor-Offset",
-          "target_offset": "Zieltemperatur-Offset",
-          "target_offset_cool": "Zieltemperatur-Offset (Kühlen)",
-          "target_offset_heat": "Zieltemperatur-Offset (Heizen)"
+          "firmware_update_check": "Firmware-Update-Prüfung (Online)"
         },
         "title": "WF-RAC Optionen",
-        "data_description": {
-          "target_offset_cool": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden.",
-          "target_offset_heat": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden."
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Quelle der Innentemperatur",
+            "description": "Gibt dem Gerät eine Raumtemperatur, die dort gemessen wird, wo es darauf ankommt, statt der am eigenen Ansauggitter."
+          },
+          "setpoint_offsets": {
+            "name": "Sollwert-Korrekturen",
+            "description": "Verschieben den Wert, der ans Gerät geht, während die Karte weiterhin Ihren zeigt. Bei genutzter Quelle ist der Überschwing-Wert oben der bessere Hebel; sind beide gesetzt, wirken auch beide.",
+            "data": {
+              "target_offset": "Zieltemperatur-Offset",
+              "target_offset_cool": "Zieltemperatur-Offset (Kühlen)",
+              "target_offset_heat": "Zieltemperatur-Offset (Heizen)"
+            },
+            "data_description": {
+              "target_offset_cool": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden.",
+              "target_offset_heat": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Sensor-Korrekturen",
+            "description": "Korrigieren nur die in Home Assistant angezeigten Messwerte, nicht das Verhalten des Geräts.",
+            "data": {
+              "indoor_offset": "Innentemperatur Sensor-Offset",
+              "outdoor_offset": "Außentemperatur Sensor-Offset"
+            }
+          }
         }
       }
     }

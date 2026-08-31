@@ -183,10 +183,10 @@ set_home_leave_mode:
               value: "4"
 # Service ID
 set_external_temperature:
-  name: Set external temperature override
+  name: Set indoor temperature override
   description: >-
-    Arms an external room temperature for the AC to regulate on instead of its
-    own indoor sensor. The value is not sent by this action; it rides along on
+    Arms a room temperature for the AC to regulate on instead of the one its
+    own indoor sensor reads. The value is not sent by this action; it rides along on
     the next frame that goes out anyway, so it takes effect within a minute.
     While an override is armed the integration asks the unit for one operation
     data segment per cycle, which is the frame that carries it. Omit the
@@ -198,7 +198,7 @@ set_external_temperature:
   fields:
     temperature:
       name: Temperature
-      description: External room temperature in °C. Leave blank to use the internal sensor.
+      description: Room temperature in °C. Leave blank to use the unit's own sensor.
       required: false
       selector:
         number:

@@ -77,17 +77,35 @@
         "description": "以下は、このエアコンの変更可能なオプションです。",
         "data": {
           "availability_retry_limit": "リトライ回数の上限（最小 3）",
-          "firmware_update_check": "ファームウェア更新の確認 (オンライン)",
-          "indoor_offset": "室内オフセット",
-          "outdoor_offset": "室外オフセット",
-          "target_offset": "設定オフセット",
-          "target_offset_cool": "設定オフセット（冷房時）",
-          "target_offset_heat": "設定オフセット（暖房時）"
+          "firmware_update_check": "ファームウェア更新の確認 (オンライン)"
         },
         "title": "WF-RAC の設定",
-        "data_description": {
-          "target_offset_cool": "空欄の場合は、共通の設定オフセットが使用されます。",
-          "target_offset_heat": "空欄の場合は、共通の設定オフセットが使用されます。"
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "室内温度の取得元",
+            "description": "エアコン自身の吸込口ではなく、実際に気になる場所で測った室温をエアコンに渡します。"
+          },
+          "setpoint_offsets": {
+            "name": "設定温度の補正",
+            "description": "カードには設定した値を表示したまま、エアコンに送る値をずらします。取得元を使っている場合は上のオーバーシュート補正のほうが適しています。両方設定すると両方効きます。",
+            "data": {
+              "target_offset": "設定オフセット",
+              "target_offset_cool": "設定オフセット（冷房時）",
+              "target_offset_heat": "設定オフセット（暖房時）"
+            },
+            "data_description": {
+              "target_offset_cool": "空欄の場合は、共通の設定オフセットが使用されます。",
+              "target_offset_heat": "空欄の場合は、共通の設定オフセットが使用されます。"
+            }
+          },
+          "sensor_offsets": {
+            "name": "センサー値の補正",
+            "description": "Home Assistant に表示される値だけを補正します。エアコンの動作は変わりません。",
+            "data": {
+              "indoor_offset": "室内オフセット",
+              "outdoor_offset": "室外オフセット"
+            }
+          }
         }
       }
     }
