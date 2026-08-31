@@ -349,6 +349,26 @@ async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device)
     assert entity._attr_current_temperature == 23.5
 
 
+async def test_update_state_shows_a_source_even_before_the_unit_uses_it(device):
+    # Deciding whether to switch the unit on is exactly when someone reads the
+    # room temperature off the card, and that is a moment when the unit is not
+    # using the supplied value - nothing writes byte 5 while it is off. A
+    # source keeps measuring the room regardless, so it is shown anyway; the
+    # unit's own sensor means least just then, with no air moving past it.
+    _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
+    _with_external_temperature_source(device)
+    device.airco.IndoorTemp = 22.0
+    device.airco.Operation = False
+    entity = _service_entity(device)
+
+    device.set_external_temperature_override(20.0)
+    entity._update_state()
+
+    assert entity._attr_current_temperature == 20.0
+    # The override is still correctly reported as not in effect.
+    assert device.external_temperature_applied is False
+
+
 async def test_update_state_follows_the_newest_value_while_one_is_in_flight(device):
     # A source sensor feeding the action reports a new value every cycle, and
     # the unit only picks it up on the next frame. The card is showing the

@@ -303,7 +303,7 @@ The climate entity exposes the following entity services (use as `mitsubishi_wf_
 | `set_vertical_swing_mode` | `swing_mode` | Set the vertical (up/down) louver position. |
 | `request_home_leave_mode_status` | — | Ask the unit to report its Home Leave Mode thresholds/airflow (only on supporting models). |
 | `set_home_leave_mode` | `temp_rule_cooling`, `temp_setting_cooling`, `air_flow_cooling`, `temp_rule_heating`, `temp_setting_heating`, `air_flow_heating` | Write new Home Leave Mode thresholds/airflow (only on supporting models). |
-| `set_external_temperature` | `temperature` (optional) | Provide a room temperature to the AC, overriding the one its own indoor sensor reads. Omit `temperature` or pass `null` to revert to the internal sensor. See below. |
+| `set_external_temperature` | `temperature` (optional) | Provide a room temperature to the AC, replacing the one its own indoor sensor reads. Omit `temperature` or pass `null` to revert to the internal sensor. See below. |
 
 ## Indoor temperature override
 
@@ -323,7 +323,7 @@ What an armed override costs is one request per poll cycle, which holds the unit
 
 **While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; the climate entity shows the value you supplied instead, and your own sensor remains the measurement. Clearing the override brings the real reading back within a cycle.
 
-An action-driven override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. With a configured source, its current state is used instead of a restored value. The Indoor Temperature sensor shows what the unit reports throughout, so it keeps agreeing with the official app. `current_temperature` does not: while the unit is regulating on a value you supplied, the climate entity shows that value.
+An action-driven override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. With a configured source, its current state is used instead of a restored value. The Indoor Temperature sensor shows what the unit reports throughout, so it keeps agreeing with the official app. `current_temperature` does not: with an **Indoor temperature source** configured, the climate entity shows that sensor's reading - including while the unit is off or in `fan_only`, where nothing is written and the unit's own reading means least. An override armed from an automation instead of a source is only shown once the unit is actually using it: there is no sensor behind it, so before then it is an intention rather than a measurement.
 
 ### When the room ends up past your setting
 
