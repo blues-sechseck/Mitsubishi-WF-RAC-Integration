@@ -655,6 +655,7 @@ operating points are not a calibration, so the formulas stay `[INF]`.
 | `0xB1` | TDSH [°C] | `OP2 / 2` | `00` in both — never moved |
 | `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32`, **only for `OP2 >= 0x12`** | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
 | `0x13` | Outdoor EEV [pulses] | `OP2` | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
+| `0x05` | Internal setpoint [°C] | `OP2 / 2`, `sel` = `0x13` | `2e` ⇒ **23.0 °C** while 22.5 °C was the value sent |
 | `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
 | `0x81` | THI-R1 [°C] | thermistor curve, see §5.4 | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
 | `0x87` | THI-R3 [°C] | thermistor curve, see §5.4 | `10 5a ff` ⇒ raw 90 |
@@ -673,6 +674,14 @@ Notes on the shape of the answers `[HW]`:
 - The second byte is a **selector**, not a fixed status marker. `0x10` and
   `0x20` follow the same indoor/outdoor convention as air temperature; `0x0D`
   and `0x32` answer with values outside that pattern and are not understood.
+- **`0x05` is not in the firmware's whitelist and answers anyway**, over the
+  generic path (§5.3), with the setpoint the unit is *using internally*. It is
+  not always the value that was sent: 22.5 °C came back as 23.0, 22.0 °C as
+  22.0 (three and ten measurements, SRK20ZS-WF). The unit resolves whole
+  degrees and rounds a half one up, so a half-degree step either lands a full
+  degree away or nowhere — which is what `ENHANCED_RESOLUTION` in MHI-AC-Ctrl
+  works around. `[HW]` A correction finer than a degree has to travel in the
+  injected room temperature instead (§5.6); that field has a 0.25 K grid.
 - `0x1E` and `0x1F` answer with all-`0xFF`. Both are codes MHI-AC-Ctrl requests
   *twice*, once per unit, using the `DB6` selector the bridge does not expose —
   the likeliest reading is "unit not selectable, so no value". Untested.
@@ -683,7 +692,9 @@ Notes on the shape of the answers `[HW]`:
   sharing the outdoor unit — they are outdoor-unit-level values, not
   per-indoor. `0x13` (EEV) differs per indoor unit, since each has its own
   expansion valve. Confirmed live: one indoor unit cooling, the other idle,
-  identical frequency/current/temperature on both, EEV 57 vs. 0. `[HW]`
+  identical frequency/current/temperature on both, EEV 57 vs. 0. `[HW]` So
+  `0x11` does **not** tell you whether *this* indoor unit is calling for
+  cooling on a multi-split — `state[9] & 0x02` (§4.6) does, and costs nothing.
 - `0x13`'s full-open pulse count is unknown. MHI-AC-Ctrl reads the same
   quantity as 16 bits (`DB12<<8 | DB11`, its `OU-EEV1`), while this bridge's
   `OP2` is a single byte — likely a narrowed/derived value, not a raw pass

@@ -691,12 +691,13 @@ class RacParser:
         the whole byte range converts, heating included. A byte of 0 is the
         divider's own limit and carries no temperature, so it yields None.
 
-        The one point this disagrees with is the manual's 1.0 C frost cut-off,
-        where the curve reads ~5.5 C. That anchor is indirect: the threshold is
-        adjustable on the unit, and what gets sampled is the value before the
-        stop rather than the threshold. A reading taken against a thermometer
-        at byte 75 backs the curve (16.8 C measured, 17.0 C here), so the
-        measurement wins over the inference.
+        The cold end sits on the three frost-protection thresholds the
+        databook gives for this series - 8 C recovery, 5 C throttle, 2.5 C stop
+        - which a cooling run drove through in order; the curve reads 7.8, 5.0
+        and 2.4 C at the nearest bytes, so it is good to about one count there.
+        A reading against a thermometer at byte 75 backs the middle of the
+        range (16.8 C measured, 17.0 C here). Above byte 170 the curve is
+        extrapolation: nothing has been held against the coil that hot.
         """
         if not 0 < op2 < COIL_ADC_GAIN:
             _LOGGER.debug(
