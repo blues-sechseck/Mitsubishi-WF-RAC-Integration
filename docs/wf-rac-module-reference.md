@@ -505,7 +505,7 @@ The temperature you actually want arrives as **pushed variable segments** (§5.2
 with much better resolution: 256-entry thermistor lookup tables, 0.1 °C steps,
 −30…52 °C indoor and −50…43 °C outdoor. These tables are non-linear and are not
 derivable from a formula — copy them (the ones in this project live in
-`repo/custom_components/mitsubishi_wf_rac/wfrac/utils.py`). `[APP]`
+[`pywfrac`'s `utils.py`](https://github.com/blues-sechseck/pywfrac/blob/main/src/pywfrac/utils.py)). `[APP]`
 
 ---
 
@@ -1149,4 +1149,4 @@ branches agreed.
 
 Independent client implementations worth reading: `homebridge-mhi-wfrac`,
 `mqtt2mhi-wf-rac`, `ioBroker.woso_mitsu_aircon_rac`, `node-red-aircon-rac-wf`,
-and this project's own `custom_components/mitsubishi_wf_rac/wfrac/rac_parser.py`.
+and this project's own protocol library [`pywfrac`](https://github.com/blues-sechseck/pywfrac).

@@ -38,7 +38,7 @@ class FirmwareUpdateEntity(WfRacEntity, UpdateEntity):
 
     Compares the version reported locally (device.py, from getAirconStat)
     against the manufacturer's unauthenticated getFirmware endpoint - see
-    wfrac/firmware_check.py. Read-only: the module only downloads and flashes
+    firmware_check.py. Read-only: the module only downloads and flashes
     itself while switched off, so triggering an install isn't offered here.
     """
 

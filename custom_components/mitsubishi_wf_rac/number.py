@@ -14,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import MitsubishiWfRacConfigEntry
 from .entity import WfRacEntity
 from .coordinator import Device
-from .wfrac.models.aircon import HomeLeaveModeSetting
+from pywfrac import HomeLeaveModeSetting
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)

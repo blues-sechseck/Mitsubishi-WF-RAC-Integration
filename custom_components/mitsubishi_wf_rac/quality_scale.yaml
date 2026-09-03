@@ -79,15 +79,6 @@ rules:
     comment: One device per config entry; nothing goes stale independently of it.
 
   # Platinum
-  async-dependency:
-    status: exempt
-    comment: >-
-      No third-party library yet - repository.py talks to aiohttp directly.
-      Becomes applicable once the protocol code moves into its own library.
-  inject-websession:
-    status: exempt
-    comment: >-
-      Not applicable for the same reason as async-dependency, but already done
-      right in practice: async_get_clientsession(hass) is used rather than an
-      owned session. Moves to done once pywfrac exists.
+  async-dependency: done
+  inject-websession: done
   strict-typing: done

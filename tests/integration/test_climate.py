@@ -32,8 +32,8 @@ from custom_components.mitsubishi_wf_rac.const import (
     HVAC_TRANSLATION,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import Device
-from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands
-from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
+from pywfrac import AirconCommands
+from pywfrac.parser import (
     SERVICE_DATA_INDOOR_COIL_RAW,
 )
 

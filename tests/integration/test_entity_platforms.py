@@ -31,7 +31,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     SWING_MODE_TRANSLATION,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import Device
-from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import AirconCommands, HomeLeaveModeSetting
+from pywfrac import AirconCommands, HomeLeaveModeSetting
 
 from ..unit.live_captures import LIVE_CAPTURES
 

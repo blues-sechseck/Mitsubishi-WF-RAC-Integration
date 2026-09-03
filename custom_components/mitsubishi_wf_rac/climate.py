@@ -32,8 +32,8 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .entity import WfRacEntity
 from .coordinator import Device
-from .wfrac.models.aircon import Aircon, AirconCommands, HomeLeaveModeSetting
-from .wfrac.rac_parser import (
+from pywfrac import Aircon, AirconCommands, HomeLeaveModeSetting
+from pywfrac.parser import (
     EXTERNAL_TEMPERATURE_MAX,
     EXTERNAL_TEMPERATURE_MIN,
     is_external_temperature_mode,
@@ -339,7 +339,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         accepts 18-30C. Cooling reliably goes lower than that in practice
         regardless of model, so that override applies unconditionally.
         Models with the app's PresetTempRange2 capability (`ModelNoType`/
-        `TempItemType` in the app, see wfrac/capabilities.py) go further,
+        `TempItemType` in the app, see pywfrac's capabilities module) go further,
         per the app's own table (Constants.java TempItemType.getMin/getMax):
         Auto/Cool/Dry down to 16, Heat down to 10. That 10C heating floor is
         unconfirmed on real hardware - the plain-setpoint reset to 18C after a
