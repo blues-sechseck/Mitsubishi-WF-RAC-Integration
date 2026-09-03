@@ -227,3 +227,11 @@ OPERATION_LIST = {
     HVACMode.DRY: "Dry",
     HVACMode.FAN_ONLY: "Fan",
 }
+
+
+# Optional certificate for the unit's HTTPS stack, looked up in the HA config
+# directory. Without it the connection falls back to a permissive SSL context.
+# Create it by running this in that directory:
+#   openssl s_client -connect <AC_IP_ADDRESS>:51443 -showcerts </dev/null 2>/dev/null \
+#       | openssl x509 -outform PEM > ac_cert.pem
+AC_CERT_FILENAME = "ac_cert.pem"

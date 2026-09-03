@@ -11,10 +11,12 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    AC_CERT_FILENAME,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_HEAT,
@@ -23,23 +25,23 @@ from .const import (
     OPERATION_MODE_COOL,
     OPERATION_MODE_HEAT,
 )
-from .wfrac.firmware_check import fetch_latest_firmware
-from .wfrac.models.aircon import Aircon, AirconCommands, AirconStat, HomeLeaveModeSetting
-from .wfrac.rac_parser import (
+from pywfrac import (
+    Aircon,
+    AirconCommands,
+    AirconStat,
+    HomeLeaveModeSetting,
     RacParser,
-    SERVICE_DATA_CODES,
-    SERVICE_DATA_INDOOR_COIL_RAW,
-)
-from .wfrac.repository import (
-    MIN_TIME_BETWEEN_REQUESTS,
-    REQUEST_TIMEOUT,
-    AirconApiError,
-    AirconCommandError,
-    AirconConnectionError,
-    AirconRegistrationError,
-    AirconWriteRefusedError,
     Repository,
+    WfRacCommandError,
+    WfRacConnectionError,
+    WfRacError,
+    WfRacRegistrationError,
+    WfRacWriteRefusedError,
 )
+from pywfrac.parser import SERVICE_DATA_CODES, SERVICE_DATA_INDOOR_COIL_RAW
+from pywfrac.repository import MIN_TIME_BETWEEN_REQUESTS, REQUEST_TIMEOUT
+
+from .firmware_check import fetch_latest_firmware
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -242,7 +244,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             connection_method: str | None = None,
     ) -> None:
         self._api = Repository(
-            hass, hostname, port, operator_id, device_id, method=connection_method
+            async_get_clientsession(hass),
+            hostname,
+            port,
+            operator_id,
+            device_id,
+            method=connection_method,
+            cert_path=hass.config.path(AC_CERT_FILENAME),
         )
         self._parser = RacParser()
         self._hass = hass
@@ -526,10 +534,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self._set_availability(False)
                 _LOGGER.warning("Received no data for device %s", self._airco_id)
                 return False
-        except AirconConnectionError as ex:
+        except WfRacConnectionError as ex:
             self._record_connection_failure(ex)
             return False
-        except (AirconApiError, KeyError) as ex:
+        except (WfRacError, KeyError) as ex:
             self._set_availability(False)
             _LOGGER.warning(
                 "Error: something went wrong updating the airco [%s] values",
@@ -709,7 +717,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
             expires = response["expires"]
-        except (AirconApiError, KeyError, TypeError, ValueError):
+        except (WfRacError, KeyError, TypeError, ValueError):
             return WRITE_LOCK_RETRY_DELAY.total_seconds()
         if not isinstance(expires, int):
             return WRITE_LOCK_RETRY_DELAY.total_seconds()
@@ -866,7 +874,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # schedule moving.
                 self.async_update_listeners()
                 return
-            except AirconWriteRefusedError as ex:
+            except WfRacWriteRefusedError as ex:
                 # Someone else may hold the write lock. Unlike a user command
                 # this is not worth contesting: give the cycle up immediately
                 # rather than retrying into a lock we would only be renewing
@@ -878,7 +886,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     ex,
                 )
                 return
-            except AirconCommandError as ex:
+            except WfRacCommandError as ex:
                 if attempt == 1:
                     _LOGGER.debug("Service data request refused (%s); retrying", ex)
                     await asyncio.sleep(SERVICE_DATA_RETRY_DELAY.total_seconds())
@@ -894,7 +902,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self.device_name,
                     ex,
                 )
-            except (AirconApiError, KeyError, TypeError, ValueError):
+            except (WfRacError, KeyError, TypeError, ValueError):
                 # Unreachable or unparseable: the poll itself reports that, and
                 # this request is an optional extra on top of it.
                 return
@@ -983,7 +991,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """Delete account (operator id) from the airco"""
         try:
             return await self._api.del_account_info(self._airco_id)
-        except (AirconApiError, KeyError, TypeError):
+        except (WfRacError, KeyError, TypeError):
             _LOGGER.warning("Could not delete account from airco %s", self._airco_id)
             return None
 
@@ -993,7 +1001,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             result = await self._api.update_account_info(
                 self._airco_id, self._hass.config.time_zone
             )
-        except (AirconApiError, KeyError, TypeError):
+        except (WfRacError, KeyError, TypeError):
             _LOGGER.warning("Could not add account from airco %s", self._airco_id)
             return None
 
@@ -1093,7 +1101,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     response = await self._api.send_airco_command(
                         self._airco_id, command, timestamp_offset=timestamp_offset
                     )
-                except AirconWriteRefusedError:
+                except WfRacWriteRefusedError:
                     # Most likely another client's 60-second write lock - the
                     # Smart M-Air app was used moments ago (#294). Waiting it
                     # out is the only thing that helps: our registration is
@@ -1105,7 +1113,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     response = await self._api.send_airco_command(
                         self._airco_id, command, timestamp_offset=timestamp_offset
                     )
-                except AirconRegistrationError:
+                except WfRacRegistrationError:
                     # Our operator id is not in the airco's account table.
                     # Re-register and try once more rather than losing the
                     # command outright. If the table is full instead,
@@ -1129,7 +1137,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self._external_temperature_written.clear()
                 else:
                     self._external_temperature_written.append(written)
-            except (AirconApiError, KeyError, TypeError, ValueError) as ex:
+            except (WfRacError, KeyError, TypeError, ValueError) as ex:
                 if log_failure:
                     _LOGGER.warning("Could not send airco data: %s", str(ex))
                 raise
@@ -1218,7 +1226,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._last_command_at = datetime.now()
         try:
             await self.set_airco(params)
-        except (AirconApiError, KeyError, TypeError, ValueError):
+        except (WfRacError, KeyError, TypeError, ValueError):
             # Already logged in set_airco(). This runs as a detached task
             # (nothing awaits it), so without this the re-raised error becomes
             # an orphaned "Task exception was never retrieved" with zero
@@ -1423,7 +1431,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # poll so transient outages stay quiet and the entity only becomes
             # unavailable at the configured threshold.
             self._record_connection_failure(
-                AirconConnectionError(
+                WfRacConnectionError(
                     f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
                 )
             )

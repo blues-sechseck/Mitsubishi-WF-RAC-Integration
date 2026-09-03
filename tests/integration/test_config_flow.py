@@ -36,7 +36,7 @@ from custom_components.mitsubishi_wf_rac.config_flow import (
     SECTION_SENSOR_OFFSETS,
     SECTION_SETPOINT_OFFSETS,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.repository import AirconApiError
+from pywfrac.repository import WfRacError
 
 
 def _mock_repository(airco_id="airco-1", update_result=0):
@@ -169,7 +169,7 @@ async def test_user_flow_force_update_bypasses_duplicate_host_check(hass: HomeAs
 
 async def test_user_flow_cannot_connect_shows_error(hass: HomeAssistant):
     repo = _mock_repository()
-    repo.get_airco_id.side_effect = AirconApiError("timeout")
+    repo.get_airco_id.side_effect = WfRacError("timeout")
     with _patch_repository(repo):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -363,7 +363,7 @@ async def test_reconfigure_flow_cannot_connect_shows_error(hass: HomeAssistant):
     entry = _existing_entry(hass, host="192.168.1.50")
 
     repo = _mock_repository()
-    repo.get_airco_id.side_effect = AirconApiError("timeout")
+    repo.get_airco_id.side_effect = WfRacError("timeout")
     with _patch_repository(repo):
         result = await entry.start_reconfigure_flow(hass)
         result = await hass.config_entries.flow.async_configure(
@@ -440,7 +440,7 @@ async def test_zeroconf_announced_port_falls_back_to_the_fixed_one(hass: HomeAss
     the real port rather than failing setup on a value it cannot have meant.
     """
     repo = _mock_repository()
-    repo.get_airco_id.side_effect = [AirconApiError("no answer"), "airco-1"]
+    repo.get_airco_id.side_effect = [WfRacError("no answer"), "airco-1"]
     with _patch_repository(repo) as repository_cls:
         result = await hass.config_entries.flow.async_init(
             DOMAIN,
@@ -463,7 +463,7 @@ async def test_manual_port_is_not_second_guessed(hass: HomeAssistant):
     instead of being silently redirected.
     """
     repo = _mock_repository()
-    repo.get_airco_id.side_effect = AirconApiError("no answer")
+    repo.get_airco_id.side_effect = WfRacError("no answer")
     with _patch_repository(repo) as repository_cls:
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}

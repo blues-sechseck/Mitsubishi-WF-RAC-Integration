@@ -12,9 +12,9 @@ from custom_components.mitsubishi_wf_rac.diagnostics import (
     TO_REDACT,
     async_get_config_entry_diagnostics,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.capabilities import ModelCapabilities
+from pywfrac import ModelCapabilities
 from custom_components.mitsubishi_wf_rac.coordinator import Device
-from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
+from pywfrac import (
     Aircon,
     HomeLeaveModeSetting,
 )

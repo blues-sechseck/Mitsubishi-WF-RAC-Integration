@@ -23,9 +23,11 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import entity_registry as er, selector
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
+    AC_CERT_FILENAME,
     DEFAULT_PORT,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_HEAT,
@@ -43,7 +45,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN
-from .wfrac.repository import AirconApiError, Repository
+from pywfrac import Repository, WfRacError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -117,16 +119,17 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise HostAlreadyConfigured(error_name=existing_entry.data[CONF_NAME])
 
         repository = Repository(
-            hass,
+            async_get_clientsession(hass),
             data[CONF_HOST],
             data[CONF_PORT],
             data[CONF_OPERATOR_ID],
             data[CONF_DEVICE_ID],
+            cert_path=hass.config.path(AC_CERT_FILENAME),
         )
 
         try:
             airco_id = await repository.get_airco_id()
-        except (AirconApiError, KeyError, TypeError) as query_failed:
+        except (WfRacError, KeyError, TypeError) as query_failed:
             # A discovery announcement has been seen carrying a port the module
             # does not serve (#290). The port is fixed in the firmware and not
             # user-settable, so rather than failing on a value the device
@@ -144,15 +147,16 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 DEFAULT_PORT,
             )
             repository = Repository(
-                hass,
+                async_get_clientsession(hass),
                 data[CONF_HOST],
                 DEFAULT_PORT,
                 data[CONF_OPERATOR_ID],
                 data[CONF_DEVICE_ID],
+                cert_path=hass.config.path(AC_CERT_FILENAME),
             )
             try:
                 airco_id = await repository.get_airco_id()
-            except (AirconApiError, KeyError, TypeError) as retry_failed:
+            except (WfRacError, KeyError, TypeError) as retry_failed:
                 raise CannotConnect(reason=str(retry_failed)) from retry_failed
             data[CONF_PORT] = DEFAULT_PORT
 

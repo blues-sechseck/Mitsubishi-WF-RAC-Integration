@@ -15,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import MitsubishiWfRacConfigEntry
 from .entity import WfRacEntity
 from .coordinator import Device
-from .wfrac.error_codes import describe_error_code
+from pywfrac import describe_error_code
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)

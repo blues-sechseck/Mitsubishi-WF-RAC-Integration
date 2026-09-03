@@ -12,7 +12,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .entity import WfRacEntity
-from .wfrac.models.aircon import AirconCommands, HomeLeaveModeSetting
+from pywfrac import AirconCommands, HomeLeaveModeSetting
 from .coordinator import Device
 from .const import (
     DOMAIN,

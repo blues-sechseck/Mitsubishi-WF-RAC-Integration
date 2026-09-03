@@ -39,11 +39,11 @@ from custom_components.mitsubishi_wf_rac.coordinator import (
     SERVICE_DATA_MAX_AGE,
     Device,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import (
+from pywfrac import (
     Aircon,
     AirconCommands,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
+from pywfrac.parser import (
     RacParser,
     SERVICE_DATA_CODE_BY_FIELD,
     SERVICE_DATA_CODES,
@@ -57,12 +57,12 @@ from custom_components.mitsubishi_wf_rac.wfrac.rac_parser import (
     SERVICE_DATA_OUTDOOR_COIL_RAW,
     SERVICE_DATA_PROTECTION_RAW,
 )
-from custom_components.mitsubishi_wf_rac.wfrac.repository import (
-    AirconApiError,
-    AirconCommandError,
-    AirconConnectionError,
-    AirconRegistrationError,
-    AirconWriteRefusedError,
+from pywfrac.repository import (
+    WfRacError,
+    WfRacCommandError,
+    WfRacConnectionError,
+    WfRacRegistrationError,
+    WfRacWriteRefusedError,
 )
 
 from ..unit.live_captures import LIVE_CAPTURES
@@ -157,7 +157,7 @@ async def test_update_none_response_marks_unavailable(device):
 
 
 async def test_update_api_error_marks_unavailable_and_reregisters(device):
-    device._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    device._api.get_aircon_stats.side_effect = WfRacError("boom")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     assert await device.update() is False
     assert device.available is False
@@ -174,7 +174,7 @@ async def test_update_transient_unreachable_is_debug_only(device, caplog):
     await device.update()
     caplog.clear()
 
-    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     await device.update()
 
@@ -198,7 +198,7 @@ async def test_update_sustained_unreachable_logs_one_transition(device, caplog):
     await device.update()
     caplog.clear()
 
-    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     for _ in range(10):
         await device.update()
@@ -225,7 +225,7 @@ async def test_update_initially_unreachable_logs_threshold_once(device, caplog):
     """An unavailable device at startup still has a distinct threshold event,
     even though its public availability flag starts out false.
     """
-    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     for _ in range(5):
         await device.update()
@@ -241,7 +241,7 @@ async def test_update_initially_unreachable_logs_threshold_once(device, caplog):
 
 async def test_update_recovery_is_logged_once(device, caplog):
     caplog.set_level("INFO", logger=coordinator_module.__name__)
-    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     for _ in range(3):
         await device.update()
 
@@ -265,7 +265,7 @@ async def test_update_refused_command_reregisters(device):
     """An evicted account answers (HTTP 400 / result:2) rather than timing
     out, so this path keeps the re-registration attempt.
     """
-    device._api.get_aircon_stats.side_effect = AirconCommandError("refused")
+    device._api.get_aircon_stats.side_effect = WfRacCommandError("refused")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     await device.update()
     assert device.available is False
@@ -303,7 +303,7 @@ async def test_set_airco_merges_params_with_current_state(device):
     raw = base64.b64decode(captured["command"])
     signed = [(256 - a) * -1 if a > 127 else a for a in raw]
     receive_content = signed[25:43]
-    from custom_components.mitsubishi_wf_rac.wfrac.models.aircon import Aircon
+    from pywfrac import Aircon
 
     sent = Aircon()
     RacParser()._parse_basic_settings(sent, receive_content)
@@ -495,9 +495,9 @@ async def test_external_temperature_applied_survives_a_value_change(device):
 async def test_set_airco_raises_and_logs_on_send_failure(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
-    device._api.send_airco_command = AsyncMock(side_effect=AirconApiError("boom"))
+    device._api.send_airco_command = AsyncMock(side_effect=WfRacError("boom"))
 
-    with pytest.raises(AirconApiError):
+    with pytest.raises(WfRacError):
         await device.set_airco({AirconCommands.Operation: True})
 
 
@@ -515,7 +515,7 @@ async def test_set_airco_reregisters_and_retries_once_on_registration_error(devi
     async def _fail_once_then_echo(airco_id, command, **_kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
-            raise AirconRegistrationError("result 2")
+            raise WfRacRegistrationError("result 2")
         return await _echo_send_airco_command(airco_id, command)
 
     device._api.send_airco_command = AsyncMock(side_effect=_fail_once_then_echo)
@@ -537,10 +537,10 @@ async def test_set_airco_gives_up_after_one_retry_if_still_refused(device):
     await device.update()
     device._api.update_account_info = AsyncMock(return_value={"result": 2})
     device._api.send_airco_command = AsyncMock(
-        side_effect=AirconRegistrationError("result 2")
+        side_effect=WfRacRegistrationError("result 2")
     )
 
-    with pytest.raises(AirconRegistrationError):
+    with pytest.raises(WfRacRegistrationError):
         await device.set_airco({AirconCommands.Operation: True})
 
     device._api.update_account_info.assert_awaited_once()
@@ -653,7 +653,7 @@ async def test_async_queue_command_notifies_listeners_even_on_failure(device, mo
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
     device._api.send_airco_command = AsyncMock(
-        side_effect=AirconConnectionError("offline")
+        side_effect=WfRacConnectionError("offline")
     )
 
     listener = MagicMock()
@@ -721,7 +721,7 @@ async def test_delete_account_success(device):
 
 
 async def test_delete_account_failure_returns_none(device):
-    device._api.del_account_info = AsyncMock(side_effect=AirconApiError("boom"))
+    device._api.del_account_info = AsyncMock(side_effect=WfRacError("boom"))
     assert await device.delete_account() is None
 
 
@@ -738,7 +738,7 @@ async def test_availability_tolerates_failures_below_limit(hass):
     await dev.update()
     assert dev.available is True
 
-    dev._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    dev._api.get_aircon_stats.side_effect = WfRacError("boom")
     dev._api.update_account_info = AsyncMock(return_value={"result": 0})
 
     await dev.update()
@@ -772,7 +772,7 @@ async def test_availability_limit_can_be_raised_but_not_lowered(hass):
     lowered._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await lowered.update()
 
-    lowered._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    lowered._api.get_aircon_stats.side_effect = WfRacError("boom")
     await lowered.update()
     assert lowered.available is True  # would already be unavailable at limit 1
 
@@ -790,7 +790,7 @@ async def test_availability_recovers_and_resets_the_failure_count(hass):
     dev._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await dev.update()
 
-    dev._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    dev._api.get_aircon_stats.side_effect = WfRacError("boom")
     await dev.update()
     await dev.update()
     assert dev.available is True
@@ -799,7 +799,7 @@ async def test_availability_recovers_and_resets_the_failure_count(hass):
     await dev.update()
     assert dev.available is True
 
-    dev._api.get_aircon_stats.side_effect = AirconApiError("boom")
+    dev._api.get_aircon_stats.side_effect = WfRacError("boom")
     await dev.update()
     await dev.update()
     assert dev.available is True  # count restarted, not resumed at 2
@@ -808,7 +808,7 @@ async def test_availability_recovers_and_resets_the_failure_count(hass):
 
 
 
-# --- firmware update check (wfrac/firmware_check.py) ----------------------
+# --- firmware update check (firmware_check.py) ----------------------------
 
 
 def _stats_response_with_firmware(payload: str, firm_type: str, wireless_ver: str) -> dict:
@@ -1171,7 +1171,7 @@ async def test_a_refused_write_falls_back_when_the_unit_reports_no_deadline(devi
 
 async def test_a_refused_write_falls_back_when_the_unit_stops_answering(device):
     """The probe is an extra request and can fail on its own."""
-    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
 
     assert (
         await device._async_write_lock_delay()
@@ -1268,7 +1268,7 @@ async def test_service_data_request_gives_up_immediately_when_refused_as_a_write
     _shorten_service_data_timing(monkeypatch)
     _activate_service_data_contexts(device, monkeypatch)
     device.set_airco = set_airco = AsyncMock(
-        side_effect=AirconWriteRefusedError("result 1")
+        side_effect=WfRacWriteRefusedError("result 1")
     )
 
     device._maybe_request_service_data()
@@ -1295,7 +1295,7 @@ async def test_set_airco_waits_and_retries_once_when_the_write_lock_is_held(
     async def _fail_once_then_echo(airco_id, command, **_kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
-            raise AirconWriteRefusedError("result 1")
+            raise WfRacWriteRefusedError("result 1")
         return await _echo_send_airco_command(airco_id, command)
 
     device._api.send_airco_command = AsyncMock(side_effect=_fail_once_then_echo)
@@ -1318,7 +1318,7 @@ async def test_service_data_request_does_not_overlap_an_active_request(device, m
 
 
 async def test_add_account_returns_none_on_api_error(device):
-    device._api.update_account_info.side_effect = AirconApiError("failed")
+    device._api.update_account_info.side_effect = WfRacError("failed")
 
     assert await device.add_account() is None
 
@@ -1360,7 +1360,7 @@ async def test_add_account_does_not_report_an_issue_on_ordinary_success(device):
 
 
 async def test_update_reregister_reports_repair_issue_when_table_stays_full(device):
-    device._api.get_aircon_stats.side_effect = AirconApiError("evicted")
+    device._api.get_aircon_stats.side_effect = WfRacError("evicted")
     device._api.update_account_info.return_value = {"result": 2}
 
     await device.update()
@@ -1472,7 +1472,7 @@ async def test_service_data_request_is_retried_once_when_refused(device, monkeyp
     async def _refuse_then_answer(airco_id, command, **_kwargs):
         calls.append(command)
         if len(calls) == 1:
-            raise AirconCommandError("HTTP 501: Not supported this command")
+            raise WfRacCommandError("HTTP 501: Not supported this command")
         return await _echo_send_airco_command(airco_id, command)
 
     device._api.send_airco_command = AsyncMock(side_effect=_refuse_then_answer)
@@ -1488,7 +1488,7 @@ async def test_service_data_request_gives_up_after_the_retry(device, monkeypatch
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(
-        side_effect=AirconCommandError("HTTP 501: Not supported this command")
+        side_effect=WfRacCommandError("HTTP 501: Not supported this command")
     )
 
     await device.update()
@@ -1557,7 +1557,7 @@ async def test_coordinator_tracks_transient_failure_without_regular_log_noise(
     await device.async_refresh()
     caplog.clear()
 
-    device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+    device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     await device.async_refresh()
 
     # An expected miss deliberately leaves the coordinator successful: it is
@@ -1587,7 +1587,7 @@ async def test_coordinator_notifies_when_device_reaches_unavailable_threshold(de
     unsubscribe = device.async_add_listener(listener)
 
     try:
-        device._api.get_aircon_stats.side_effect = AirconConnectionError("no route")
+        device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
         await device.async_refresh()
         await device.async_refresh()
         listener.reset_mock()
