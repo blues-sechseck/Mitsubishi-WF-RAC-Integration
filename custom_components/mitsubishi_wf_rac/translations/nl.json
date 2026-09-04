@@ -63,6 +63,12 @@
     },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} is geen totaal-energieverbruiksensor."
+    },
+    "external_temperature_source_configured": {
+      "message": "De binnentemperatuur wordt bepaald door de ingestelde bronentiteit."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Afwezigheidsmodus werkt alleen tijdens koelen of verwarmen, niet in {hvac_mode}. Zet de unit eerst op koelen of verwarmen, of kies de richting rechtstreeks met de selectie Afwezigheidsmodus."
     }
   },
   "issues": {
@@ -104,6 +110,7 @@
               "target_offset_heat": "Doel offset (Verwarmen)"
             },
             "data_description": {
+              "target_offset": "Positief verlaagt de instelling die naar de unit gaat, negatief verhoogt hem — de kaart blijft in beide gevallen uw eigen waarde tonen. De meeste units ronden een halve graad af naar de volgende hele, dus 0,5 werkt hier vaak als 1. Met een binnentemperatuurbron ingesteld is Overshoot koelen hierboven de betere knop voor een unit die doorschiet: die werkt fijner en laat de instelling gelijk aan wat de app toont.",
               "target_offset_cool": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken.",
               "target_offset_heat": "Laat leeg om de algemene doeltemperatuur-offset te gebruiken."
             }

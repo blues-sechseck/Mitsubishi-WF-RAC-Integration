@@ -63,6 +63,12 @@
     },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} 不是累计用电量传感器。"
+    },
+    "external_temperature_source_configured": {
+      "message": "室内温度由所配置的传感器实体决定。"
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "离家模式仅在制冷或制热时可用，当前为 {hvac_mode}。请先将设备切换到制冷或制热，或直接用“离家模式”选择项指定离家制冷 / 离家制热。"
     }
   },
   "issues": {
@@ -104,6 +110,7 @@
               "target_offset_heat": "目标偏移（制热）"
             },
             "data_description": {
+              "target_offset": "正值会降低发送给设备的设定温度，负值则提高它——无论哪种情况，卡片上显示的仍是您设定的温度。多数机型会把半度向上取整到整度，因此这里的 0.5 常常等同于 1。若已配置室内温度传感器，对于超调的机型，上面的“制冷过冲”是更合适的调节项：它更精细，而且设定温度与官方 App 显示的保持一致。",
               "target_offset_cool": "留空以使用通用的目标温度偏移。",
               "target_offset_heat": "留空以使用通用的目标温度偏移。"
             }

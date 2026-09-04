@@ -66,6 +66,9 @@
     },
     "preset_away_needs_cool_or_heat": {
       "message": "Der Abwesenheitsmodus ist nur beim Kühlen oder Heizen verfügbar, nicht in {hvac_mode}. Stellen Sie das Gerät zuerst auf Kühlen oder Heizen, oder wählen Sie die Richtung über die Auswahl „Abwesenheitsmodus“."
+    },
+    "external_temperature_source_configured": {
+      "message": "Die Innentemperatur wird von der eingerichteten Quell-Entität bestimmt."
     }
   },
   "issues": {
@@ -107,6 +110,7 @@
               "target_offset_heat": "Zieltemperatur-Offset (Heizen)"
             },
             "data_description": {
+              "target_offset": "Positiv senkt den ans Gerät gesendeten Sollwert, negativ hebt ihn an — die Karte zeigt in beiden Fällen weiterhin Ihren Wert. Die meisten Geräte runden ein halbes Grad auf das nächste ganze auf, 0,5 wirkt hier also oft wie 1. Wenn eine Innentemperatur-Quelle eingerichtet ist, ist das Überschwingen Kühlen der passendere Hebel für ein Gerät, das über das Ziel hinausschießt — es greift feiner und lässt den Sollwert so, wie ihn auch die App zeigt.",
               "target_offset_cool": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden.",
               "target_offset_heat": "Leer lassen, um den allgemeinen Zieltemperatur-Offset zu verwenden."
             }
