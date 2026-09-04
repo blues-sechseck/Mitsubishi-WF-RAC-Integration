@@ -63,6 +63,9 @@
     },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} ist kein Energieverbrauch-Gesamt-Sensor."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Der Abwesenheitsmodus ist nur beim Kühlen oder Heizen verfügbar, nicht in {hvac_mode}. Stellen Sie das Gerät zuerst auf Kühlen oder Heizen, oder wählen Sie die Richtung über die Auswahl „Abwesenheitsmodus“."
     }
   },
   "issues": {

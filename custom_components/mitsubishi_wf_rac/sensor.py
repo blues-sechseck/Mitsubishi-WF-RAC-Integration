@@ -7,7 +7,6 @@ from decimal import Decimal
 import logging
 from typing import Any, Self
 
-import voluptuous as vol
 
 from . import MitsubishiWfRacConfigEntry
 from homeassistant.components.sensor import (
@@ -18,7 +17,6 @@ from homeassistant.components.sensor import (
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import (
@@ -68,7 +66,6 @@ from .const import (
     ATTR_COOL_HOT_JUDGE,
     CONF_INDOOR_OFFSET,
     CONF_OUTDOOR_OFFSET,
-    SERVICE_SET_ENERGY_TOTAL,
     SIGNAL_SET_ENERGY_TOTAL,
 )
 
@@ -140,19 +137,14 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
-    entity_platform.async_get_current_platform().async_register_entity_service(
-        SERVICE_SET_ENERGY_TOTAL,
-        {vol.Required("value"): vol.All(vol.Coerce(float), vol.Range(min=0))},
-        _async_set_energy_total,
-    )
 
-
-async def _async_set_energy_total(entity: SensorEntity, call: ServiceCall) -> None:
-    """Entity-service handler for SERVICE_SET_ENERGY_TOTAL.
+async def async_set_energy_total(entity: SensorEntity, call: ServiceCall) -> None:
+    """Entity-service handler for SERVICE_SET_ENERGY_TOTAL, registered in
+    services.py.
 
     Registered as a callable rather than a method name so targeting any other
     sensor of this integration fails with a readable message instead of an
-    AttributeError - entity services apply to every entity on the platform.
+    AttributeError - entity services apply to every entity of the platform.
     """
     if not isinstance(entity, EnergyTotalSensor):
         raise ServiceValidationError(

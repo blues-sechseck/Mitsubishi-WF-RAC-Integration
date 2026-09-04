@@ -6,7 +6,8 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers.typing import ConfigType
 
 from homeassistant.const import (
     CONF_HOST,
@@ -26,6 +27,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN, Device, registration_full_issue_id
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +50,20 @@ class MitsubishiWfRacData:
 
 
 type MitsubishiWfRacConfigEntry = ConfigEntry[MitsubishiWfRacData]
+
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the integration's entity service actions.
+
+    They live here rather than in the platforms so a config entry that fails
+    to set up - an unreachable device at startup, say - doesn't take the
+    actions down with it.
+    """
+    async_setup_services(hass)
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -127,8 +143,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
 
     # Persist the discovered connection method (http/https) so we can skip
     # protocol discovery (and its potential extra round-trip) after the next
-    # restart. Done before the update listener is registered below, so this
-    # does not itself trigger a reload.
+    # restart. Writing entry.data here is safe on its own: nothing listens for
+    # entry updates any more, the options flow reloads itself instead.
     method = _device.connection_method
     if method and entry.data.get(CONF_CONNECTION_METHOD) != method:
         hass.config_entries.async_update_entry(
@@ -140,7 +156,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
 
     entry.runtime_data = MitsubishiWfRacData(_device)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     return True
 
@@ -188,16 +203,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
         _LOGGER.warning("Failed to unload entry for device [%s]", entry.data[CONF_NAME])
 
     return unload_ok
-
-
-async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Update options."""
-    reloaded = await hass.config_entries.async_reload(entry.entry_id)
-
-    if reloaded:
-        _LOGGER.info("Options updated to [%s]", entry.options)
-    else:
-        _LOGGER.warning("Failed to update options to [%s]", entry.options)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry) -> None:

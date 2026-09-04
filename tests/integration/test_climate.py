@@ -8,11 +8,17 @@ the offset exactly like the climate entity. Needs the `hass` fixture (Device
 is a DataUpdateCoordinator), hence tests/integration/ rather than tests/unit/.
 """
 
+from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from homeassistant.components.climate.const import HVACMode
+from homeassistant.components.climate.const import (
+    ClimateEntityFeature,
+    HVACMode,
+    PRESET_AWAY,
+    PRESET_NONE,
+)
 from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, STATE_UNKNOWN, STATE_UNAVAILABLE, UnitOfTemperature
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.restore_state import RestoredExtraData
@@ -29,7 +35,10 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
     DOMAIN,
+    HOME_LEAVE_TEMP_COOL,
+    HOME_LEAVE_TEMP_HEAT,
     HVAC_TRANSLATION,
+    NORMAL_TEMP,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import Device
 from pywfrac import AirconCommands
@@ -670,3 +679,92 @@ async def test_restore_state_ignores_an_unusable_override(device, restored):
 
     assert entity._external_temperature_override is None
     assert device._external_temperature_override is None
+
+
+async def test_target_temperature_step_matches_the_wire_format(device):
+    """0.5 K, because the setpoint byte is int(PresetTemp / 0.5) - offering
+    0.1 K in the UI would promise a resolution the unit truncates away."""
+    assert AircoClimate(device).target_temperature_step == 0.5
+
+
+async def test_preset_mode_absent_without_the_vacant_capability(device):
+    device.airco.Capabilities = replace(
+        device.airco.Capabilities, vacant_property=False
+    )
+
+    entity = AircoClimate(device)
+
+    assert not entity.supported_features & ClimateEntityFeature.PRESET_MODE
+    assert entity.preset_modes is None
+
+
+async def test_preset_mode_follows_the_vacant_bit(device):
+    device.airco.Capabilities = replace(
+        device.airco.Capabilities, vacant_property=True
+    )
+    entity = AircoClimate(device)
+    assert entity.supported_features & ClimateEntityFeature.PRESET_MODE
+    assert entity.preset_modes == [PRESET_NONE, PRESET_AWAY]
+
+    device.airco.Vacant = True
+    entity._update_state()
+    assert entity.preset_mode == PRESET_AWAY
+
+    device.airco.Vacant = False
+    entity._update_state()
+    assert entity.preset_mode == PRESET_NONE
+
+
+@pytest.mark.parametrize(
+    ("hvac_mode", "expected_temp"),
+    [(HVACMode.COOL, HOME_LEAVE_TEMP_COOL), (HVACMode.HEAT, HOME_LEAVE_TEMP_HEAT)],
+)
+async def test_set_preset_away_sends_the_away_target_of_the_running_direction(
+    device, hvac_mode, expected_temp
+):
+    device.airco.Capabilities = replace(
+        device.airco.Capabilities, vacant_property=True
+    )
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+    entity._update_state()
+
+    await entity.async_set_preset_mode(PRESET_AWAY)
+
+    sent = device.async_queue_command.call_args.args[0]
+    assert sent[AirconCommands.PresetTemp] == expected_temp
+    assert sent[AirconCommands.OperationMode] == HVAC_TRANSLATION[hvac_mode]
+
+
+@pytest.mark.parametrize("hvac_mode", [HVACMode.AUTO, HVACMode.DRY, HVACMode.FAN_ONLY])
+async def test_set_preset_away_refuses_a_direction_it_cannot_name(device, hvac_mode):
+    """Auto, dry and fan-only have no away target to send - the direction has
+    to come from HomeLeaveModeSelect instead of being guessed at."""
+    device.airco.Capabilities = replace(
+        device.airco.Capabilities, vacant_property=True
+    )
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+    entity._update_state()
+
+    with pytest.raises(ServiceValidationError):
+        await entity.async_set_preset_mode(PRESET_AWAY)
+
+    device.async_queue_command.assert_not_called()
+
+
+async def test_set_preset_none_restores_a_normal_setpoint(device):
+    device.airco.Capabilities = replace(
+        device.airco.Capabilities, vacant_property=True
+    )
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+
+    await entity.async_set_preset_mode(PRESET_NONE)
+
+    sent = device.async_queue_command.call_args.args[0]
+    assert sent == {AirconCommands.PresetTemp: NORMAL_TEMP}

@@ -91,6 +91,8 @@ This integration creates one device per airco with the following entities.
 | | `swing_horizontal_mode` | `left_right_auto`, `left_left`, `left_center`, `center_center`, `center_right`, `right_right`, `left_right`, `right_left`, `3d_auto` | Horizontal louver position. `3d_auto` behaves as above. |
 | | `target_temperature` | 16–30 °C (cool), 18–30 °C (other modes) | Setpoint. Cooling accepts a lower minimum than heating/auto/dry in practice; heating below 18 °C isn't a reliable plain setpoint (see Home Leave Mode for that instead). |
 | | `current_temperature` | °C | Indoor temperature as measured by the unit, corrected by the "Indoor Temp. Sensor Offset" option if set. |
+| | `preset_mode` | `none`, `away` | Only on units that report the Vacant bit. `away` is the unit's own Home Leave Mode, entered with the away-target of the direction the unit is currently running in - so it needs `cool` or `heat`, and refuses in `auto`/`dry`/`fan_only`. The Home Leave Mode select names the direction explicitly and works from any mode. |
+| | `target_temperature` step | 0.5 °C | The setpoint travels the wire in 0.5 K steps; anything finer is truncated by the unit. |
 | | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. `idle` means the unit is on but the compressor is stopped (e.g. setpoint satisfied) - same signal as the Compressor Demand binary sensor below. In `auto` mode, `cooling`/`heating` reflects the unit's own cool/heat decision, not just the configured mode. |
 
 ## Sensors
@@ -155,6 +157,7 @@ The unit's own frost-protection/low-power standby mode for when nobody's home, w
 | Entity | Values | Description |
 |---|---|---|
 | Home Leave Mode (select) | `off`, `away_cool`, `away_heat` | Enters/leaves Home Leave mode in either direction. |
+| `climate.<name>` `preset_mode` | `none`, `away` | The same mode as a thermostat preset, for cards and voice assistants. Entering it uses the direction the unit is running in; the select above is the way to name it. |
 | Home Leave Cooling/Heating Temp Rule *(number, disabled by default)* | 10–50 °C | Outdoor/room temperature threshold at which Home Leave engages for that mode. |
 | Home Leave Cooling/Heating Temp Setting *(number, disabled by default)* | 10–50 °C | Target temperature while Home Leave is active for that mode. |
 | Home Leave Cooling/Heating Airflow *(select, disabled by default)* | `auto`, `1`–`4` | Fan speed while Home Leave is active for that mode. |
