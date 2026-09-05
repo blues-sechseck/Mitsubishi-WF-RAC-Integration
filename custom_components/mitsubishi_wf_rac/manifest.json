@@ -15,7 +15,7 @@
   "requirements": [
     "pywfrac==0.1.0"
   ],
-  "version": "2026.9.7",
+  "version": "2026.9.8",
   "zeroconf": [
     "_beaver._tcp.local."
   ]
