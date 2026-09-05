@@ -61,6 +61,9 @@
     "cannot_connect": {
       "message": "Die Klimaanlage unter {device} war nicht erreichbar."
     },
+    "update_failed": {
+      "message": "Die Abfrage des Klimageräts unter {device} ist fehlgeschlagen: {error}"
+    },
     "temperature_required": {
       "message": "Eine Zieltemperatur ist erforderlich."
     },

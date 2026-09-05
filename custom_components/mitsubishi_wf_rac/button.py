@@ -16,7 +16,9 @@ from .coordinator import Device
 from .const import DOMAIN, SIGNAL_SET_ENERGY_TOTAL
 
 _LOGGER = logging.getLogger(__name__)
-PARALLEL_UPDATES = 1
+# Read-only as far as the device is concerned: the coordinator does the
+# polling, and nothing on this platform sends a request of its own.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(

@@ -6,8 +6,12 @@
   ],
   "config_flow": true,
   "documentation": "https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/",
+  "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues",
+  "loggers": [
+    "pywfrac"
+  ],
   "requirements": [
     "pywfrac==0.1.0"
   ],

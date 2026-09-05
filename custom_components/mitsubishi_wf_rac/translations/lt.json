@@ -61,6 +61,9 @@
     "cannot_connect": {
       "message": "Nepavyko pasiekti kondicionieriaus adresu {device}."
     },
+    "update_failed": {
+      "message": "Nepavyko apklausti kondicionieriaus adresu {device}: {error}"
+    },
     "temperature_required": {
       "message": "Būtina nurodyti norimą temperatūrą."
     },

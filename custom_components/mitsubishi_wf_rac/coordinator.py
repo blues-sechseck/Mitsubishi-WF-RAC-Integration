@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from collections import deque
 from collections.abc import Mapping
 from datetime import datetime, timedelta
@@ -12,7 +13,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import (
+    CONNECTION_NETWORK_MAC,
+    DeviceInfo,
+    format_mac,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -1293,14 +1298,30 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return a device description for device registry."""
-        return {
+        """Return a device description for device registry.
+
+        No "model": the only model field the protocol offers is ModelNr, a
+        capability grouping (0/1/2/3/64...), not a type name - it would put a
+        bare digit where users expect "SRK35ZS-WF". It goes into model_id
+        instead, which is what a machine-readable model identifier is for, and
+        stays available as its own diagnostic sensor.
+        """
+        info: DeviceInfo = {
             "sw_version": self._firmware,
             "identifiers": {(DOMAIN, self.airco_id)},
             "manufacturer": "Mitsubishi (WF-RAC)",
-            # "model": self.airco.ModelNr,
             "name": self.device_name,
         }
+        # airconId is MAC-derived, and on every module seen so far it is the
+        # bare MAC. Only claim it when it has exactly that shape - a differently
+        # shaped id would otherwise register as somebody else's hardware and
+        # merge two unrelated devices in the registry.
+        if re.fullmatch(r"[0-9a-fA-F]{12}", self.airco_id):
+            info["connections"] = {(CONNECTION_NETWORK_MAC, format_mac(self.airco_id))}
+        model_nr = getattr(self.airco, "ModelNrRaw", None)
+        if model_nr is not None:
+            info["model_id"] = str(model_nr)
+        return info
 
     @property
     def operator_id(self) -> str:
@@ -1436,6 +1457,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
             )
         except Exception as error:
-            raise UpdateFailed(error) from error
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={
+                    "device": self.device_name,
+                    "error": str(error),
+                },
+            ) from error
 
         return self._airco
