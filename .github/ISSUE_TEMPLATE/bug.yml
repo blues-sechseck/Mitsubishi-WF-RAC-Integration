@@ -1,0 +1,88 @@
+name: Bug report
+description: The integration does something it shouldn't
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        Only the first two fields are required - a report is welcome even if
+        that is all you can give me. Everything below them is optional, but
+        each one is a question I would otherwise have to come back and ask, so
+        whatever you can fill in gets you an answer faster.
+
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      description: >
+        Shown on the integration's page in Home Assistant, and in HACS.
+      placeholder: 2026.9.7
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens, and what you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: >
+        Numbered steps if you have them, starting from a known state. "Every
+        time" and "once, and not since" are both useful answers, so don't
+        worry if it isn't reliably repeatable.
+      placeholder: |
+        1. Turn the unit on from the thermostat card
+        2. Wait a minute
+        3. It switches itself off
+
+  - type: dropdown
+    id: automations
+    attributes:
+      label: Does it still happen with your automations disabled?
+      description: >
+        The most common cause of a command being undone is a second command
+        arriving right behind it. This one answer often settles the report.
+      options:
+        - "Yes - it happens with nothing else controlling the unit"
+        - "No - it stops when I disable my automations"
+        - "Not tested yet"
+        - "No automations control this unit"
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: >
+        Use **Download diagnostics** on the device's page in Home Assistant and
+        drag the file in here. It is redacted before you get it - the unit's
+        address and its account and device ids are removed - and it carries the
+        firmware version, your settings and the unit's own state, so it saves
+        us a round of back and forth.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug log
+      description: >
+        Turn on debug logging for `custom_components.mitsubishi_wf_rac`, let
+        the problem happen once, and paste the log from around that moment
+        (Settings -> System -> Logs). A log is usually what makes a report
+        solvable - if you can't catch one right now, please send the report
+        anyway and add it later.
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Anything else controlling the unit
+      options:
+        - label: >
+            Nothing else was controlling the unit at the time - not the Smart
+            M-Air app, the IR remote, or a second Home Assistant instance.
