@@ -104,6 +104,19 @@ SENSOR_TYPES = {
     },
 }
 
+# Heating uses the unit's own Heating TempSetting (10.0°C), which matches
+# HOME_LEAVE_TEMP_HEAT exactly. Cooling does not: the unit's Cooling
+# TempSetting reads 33.0°C, but the temperature actually applied while the
+# official app's away-cool mode is running is 31.0°C - so this hardcodes the
+# applied value rather than trusting the configured TempSetting, since only
+# the applied value is known to flip Vacant.
+HOME_LEAVE_TEMP_HEAT = 10.0
+HOME_LEAVE_TEMP_COOL = 31.0
+# Temperature to restore when leaving Home Leave mode. There's no reliable way
+# to recall whatever temperature was set before Home Leave was turned on (the
+# unit itself doesn't report it), so this is a plain, reasonable default.
+NORMAL_TEMP = 21.0
+
 SERVICE_SET_HORIZONTAL_SWING_MODE = "set_horizontal_swing_mode"
 SERVICE_SET_VERTICAL_SWING_MODE = "set_vertical_swing_mode"
 SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS = "request_home_leave_mode_status"

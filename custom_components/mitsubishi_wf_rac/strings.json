@@ -122,6 +122,9 @@
     },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} is not an Energy Usage Total sensor."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Home Leave mode is only available while cooling or heating, not in {hvac_mode}. Switch the unit to cool or heat first, or use the Home Leave Mode select to name the direction."
     }
   },
   "entity": {

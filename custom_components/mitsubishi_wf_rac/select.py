@@ -16,6 +16,9 @@ from pywfrac import AirconCommands, HomeLeaveModeSetting
 from .coordinator import Device
 from .const import (
     DOMAIN,
+    HOME_LEAVE_TEMP_COOL,
+    HOME_LEAVE_TEMP_HEAT,
+    NORMAL_TEMP,
     SWING_HORIZONTAL_MODE_TRANSLATION,
     SUPPORT_SWING_HORIZONTAL_MODES,
     SUPPORT_SWING_MODES,
@@ -27,19 +30,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 1
-
-# Heating uses the unit's own Heating TempSetting (10.0°C), which matches
-# HOME_LEAVE_TEMP_HEAT exactly. Cooling does not: the unit's Cooling
-# TempSetting reads 33.0°C, but the temperature actually applied while the
-# official app's away-cool mode is running is 31.0°C - so this hardcodes the
-# applied value rather than trusting the configured TempSetting, since only
-# the applied value is known to flip Vacant.
-HOME_LEAVE_TEMP_HEAT = 10.0
-HOME_LEAVE_TEMP_COOL = 31.0
-# Temperature to restore when leaving Home Leave mode. There's no reliable way
-# to recall whatever temperature was set before Home Leave was turned on (the
-# unit itself doesn't report it), so this is a plain, reasonable default.
-NORMAL_TEMP = 21.0
 
 HOME_LEAVE_MODE_OFF = "off"
 HOME_LEAVE_MODE_AWAY_COOL = "away_cool"
@@ -223,7 +213,7 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
     The official app's away mode has two independent target points (Heat and
     Cool, each with its own Tag-248 threshold/setting - see the home_leave_*
     diagnostic sensors in sensor.py) and flips the same Vacant bit this
-    entity reads/writes. See HOME_LEAVE_TEMP_HEAT/_COOL above for the values
+    entity reads/writes. See HOME_LEAVE_TEMP_HEAT/_COOL in const.py for the values
     used and why they're hardcoded rather than read from the live Tag-248
     TempSetting.
     """

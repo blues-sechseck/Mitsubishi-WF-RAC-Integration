@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import MitsubishiWfRacConfigEntry
-import voluptuous as vol
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
@@ -14,6 +13,8 @@ from homeassistant.components.climate.const import (
     HVACMode,
     HVACAction,
     FAN_AUTO,
+    PRESET_AWAY,
+    PRESET_NONE,
 )
 from homeassistant.const import (
     ATTR_TEMPERATURE,
@@ -24,7 +25,6 @@ from homeassistant.const import (
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
@@ -41,12 +41,10 @@ from pywfrac.parser import (
 from .const import (
     DOMAIN,
     FAN_MODE_TRANSLATION,
+    HOME_LEAVE_TEMP_COOL,
+    HOME_LEAVE_TEMP_HEAT,
     HVAC_TRANSLATION,
-    SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS,
-    SERVICE_SET_HOME_LEAVE_MODE,
-    SERVICE_SET_EXTERNAL_TEMPERATURE,
-    SERVICE_SET_HORIZONTAL_SWING_MODE,
-    SERVICE_SET_VERTICAL_SWING_MODE,
+    NORMAL_TEMP,
     SUPPORT_FLAGS,
     SWING_HORIZONTAL_AUTO,
     SWING_VERTICAL_AUTO,
@@ -78,60 +76,6 @@ async def async_setup_entry(
     device: Device = entry.runtime_data.device
     _LOGGER.info("Setup climate for: %s, %s", device.device_name, device.airco_id)
     async_add_entities([AircoClimate(device)])
-
-    platform = entity_platform.async_get_current_platform()
-
-    platform.async_register_entity_service(
-        SERVICE_SET_HORIZONTAL_SWING_MODE,
-        {
-            vol.Required("swing_mode"): cv.string,
-        },
-        "async_set_swing_horizontal_mode",
-    )
-
-    platform.async_register_entity_service(
-        SERVICE_SET_VERTICAL_SWING_MODE,
-        {
-            vol.Required("swing_mode"): cv.string,
-        },
-        "async_set_swing_mode",
-    )
-
-    # HomeLeaveMode (Tag 248, capability index 7) - deliberately services, not
-    # switch/number entities, until confirmed on real hardware: no dashboard
-    # tile to accidentally trigger before that.
-    platform.async_register_entity_service(
-        SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS,
-        {},
-        "async_request_home_leave_mode_status",
-    )
-
-    platform.async_register_entity_service(
-        SERVICE_SET_HOME_LEAVE_MODE,
-        {
-            vol.Required("temp_rule_cooling"): vol.Coerce(float),
-            vol.Required("temp_setting_cooling"): vol.Coerce(float),
-            # The select selector in services.yaml submits its value as a
-            # string ("0".."4") - coerce before checking range so both that
-            # and a programmatic int call work.
-            vol.Required("air_flow_cooling"): vol.All(vol.Coerce(int), vol.In([0, 1, 2, 3, 4])),
-            vol.Required("temp_rule_heating"): vol.Coerce(float),
-            vol.Required("temp_setting_heating"): vol.Coerce(float),
-            vol.Required("air_flow_heating"): vol.All(vol.Coerce(int), vol.In([0, 1, 2, 3, 4])),
-        },
-        "async_set_home_leave_mode",
-    )
-
-    platform.async_register_entity_service(
-        SERVICE_SET_EXTERNAL_TEMPERATURE,
-        {
-            vol.Optional("temperature"): vol.Any(
-                vol.Range(min=EXTERNAL_TEMPERATURE_MIN, max=EXTERNAL_TEMPERATURE_MAX),
-                None,
-            ),
-        },
-        "async_set_external_temperature",
-    )
 
 
 @dataclass
@@ -175,13 +119,33 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     _attr_swing_modes: list[str] | None = SUPPORT_SWING_MODES
     _attr_swing_horizontal_mode: str | None = SWING_HORIZONTAL_AUTO
     _attr_swing_horizontal_modes: list[str] | None = SUPPORT_SWING_HORIZONTAL_MODES
-    _enable_turn_on_off_backwards_compatibility = False  # Remove after HA 2025.1
+    # 0.5 K is what the wire format carries: the setpoint byte is
+    # int(PresetTemp / 0.5), which truncates. Without declaring the step, HA
+    # offers 0.1 K and the unit silently drops the remainder - 21.4 arrives as
+    # 21.0. A target_offset that isn't a multiple of 0.5 still shifts the
+    # displayed target off the grid; that is the offset's job, and it stays
+    # visible rather than the UI promising a resolution the device lacks.
+    _attr_target_temperature_step: float = 0.5
+    # Only filled in when the model reports VacantProperty (see __init__);
+    # ClimateEntity has no class-level default for either of these.
+    _attr_preset_modes: list[str] | None = None
+    _attr_preset_mode: str | None = None
     _attr_translation_key = "mitsubishi_wf_rac"
 
     def __init__(self, device: Device) -> None:
         super().__init__(device)
         self._attr_name = device.device_name
         self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-climate"
+        # Away is the unit's own Home Leave mode, offered here as the preset a
+        # thermostat card and a voice assistant already know how to ask for.
+        # HomeLeaveModeSelect in select.py stays: it can name the direction
+        # (away_cool/away_heat), which a single preset cannot, and it is what
+        # existing automations target. Same capability gate as that select.
+        if device.airco.Capabilities.vacant_property:
+            self._attr_supported_features = (
+                SUPPORT_FLAGS | ClimateEntityFeature.PRESET_MODE
+            )
+            self._attr_preset_modes = [PRESET_NONE, PRESET_AWAY]
         self._update_state()
 
     async def async_added_to_hass(self) -> None:
@@ -551,6 +515,41 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         """Turn the entity off."""
         await self._device.async_queue_command({AirconCommands.Operation: False})
 
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Enter or leave the unit's Home Leave mode.
+
+        The unit has no single "away" command: it enters the mode when it is
+        given the away target of the direction it is running in, which is why
+        the current hvac_mode decides between them. A unit in auto, dry or
+        fan-only has no such target to send, so the direction has to be named
+        through HomeLeaveModeSelect instead of guessed at here.
+        """
+        if preset_mode == PRESET_NONE:
+            await self._device.async_queue_command(
+                {AirconCommands.PresetTemp: NORMAL_TEMP}
+            )
+            return
+
+        if self._attr_hvac_mode == HVACMode.COOL:
+            away_temp = HOME_LEAVE_TEMP_COOL
+        elif self._attr_hvac_mode == HVACMode.HEAT:
+            away_temp = HOME_LEAVE_TEMP_HEAT
+        else:
+            raise ServiceValidationError(
+                f"Home Leave mode needs cooling or heating, not {self._attr_hvac_mode}",
+                translation_domain=DOMAIN,
+                translation_key="preset_away_needs_cool_or_heat",
+                translation_placeholders={"hvac_mode": str(self._attr_hvac_mode)},
+            )
+
+        await self._device.async_queue_command(
+            {
+                AirconCommands.Operation: True,
+                AirconCommands.OperationMode: HVAC_TRANSLATION[self._attr_hvac_mode],
+                AirconCommands.PresetTemp: away_temp,
+            }
+        )
+
     def _require_home_leave_mode_capability(self) -> None:
         if not self._device.airco.Capabilities.home_leave_mode:
             raise ServiceValidationError(
@@ -657,6 +656,12 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
 
             # Determine hvac_action based on operation mode and state
             self._attr_hvac_action = self._determine_hvac_action(airco)
+
+        # Read back from the same Vacant bit HomeLeaveModeSelect uses, so the
+        # two never disagree - including when the mode was entered from the
+        # official app or the IR remote.
+        if self.supported_features & ClimateEntityFeature.PRESET_MODE:
+            self._attr_preset_mode = PRESET_AWAY if airco.Vacant else PRESET_NONE
 
     def _determine_hvac_action(self, airco: Aircon) -> HVACAction:
         """Determine the current HVAC action from operation mode and state.

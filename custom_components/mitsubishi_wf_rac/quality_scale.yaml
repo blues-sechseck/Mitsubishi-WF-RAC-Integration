@@ -7,7 +7,8 @@ rules:
     comment: >-
       Needs an entry in home-assistant/brands moved from custom_integrations/
       to core_integrations/ - relevant only for a Home Assistant Core
-      submission.
+      submission. The brand/ directory shipped alongside this file covers the
+      custom-integration install (HA 2026.3+) but not this rule.
   common-modules: done
   config-flow: done
   config-flow-test-coverage: done

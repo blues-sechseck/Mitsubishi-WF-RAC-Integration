@@ -63,6 +63,12 @@
     },
     "entity_not_energy_total_sensor": {
       "message": "{entity_id} 不是累計用電量感測器。"
+    },
+    "external_temperature_source_configured": {
+      "message": "室內溫度由所設定的感測器實體決定。"
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "離家模式僅在製冷或製熱時可用，目前為 {hvac_mode}。請先將設備切換到製冷或製熱，或直接用「離家模式」選擇項指定離家製冷／離家製熱。"
     }
   },
   "issues": {
@@ -104,6 +110,7 @@
               "target_offset_heat": "目標偏移（製熱）"
             },
             "data_description": {
+              "target_offset": "正值會降低傳送給設備的設定溫度，負值則提高它——無論哪種情況，卡片上顯示的仍是您設定的溫度。多數機型會把半度向上取整到整度，因此這裡的 0.5 常常等同於 1。若已設定室內溫度感測器，對於超調的機型，上面的「製冷過衝」是更合適的調節項：它更精細，而且設定溫度與官方 App 顯示的保持一致。",
               "target_offset_cool": "留空以使用通用的目標溫度偏移。",
               "target_offset_heat": "留空以使用通用的目標溫度偏移。"
             }

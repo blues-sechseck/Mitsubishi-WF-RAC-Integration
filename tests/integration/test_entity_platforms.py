@@ -77,14 +77,11 @@ def test_platforms_serialize_updates(module):
     assert module.PARALLEL_UPDATES == 1
 
 
-async def test_platform_entity_composition_and_metadata(hass, platform_device, monkeypatch):
+async def test_platform_entity_composition_and_metadata(hass, platform_device):
     """All optional entities retain their current default-enabled/category contract."""
     platform_device.airco.Capabilities = replace(platform_device.airco.Capabilities, vacant_property=True, home_leave_mode=True)
     platform_device.airco.Electric = 1.2
     entry = _entry(platform_device)
-    fake_platform = MagicMock()
-    monkeypatch.setattr(sensor.entity_platform, "async_get_current_platform", lambda: fake_platform)
-    monkeypatch.setattr(climate.entity_platform, "async_get_current_platform", lambda: fake_platform)
 
     entities = []
     for setup in (binary_sensor.async_setup_entry, button.async_setup_entry, climate.async_setup_entry, number.async_setup_entry, select.async_setup_entry, sensor.async_setup_entry, update.async_setup_entry):
