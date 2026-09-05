@@ -255,6 +255,14 @@ automation:
                or state_attr('binary_sensor.<name>_problem', 'error_code') }}
 ```
 
+# Blueprints
+
+Community automation blueprints live in [`blueprints/`](blueprints/). They are not part of
+the download - HACS installs the integration folder only - so you import one yourself under
+Settings -> Automations & scenes -> Blueprints -> Import blueprint, pasting the URL of the
+`.yaml` file. See the [directory README](blueprints/README.md) for what is in there and how
+to contribute one.
+
 # Options
 
 Configurable via the integration's "Configure" (options) flow. The host/IP
