@@ -1,0 +1,18 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question about how something works
+    url: https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/discussions/categories/q-a
+    about: >
+      Protocol and behaviour questions are very welcome in Q&A, and they get
+      the same attention there - no need to be sure it's a bug first.
+  - name: Feature idea
+    url: https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/discussions/categories/ideas
+    about: >
+      Ideas start as a discussion, so the shape can be worked out before
+      anything is built.
+  - name: What the module can and cannot do
+    url: https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/blob/main/docs/wf-rac-module-reference.md
+    about: >
+      The interface reference documents the protocol, including the values
+      the module doesn't carry at all - worth a look before you spend time on
+      a report.
