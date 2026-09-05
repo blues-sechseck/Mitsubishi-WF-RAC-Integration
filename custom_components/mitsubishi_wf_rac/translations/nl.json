@@ -18,7 +18,13 @@
           "name": "Airco Naam",
           "host": "Host (IP) adres",
           "port": "Poort",
-          "force_update": "Negeer dubbel IP (kan en zal fouten veroorzaken, dus controleer het foutlog)"
+          "force_update": "Dubbel IP-adres negeren"
+        },
+        "data_description": {
+          "name": "De naam van deze airco in Home Assistant. Hij benoemt het apparaat en gaat vooraf aan de namen van de bijbehorende entiteiten.",
+          "host": "Het lokale IP-adres van de wifi-module in de airco. Geef de module een vast adres in je router — de integratie volgt een gewijzigd adres niet vanzelf, je zou het hier opnieuw moeten instellen.",
+          "port": "De poort waarop de lokale API van de module luistert. Laat 51443 staan, tenzij je module een andere aankondigt.",
+          "force_update": "Voegt deze airco toe hoewel een andere invoer hetzelfde IP-adres al gebruikt. Bedoeld voor een unit waarvan de oude invoer is verdwenen: de module accepteert één verbinding tegelijk, twee invoeren die hem bevragen leveren fouten in het log op."
         },
         "description": "Voer de juiste informatie toe om de airco handmatig toe te voegen ",
         "title": "WF-RAC AC verbinding info"
@@ -29,6 +35,10 @@
         "data": {
           "name": "Airco naam",
           "port": "Poort"
+        },
+        "data_description": {
+          "name": "De naam van deze airco in Home Assistant. Hij benoemt het apparaat en gaat vooraf aan de namen van de bijbehorende entiteiten.",
+          "port": "De poort die de module heeft aangekondigd. Normaal gesproken 51443 — corrigeer hem hier als hij afwijkt."
         }
       },
       "reconfigure": {
@@ -36,6 +46,11 @@
           "name": "Airco Naam",
           "host": "Host (IP) adres",
           "port": "Poort"
+        },
+        "data_description": {
+          "name": "De naam van deze airco in Home Assistant. Hij benoemt het apparaat en gaat vooraf aan de namen van de bijbehorende entiteiten.",
+          "host": "Het lokale IP-adres van de wifi-module in de airco. Geef de module een vast adres in je router — de integratie volgt een gewijzigd adres niet vanzelf, je zou het hier opnieuw moeten instellen.",
+          "port": "De poort waarop de lokale API van de module luistert. Laat 51443 staan, tenzij je module een andere aankondigt."
         },
         "description": "Werk de verbindingsgegevens voor deze airco bij.",
         "title": "WF-RAC AC verbinding herconfigureren"
@@ -82,8 +97,12 @@
       "init": {
         "description": "Hieronder zijn instellingen die je kan aanpassen voor deze airco.",
         "data": {
-          "availability_retry_limit": "Herhaal limiet (minimaal 3)",
-          "firmware_update_check": "Firmware-updatecontrole (online)"
+          "availability_retry_limit": "Herhaallimiet",
+          "firmware_update_check": "Controleren op firmware-updates"
+        },
+        "data_description": {
+          "availability_retry_limit": "Opeenvolgende mislukte pollings voordat de airco als niet beschikbaar wordt gemarkeerd. Het minimum van drie is bij een pollinginterval van 60 s ongeveer drie minuten — genoeg om de uurlijkse wifi-herverbinding van de module te overbruggen. Verhoog het bij een zwakke verbinding.",
+          "firmware_update_check": "Maakt een Firmware-update-entiteit die de versie van de module vergelijkt met de server van de fabrikant. Dit is de enige uitgaande internetverbinding van de integratie — laat hem uit om volledig lokaal te blijven."
         },
         "title": "WF-RAC opties",
         "sections": {

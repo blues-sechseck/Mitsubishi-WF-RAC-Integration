@@ -18,7 +18,13 @@
           "name": "空調名稱",
           "host": "主機（IP）地址",
           "port": "埠號",
-          "force_update": "忽略重複 IP（可能/將會引發錯誤，請檢查錯誤日誌）"
+          "force_update": "忽略重複的 IP 位址"
+        },
+        "data_description": {
+          "name": "此空調在 Home Assistant 中的名稱。它是裝置的名稱，也是其下各實體名稱的前綴。",
+          "host": "空調無線模組的本機 IP 位址。請在路由器中為該模組指派固定位址——位址變更後整合不會自動跟隨，需要在此重新設定。",
+          "port": "模組本機介面監聽的埠號。除非模組通告了其他埠號，否則保持 51443。",
+          "force_update": "即使已有另一個項目使用相同的 IP 位址，仍然新增此空調。適用於舊項目遺失後重新新增裝置：模組一次只接受一個連線，兩個項目同時輪詢會在日誌中產生錯誤。"
         },
         "description": "請填寫正確的信息以手動新增空調",
         "title": "WF-RAC 空調連接資訊"
@@ -29,6 +35,10 @@
         "data": {
           "name": "空調名稱",
           "port": "埠號"
+        },
+        "data_description": {
+          "name": "此空調在 Home Assistant 中的名稱。它是裝置的名稱，也是其下各實體名稱的前綴。",
+          "port": "模組通告的埠號。通常為 51443——如不同請在此更正。"
         }
       },
       "reconfigure": {
@@ -36,6 +46,11 @@
           "name": "空調名稱",
           "host": "主機（IP）地址",
           "port": "埠號"
+        },
+        "data_description": {
+          "name": "此空調在 Home Assistant 中的名稱。它是裝置的名稱，也是其下各實體名稱的前綴。",
+          "host": "空調無線模組的本機 IP 位址。請在路由器中為該模組指派固定位址——位址變更後整合不會自動跟隨，需要在此重新設定。",
+          "port": "模組本機介面監聽的埠號。除非模組通告了其他埠號，否則保持 51443。"
         },
         "description": "更新此空調的連接資訊。",
         "title": "重新配置 WF-RAC 空調連接"
@@ -82,8 +97,12 @@
       "init": {
         "description": "以下是你可以為此空調更改的選項。",
         "data": {
-          "availability_retry_limit": "重試次數上限（最少 3）",
-          "firmware_update_check": "韌體更新檢查（線上）"
+          "availability_retry_limit": "重試次數上限",
+          "firmware_update_check": "檢查韌體更新"
+        },
+        "data_description": {
+          "availability_retry_limit": "連續多少次輪詢失敗後將空調標記為無法使用。最小值 3 在 60 秒輪詢間隔下約為三分鐘，足以撐過模組每小時一次的 Wi-Fi 重新連線。訊號較弱時可調高。",
+          "firmware_update_check": "建立一個韌體更新實體，將模組的版本與製造商的伺服器進行比較。這是本整合唯一的對外網路連線——保持關閉即可完全在本機運作。"
         },
         "title": "WF-RAC 選項",
         "sections": {

@@ -18,7 +18,13 @@
           "name": "Airco Name",
           "host": "Host (IP) address",
           "port": "Port",
-          "force_update": "Ignore Duplicate IP (can/will cause Errors so check error log)"
+          "force_update": "Ignore duplicate IP address"
+        },
+        "data_description": {
+          "name": "The name for this airco in Home Assistant. It names the device and prefixes the entities belonging to it.",
+          "host": "The local IP address of the airco's wireless module. Give the module a fixed address in your router - the integration does not follow a changed one on its own, you would have to reconfigure it here.",
+          "port": "The port the module's local API listens on. Leave this at 51443 unless your module announces a different one.",
+          "force_update": "Add this airco even though another entry already uses this IP address. Meant for re-adding a unit whose old entry went missing: the module accepts one connection at a time, so two entries polling it will produce errors in the log."
         },
         "description": "Please fill in the correct information to add the Airco Manually",
         "title": "WF-RAC AC connection info"
@@ -29,6 +35,10 @@
         "data": {
           "name": "Airco Name",
           "port": "Port"
+        },
+        "data_description": {
+          "name": "The name for this airco in Home Assistant. It names the device and prefixes the entities belonging to it.",
+          "port": "The port the module announced. It is normally 51443 - correct it here if the value above looks different."
         }
       },
       "reconfigure": {
@@ -36,6 +46,11 @@
           "name": "Airco Name",
           "host": "Host (IP) address",
           "port": "Port"
+        },
+        "data_description": {
+          "name": "The name for this airco in Home Assistant. It names the device and prefixes the entities belonging to it.",
+          "host": "The local IP address of the airco's wireless module. Give the module a fixed address in your router - the integration does not follow a changed one on its own, you would have to reconfigure it here.",
+          "port": "The port the module's local API listens on. Leave this at 51443 unless your module announces a different one."
         },
         "description": "Update the connection details for this Airco.",
         "title": "Reconfigure WF-RAC AC connection"
@@ -82,8 +97,12 @@
       "init": {
         "description": "Below are the options you can change for this airco.",
         "data": {
-          "availability_retry_limit": "Retry limit (minimum 3)",
-          "firmware_update_check": "Firmware Update Check (Online)"
+          "availability_retry_limit": "Retry limit",
+          "firmware_update_check": "Check for firmware updates"
+        },
+        "data_description": {
+          "availability_retry_limit": "Consecutive failed polls before the airco is marked unavailable. The minimum of three is about three minutes at the 60-second poll interval - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link.",
+          "firmware_update_check": "Adds a Firmware Update entity that compares the module's version against the manufacturer's server. This is the only outbound internet connection the integration makes - leave it off to stay fully local."
         },
         "title": "WF-RAC options",
         "sections": {
