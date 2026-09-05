@@ -3,6 +3,7 @@
     "error": {
       "unexpected_error": "发生了意外错误。请查看日志以获取详细信息。",
       "cannot_connect": "无法连接到空调：{reason}",
+      "invalid_host": "主机名或 IP 地址无效",
       "name_invalid": "名称已被占用或少于 3 个字符",
       "host_already_configured": "空调 IP 已被配置为 [{error_name}]",
       "too_many_devices_registered": "此空调已注册了太多设备。请在应用中删除一个设备或对模块进行出厂重置。"
@@ -143,6 +144,10 @@
             "data": {
               "indoor_offset": "室内偏移",
               "outdoor_offset": "室外偏移"
+            },
+            "data_description": {
+              "indoor_offset": "在显示之前加到空调自带室内传感器的读数上。仅影响显示，不改变空调的运行。",
+              "outdoor_offset": "空调报告的室外温度同理。"
             }
           }
         }

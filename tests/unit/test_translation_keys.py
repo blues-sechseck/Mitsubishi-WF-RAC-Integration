@@ -120,6 +120,40 @@ def test_sections_cover_every_field_the_options_form_shows():
     }
 
 
+def test_every_error_the_flow_raises_has_a_message():
+    """A KnownError's error_name is what async_show_form puts in `errors`, and
+    the UI looks it up under config.error. A name with no entry renders as the
+    raw key - which is how `invalid_host` reached users unnoticed: nothing else
+    fails, the form just shows a word nobody wrote.
+    """
+    from custom_components.mitsubishi_wf_rac import config_flow
+
+    raised = {
+        cls.error_name
+        for cls in vars(config_flow).values()
+        if isinstance(cls, type)
+        and issubclass(cls, config_flow.KnownError)
+        and cls is not config_flow.KnownError
+    }
+
+    assert raised <= set(STRINGS["config"]["error"]), (
+        raised - set(STRINGS["config"]["error"])
+    )
+    assert raised <= set(ENGLISH["config"]["error"]), (
+        raised - set(ENGLISH["config"]["error"])
+    )
+
+
+def test_a_section_describes_every_field_it_shows():
+    """The guard above covers the top-level step fields; the sections carry
+    their own data/data_description pair and were missed by it.
+    """
+    for section, group in STRINGS["options"]["step"]["init"]["sections"].items():
+        fields = set(group.get("data", {}))
+        described = set(group.get("data_description", {}))
+        assert fields <= described, f"{section}: {fields - described}"
+
+
 def test_a_translated_section_labels_every_field_in_it():
     """A section whose fields carry no label in that language renders them as
     their raw keys - `overshoot_cool` where a label belongs. Nothing else

@@ -3,6 +3,7 @@
     "error": {
       "unexpected_error": "Įvyko nežinoma klaida. Pasitikrinkite log failus",
       "cannot_connect": "Nepavyko prisijungti prie kondicionieriaus: {reason}",
+      "invalid_host": "Netinkamas serverio vardas arba IP adresas",
       "name_invalid": "Pavadinimas jau naudojamas arba yra trumpesnis nei 3 simboliai",
       "host_already_configured": "Kondicionieriaus IP jau nustatytas kaip [{error_name}]",
       "too_many_devices_registered": "Su kondicionieriumi susieta per daug įrenginių. Ištrinkitę įrenginį programėlėje arba atstatykite modulį į gamyklinę būseną."
@@ -143,6 +144,10 @@
             "data": {
               "indoor_offset": "Vidaus poslinkis",
               "outdoor_offset": "Lauko poslinkis"
+            },
+            "data_description": {
+              "indoor_offset": "Pridedama prie paties įrenginio vidaus jutiklio rodmens prieš jį parodant. Tik rodymui — įrenginio veikimo tai nekeičia.",
+              "outdoor_offset": "Tas pats ir lauko temperatūrai, kurią praneša įrenginys."
             }
           }
         }

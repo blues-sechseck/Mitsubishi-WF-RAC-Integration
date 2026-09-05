@@ -47,6 +47,7 @@
     "error": {
       "unexpected_error": "An unexpected error occurred. Please check the log for details.",
       "cannot_connect": "Could not connect with the Airco: {reason}",
+      "invalid_host": "[%key:common::config_flow::error::invalid_host%]",
       "name_invalid": "Name is already taken or is shorter than 3 characters",
       "host_already_configured": "Airco IP already configured as [{error_name}]",
       "too_many_devices_registered": "There are too many devices registered for this airco. Please delete a device (in the app) or do a factory reset of the module."
@@ -111,6 +112,10 @@
             "data": {
               "indoor_offset": "Indoor Temp. Sensor Offset",
               "outdoor_offset": "Outdoor Temp. Sensor Offset"
+            },
+            "data_description": {
+              "indoor_offset": "Added to the unit's own indoor reading before it is shown. Display only - it does not change what the unit does.",
+              "outdoor_offset": "The same, for the outdoor temperature the unit reports."
             }
           }
         }

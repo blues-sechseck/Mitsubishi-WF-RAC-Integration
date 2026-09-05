@@ -3,6 +3,7 @@
     "error": {
       "unexpected_error": "Es ist ein unerwarteter Fehler aufgetreten. Weitere Informationen finden Sie im Protokoll.",
       "cannot_connect": "Konnte keine Verbindung zur Klimaanlage herstellen: {reason}",
+      "invalid_host": "Ungültiger Hostname oder ungültige IP-Adresse",
       "name_invalid": "Der Name ist bereits vergeben oder kürzer als 3 Zeichen",
       "host_already_configured": "Klima IP bereits konfiguriert als [{error_name}]",
       "too_many_devices_registered": "Für diese Klimaanlage sind zu viele Geräte registriert. Bitte löschen Sie ein Gerät (in der App) oder führen Sie einen Werksreset des Moduls durch."
@@ -143,6 +144,10 @@
             "data": {
               "indoor_offset": "Innentemperatur Sensor-Offset",
               "outdoor_offset": "Außentemperatur Sensor-Offset"
+            },
+            "data_description": {
+              "indoor_offset": "Wird zum Messwert des geräteeigenen Innenfühlers addiert, bevor er angezeigt wird. Nur die Anzeige — am Verhalten des Geräts ändert sich nichts.",
+              "outdoor_offset": "Dasselbe für die Außentemperatur, die das Gerät meldet."
             }
           }
         }

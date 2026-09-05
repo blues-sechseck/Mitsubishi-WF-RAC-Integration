@@ -3,6 +3,7 @@
     "error": {
       "unexpected_error": "發生了意外錯誤。請查看日誌以獲取詳細信息。",
       "cannot_connect": "無法連接到空調：{reason}",
+      "invalid_host": "主機名稱或 IP 位址無效",
       "name_invalid": "名稱已被佔用或少於 3 個字元",
       "host_already_configured": "空調 IP 已被配置為 [{error_name}]",
       "too_many_devices_registered": "此空調已註冊了太多設備。請在應用中刪除一個設備或對模組進行出廠重置。"
@@ -143,6 +144,10 @@
             "data": {
               "indoor_offset": "室內偏移",
               "outdoor_offset": "室外偏移"
+            },
+            "data_description": {
+              "indoor_offset": "在顯示之前加到空調內建室內感測器的讀數上。僅影響顯示，不改變空調的運作。",
+              "outdoor_offset": "空調回報的室外溫度同理。"
             }
           }
         }

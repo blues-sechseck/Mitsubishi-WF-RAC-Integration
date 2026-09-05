@@ -3,6 +3,7 @@
     "error": {
       "unexpected_error": "予期しないエラーが発生しました。詳細についてはログを確認してください。",
       "cannot_connect": "エアコンに接続できませんでした: {reason}",
+      "invalid_host": "ホスト名または IP アドレスが正しくありません",
       "name_invalid": "名前が既に使用されているか、3文字未満です。",
       "host_already_configured": "エアコンのIPは既に [{error_name}] として設定されています。",
       "too_many_devices_registered": "このエアコンには登録されているデバイスが多すぎます。デバイスを削除するか（アプリ内で）、モジュールを工場出荷時設定にリセットしてください。"
@@ -143,6 +144,10 @@
             "data": {
               "indoor_offset": "室内オフセット",
               "outdoor_offset": "室外オフセット"
+            },
+            "data_description": {
+              "indoor_offset": "エアコン内蔵センサーの測定値に加算してから表示します。表示だけで、動作は変わりません。",
+              "outdoor_offset": "エアコンが報告する外気温についても同様です。"
             }
           }
         }
