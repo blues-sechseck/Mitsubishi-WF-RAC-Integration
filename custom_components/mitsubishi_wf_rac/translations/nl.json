@@ -3,6 +3,7 @@
     "error": {
       "unexpected_error": "Er is een onverwachte fout opgetreden. Raadpleeg het logboek voor details.",
       "cannot_connect": "Kan niet verbinden met de Airco: {reason} ",
+      "invalid_host": "Ongeldige hostnaam of IP-adres",
       "name_invalid": "De naam is al in gebruik, of is korter dan 3 tekens. ",
       "host_already_configured": "IP is al geconfigureerd voor [{error_name}]",
       "too_many_devices_registered": "Er zijn te veel apparaten geregistreerd op deze airco. Verwijder een apparaat of reset de module."
@@ -143,6 +144,10 @@
             "data": {
               "indoor_offset": "Binnen offset",
               "outdoor_offset": "Buiten offset"
+            },
+            "data_description": {
+              "indoor_offset": "Wordt bij de meting van de eigen binnensensor opgeteld voordat die getoond wordt. Alleen weergave — het gedrag van de unit verandert er niet door.",
+              "outdoor_offset": "Hetzelfde voor de buitentemperatuur die de unit meldt."
             }
           }
         }

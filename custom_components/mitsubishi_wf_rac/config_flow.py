@@ -171,7 +171,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         result = await repository.update_account_info(airco_id, hass.config.time_zone)
         if not result:
-            raise CannotConnect
+            raise CannotConnect(reason="no answer to the registration request")
         if int(result["result"]) == 2:
             raise TooManyDevicesRegistered
 
