@@ -6,10 +6,16 @@
           "name": "[%key:common::config_flow::data::name%]",
           "host": "[%key:common::config_flow::data::host%]",
           "port": "[%key:common::config_flow::data::port%]",
-          "force_update": "[%key:common::config_flow::data::force_update%]"
+          "force_update": "Ignore duplicate IP address"
         },
         "description": "Please fill in the correct information to add the Airco Manually",
-        "title": "WF-RAC AC connection info"
+        "title": "WF-RAC AC connection info",
+        "data_description": {
+          "name": "The name for this airco in Home Assistant. It names the device and prefixes the entities belonging to it.",
+          "host": "The local IP address of the airco's wireless module. Give the module a fixed address in your router - the integration does not follow a changed one on its own, you would have to reconfigure it here.",
+          "port": "The port the module's local API listens on. Leave this at 51443 unless your module announces a different one.",
+          "force_update": "Add this airco even though another entry already uses this IP address. Meant for re-adding a unit whose old entry went missing: the module accepts one connection at a time, so two entries polling it will produce errors in the log."
+        }
       },
       "discovery_confirm": {
         "description": "The airco with id: {id}, IP: {host} and port: {port} was discovered. The port is normally 51443 — correct it below if it looks different. Please give it a name.",
@@ -17,6 +23,10 @@
         "data": {
           "name": "[%key:common::config_flow::data::name%]",
           "port": "[%key:common::config_flow::data::port%]"
+        },
+        "data_description": {
+          "name": "[%key:component::mitsubishi_wf_rac::config::step::user::data_description::name%]",
+          "port": "The port the module announced. It is normally 51443 - correct it here if the value above looks different."
         }
       },
       "reconfigure": {
@@ -26,15 +36,20 @@
           "port": "[%key:common::config_flow::data::port%]"
         },
         "description": "Update the connection details for this Airco.",
-        "title": "Reconfigure WF-RAC AC connection"
+        "title": "Reconfigure WF-RAC AC connection",
+        "data_description": {
+          "name": "[%key:component::mitsubishi_wf_rac::config::step::user::data_description::name%]",
+          "host": "[%key:component::mitsubishi_wf_rac::config::step::user::data_description::host%]",
+          "port": "[%key:component::mitsubishi_wf_rac::config::step::user::data_description::port%]"
+        }
       }
     },
     "error": {
-      "unexpected_error": "[%key:common::config_flow::error::unexpected_error%]",
-      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "name_invalid": "[%key:common::config_flow::error::name_invalid%]",
-      "host_already_configured": "[%key:common::config_flow::error::host_already_configured%]",
-      "too_many_devices_registered": "[%key:common::config_flow::error::too_many_devices_registered%]"
+      "unexpected_error": "An unexpected error occurred. Please check the log for details.",
+      "cannot_connect": "Could not connect with the Airco: {reason}",
+      "name_invalid": "Name is already taken or is shorter than 3 characters",
+      "host_already_configured": "Airco IP already configured as [{error_name}]",
+      "too_many_devices_registered": "There are too many devices registered for this airco. Please delete a device (in the app) or do a factory reset of the module."
     },
     "abort": {
       "existing_instance_updated": "Updated existing configuration.",
@@ -53,8 +68,12 @@
       "init": {
         "description": "Below are the options you can change for this airco.",
         "data": {
-          "availability_retry_limit": "Retry limit (minimum 3)",
-          "firmware_update_check": "Firmware Update Check (Online)"
+          "availability_retry_limit": "Retry limit",
+          "firmware_update_check": "Check for firmware updates"
+        },
+        "data_description": {
+          "availability_retry_limit": "Consecutive failed polls before the airco is marked unavailable. The minimum of three is about three minutes at the 60-second poll interval - enough to ride through the module's hourly WiFi reassociation. Raise it on a weak link.",
+          "firmware_update_check": "Adds a Firmware Update entity that compares the module's version against the manufacturer's server. This is the only outbound internet connection the integration makes - leave it off to stay fully local."
         },
         "title": "WF-RAC options",
         "sections": {

@@ -18,7 +18,13 @@
           "name": "空调名称",
           "host": "主机（IP）地址",
           "port": "端口",
-          "force_update": "忽略重复 IP（可能/将会引发错误，请检查错误日志）"
+          "force_update": "忽略重复的 IP 地址"
+        },
+        "data_description": {
+          "name": "此空调在 Home Assistant 中的名称。它是设备的名称，也是其下各实体名称的前缀。",
+          "host": "空调无线模块的本地 IP 地址。请在路由器中为该模块分配固定地址——地址变化后集成不会自动跟随，需要在此重新配置。",
+          "port": "模块本地接口监听的端口。除非模块通告了其他端口，否则保持 51443。",
+          "force_update": "即使已有另一个条目使用相同的 IP 地址，仍然添加此空调。适用于旧条目丢失后重新添加设备：模块一次只接受一个连接，两个条目同时轮询会在日志中产生错误。"
         },
         "description": "请填写正确的信息以手动添加空调",
         "title": "WF-RAC 空调连接信息"
@@ -29,6 +35,10 @@
         "data": {
           "name": "空调名称",
           "port": "端口"
+        },
+        "data_description": {
+          "name": "此空调在 Home Assistant 中的名称。它是设备的名称，也是其下各实体名称的前缀。",
+          "port": "模块通告的端口。通常为 51443——如不同请在此更正。"
         }
       },
       "reconfigure": {
@@ -36,6 +46,11 @@
           "name": "空调名称",
           "host": "主机（IP）地址",
           "port": "端口"
+        },
+        "data_description": {
+          "name": "此空调在 Home Assistant 中的名称。它是设备的名称，也是其下各实体名称的前缀。",
+          "host": "空调无线模块的本地 IP 地址。请在路由器中为该模块分配固定地址——地址变化后集成不会自动跟随，需要在此重新配置。",
+          "port": "模块本地接口监听的端口。除非模块通告了其他端口，否则保持 51443。"
         },
         "description": "更新此空调的连接信息。",
         "title": "重新配置 WF-RAC 空调连接"
@@ -82,8 +97,12 @@
       "init": {
         "description": "以下是你可以为此空调更改的选项。",
         "data": {
-          "availability_retry_limit": "重试次数上限（最少 3）",
-          "firmware_update_check": "固件更新检查（在线）"
+          "availability_retry_limit": "重试次数上限",
+          "firmware_update_check": "检查固件更新"
+        },
+        "data_description": {
+          "availability_retry_limit": "连续多少次轮询失败后将空调标记为不可用。最小值 3 在 60 秒轮询间隔下约为三分钟，足以熬过模块每小时一次的 Wi-Fi 重新连接。信号较弱时可调高。",
+          "firmware_update_check": "创建一个固件更新实体，将模块的版本与制造商的服务器进行比较。这是本集成唯一的对外网络连接——保持关闭即可完全本地运行。"
         },
         "title": "WF-RAC 选项",
         "sections": {

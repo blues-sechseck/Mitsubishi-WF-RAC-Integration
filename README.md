@@ -65,6 +65,23 @@ Already installed? Jump straight to setup:
 Clone or copy this repository and copy the folder `custom_components/mitsubishi_wf_rac` into
 `/custom_components/mitsubishi_wf_rac`.
 
+### Setting it up
+
+Units on the same network are found by themselves and show up as discovered devices — confirm one,
+give it a name, and you are done. Adding one by hand asks for the same details:
+
+| Field | Description |
+|---|---|
+| Airco Name | The name the airco gets in Home Assistant. It names the device and prefixes the entities belonging to it. |
+| Host (IP) address | The local IP address of the airco's wireless module. Give the module a fixed address in your router — a changed address isn't followed on its own, it has to be corrected here via **Reconfigure**. |
+| Port | The port the module's local API listens on, `51443` on every firmware branch seen so far. Discovery fills this in; correct it only if your module announces something else. |
+| Ignore duplicate IP address | Off by default. Adds the airco even though another entry already uses that IP address — meant for re-adding a unit whose old entry went missing. The module accepts one connection at a time, so two entries polling it produce errors in the log. |
+
+Discovery asks only for the name and the port; the address is the one the module announced. The
+setup connects to the airco right away and registers Home Assistant as an operator on it, so the
+unit has to be reachable at that moment. Everything else is configured afterwards under
+**Configure** (see [Options](#options)).
+
 ### Removing the integration
 
 This integration follows standard integration removal — no extra steps (like disabling a cloud
@@ -306,7 +323,8 @@ Target Temp. Offset corrects for this bias: `true_room ≈ PresetTemp + offset`.
 
 # Services
 
-The climate entity exposes the following entity services (use as `mitsubishi_wf_rac.<service>`).
+These are entity services (use as `mitsubishi_wf_rac.<service>`), so each one is called with a
+target. All but the last target the climate entity.
 
 | Service | Fields | Description |
 |---|---|---|
@@ -315,6 +333,7 @@ The climate entity exposes the following entity services (use as `mitsubishi_wf_
 | `request_home_leave_mode_status` | — | Ask the unit to report its Home Leave Mode thresholds/airflow (only on supporting models). |
 | `set_home_leave_mode` | `temp_rule_cooling`, `temp_setting_cooling`, `air_flow_cooling`, `temp_rule_heating`, `temp_setting_heating`, `air_flow_heating` | Write new Home Leave Mode thresholds/airflow (only on supporting models). |
 | `set_external_temperature` | `temperature` (optional) | Provide a room temperature to the AC, replacing the one its own indoor sensor reads. Omit `temperature` or pass `null` to revert to the internal sensor. See below. |
+| `set_energy_total` | `value` | Targets the **Energy Usage Total sensor**, not the climate entity. Sets that total to a given figure in kWh — `0` to reset it, or a reading carried over from a meter you kept previously. Only the integration's own total; the unit's own counter cannot be written. |
 
 ## Indoor temperature override
 

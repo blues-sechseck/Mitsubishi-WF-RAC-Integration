@@ -18,7 +18,13 @@
           "name": "Kondicionieriaus pavadinimas",
           "host": "Host (IP) adresas",
           "port": "Portas",
-          "force_update": "Ignoruoti dubliuot1 IP (tikėtinai bus klaidos. Patikrinkite log failus)"
+          "force_update": "Nepaisyti pasikartojančio IP adreso"
+        },
+        "data_description": {
+          "name": "Šio kondicionieriaus pavadinimas Home Assistant sistemoje. Juo pavadinamas įrenginys, jis rašomas ir prieš susijusių objektų pavadinimus.",
+          "host": "Vietinis kondicionieriaus belaidžio modulio IP adresas. Maršrutizatoriuje priskirkite moduliui pastovų adresą — pasikeitusio adreso integracija pati neseks, jį tektų iš naujo nurodyti čia.",
+          "port": "Prievadas, kuriuo pasiekiama vietinė modulio sąsaja. Palikite 51443, nebent modulis nurodo kitą.",
+          "force_update": "Prideda šį kondicionierių, nors tą patį IP adresą jau naudoja kitas įrašas. Skirta įrenginiui, kurio senas įrašas dingo: modulis vienu metu priima tik vieną prisijungimą, todėl du jį apklausiantys įrašai kelia klaidas žurnale."
         },
         "description": "Užpildykite teisingą informaciją norėdami pridėti kondicionių rankiniu būdu",
         "title": "WF-RAC AC susijungimo informacija"
@@ -29,6 +35,10 @@
         "data": {
           "name": "Kondicionieriaus pavadinimas",
           "port": "Portas"
+        },
+        "data_description": {
+          "name": "Šio kondicionieriaus pavadinimas Home Assistant sistemoje. Juo pavadinamas įrenginys, jis rašomas ir prieš susijusių objektų pavadinimus.",
+          "port": "Modulio nurodytas prievadas. Paprastai 51443 — jei kitoks, pataisykite čia."
         }
       },
       "reconfigure": {
@@ -36,6 +46,11 @@
           "name": "Kondicionieriaus pavadinimas",
           "host": "Host (IP) adresas",
           "port": "Portas"
+        },
+        "data_description": {
+          "name": "Šio kondicionieriaus pavadinimas Home Assistant sistemoje. Juo pavadinamas įrenginys, jis rašomas ir prieš susijusių objektų pavadinimus.",
+          "host": "Vietinis kondicionieriaus belaidžio modulio IP adresas. Maršrutizatoriuje priskirkite moduliui pastovų adresą — pasikeitusio adreso integracija pati neseks, jį tektų iš naujo nurodyti čia.",
+          "port": "Prievadas, kuriuo pasiekiama vietinė modulio sąsaja. Palikite 51443, nebent modulis nurodo kitą."
         },
         "description": "Atnaujinkite šio kondicionieriaus prisijungimo duomenis.",
         "title": "Iš naujo konfigūruoti WF-RAC AC ryšį"
@@ -82,8 +97,12 @@
       "init": {
         "description": "Žemiau pateikiamos parinktys, kurias galite keisti šiam oro kondicionieriui.",
         "data": {
-          "availability_retry_limit": "Pakartotinio bandymo limitas (min. 3)",
-          "firmware_update_check": "Programinės įrangos atnaujinimų tikrinimas (internetu)"
+          "availability_retry_limit": "Pakartotinių bandymų riba",
+          "firmware_update_check": "Tikrinti programinės įrangos atnaujinimus"
+        },
+        "data_description": {
+          "availability_retry_limit": "Kiek iš eilės nepavykusių apklausų reikia, kad kondicionierius būtų pažymėtas kaip nepasiekiamas. Mažiausia reikšmė 3 esant 60 s apklausos intervalui atitinka maždaug tris minutes — pakanka pergyventi kas valandą vykstantį modulio prisijungimą prie Wi-Fi iš naujo. Esant silpnam ryšiui padidinkite.",
+          "firmware_update_check": "Sukuria programinės įrangos atnaujinimo objektą, kuris lygina modulio versiją su gamintojo serveriu. Tai vienintelis integracijos užmezgamas ryšys su internetu — palikite išjungtą, kad viskas liktų vietinėje aplinkoje."
         },
         "title": "WF-RAC parinktys",
         "sections": {

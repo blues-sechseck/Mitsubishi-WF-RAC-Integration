@@ -18,7 +18,13 @@
           "name": "Klima Name",
           "host": "Host (IP) Adresse",
           "port": "Port",
-          "force_update": "Doppelte IP ignorieren (kann/wird Fehler verursachen, überprüfen Sie daher das Fehlerprotokoll)"
+          "force_update": "Doppelte IP-Adresse ignorieren"
+        },
+        "data_description": {
+          "name": "Der Name dieses Klimageräts in Home Assistant. Er benennt das Gerät und steht vor den Namen der zugehörigen Entitäten.",
+          "host": "Die lokale IP-Adresse des WLAN-Moduls im Klimagerät. Vergeben Sie im Router eine feste Adresse — die Integration folgt einer geänderten Adresse nicht von selbst, sie müsste hier neu konfiguriert werden.",
+          "port": "Der Port, auf dem die lokale Schnittstelle des Moduls lauscht. Belassen Sie 51443, sofern Ihr Modul keinen anderen ankündigt.",
+          "force_update": "Fügt dieses Klimagerät hinzu, obwohl bereits ein anderer Eintrag dieselbe IP-Adresse verwendet. Gedacht für ein Gerät, dessen alter Eintrag verloren ging: Das Modul nimmt jeweils nur eine Verbindung an, zwei Einträge darauf erzeugen Fehler im Protokoll."
         },
         "description": "Bitte geben Sie die korrekten Informationen ein, um die Klimaanlage manuell hinzuzufügen",
         "title": "WF-RAC AC Verbindungs-Info"
@@ -29,6 +35,10 @@
         "data": {
           "name": "Klima Name",
           "port": "Port"
+        },
+        "data_description": {
+          "name": "Der Name dieses Klimageräts in Home Assistant. Er benennt das Gerät und steht vor den Namen der zugehörigen Entitäten.",
+          "port": "Der vom Modul angekündigte Port. Normalerweise 51443 — bei Abweichung hier korrigieren."
         }
       },
       "reconfigure": {
@@ -36,6 +46,11 @@
           "name": "Klima Name",
           "host": "Host (IP) Adresse",
           "port": "Port"
+        },
+        "data_description": {
+          "name": "Der Name dieses Klimageräts in Home Assistant. Er benennt das Gerät und steht vor den Namen der zugehörigen Entitäten.",
+          "host": "Die lokale IP-Adresse des WLAN-Moduls im Klimagerät. Vergeben Sie im Router eine feste Adresse — die Integration folgt einer geänderten Adresse nicht von selbst, sie müsste hier neu konfiguriert werden.",
+          "port": "Der Port, auf dem die lokale Schnittstelle des Moduls lauscht. Belassen Sie 51443, sofern Ihr Modul keinen anderen ankündigt."
         },
         "description": "Aktualisieren Sie die Verbindungsdaten für diese Klimaanlage.",
         "title": "WF-RAC-Verbindung neu konfigurieren"
@@ -82,8 +97,12 @@
       "init": {
         "description": "Nachfolgend finden Sie die Optionen, die Sie für diese Klimaanlage ändern können.",
         "data": {
-          "availability_retry_limit": "max. Anzahl Wiederholungen (mind. 3)",
-          "firmware_update_check": "Firmware-Update-Prüfung (Online)"
+          "availability_retry_limit": "Max. Anzahl Wiederholungen",
+          "firmware_update_check": "Auf Firmware-Updates prüfen"
+        },
+        "data_description": {
+          "availability_retry_limit": "Aufeinanderfolgende fehlgeschlagene Abfragen, bevor das Klimagerät als nicht verfügbar gilt. Das Minimum von drei entspricht bei 60 s Abfrageintervall etwa drei Minuten — genug, um die stündliche WLAN-Neuanmeldung des Moduls zu überbrücken. Bei schwacher Verbindung erhöhen.",
+          "firmware_update_check": "Legt eine Firmware-Update-Entität an, die die Version des Moduls mit dem Server des Herstellers vergleicht. Das ist die einzige ausgehende Internetverbindung der Integration — ausgeschaltet lassen, um vollständig lokal zu bleiben."
         },
         "title": "WF-RAC Optionen",
         "sections": {

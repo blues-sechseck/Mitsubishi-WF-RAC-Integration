@@ -55,6 +55,30 @@ def test_step_data_keys_match_english_translation():
             assert actual == expected, f"{section}.{step}"
 
 
+def test_every_setup_field_carries_a_description():
+    """A form field is a label and a description; the label alone leaves the
+    user guessing at what a host, a port or a duplicate-IP override is for.
+    The quality scale asks for this explicitly under `config-flow`, and it is
+    the part hassfest cannot see - it only checks that a config flow exists.
+    """
+    for section in ("config", "options"):
+        for step, body in STRINGS[section]["step"].items():
+            fields = set(body.get("data", {}))
+            described = set(body.get("data_description", {}))
+            assert fields <= described, f"{section}.{step}: {fields - described}"
+
+
+def test_description_keys_match_english_translation():
+    """Same reason as the labels above - strings.json is what hassfest and the
+    translation pipeline read, translations/en.json is what the UI shows.
+    """
+    for section in ("config", "options"):
+        for step, body in ENGLISH[section]["step"].items():
+            expected = set(body.get("data_description", {}))
+            actual = set(STRINGS[section]["step"].get(step, {}).get("data_description", {}))
+            assert actual == expected, f"{section}.{step}"
+
+
 def test_step_section_keys_match_english_translation():
     """Fields moved into sections leave step.data empty, so the check above
     would compare two empty sets and pass while saying nothing.
