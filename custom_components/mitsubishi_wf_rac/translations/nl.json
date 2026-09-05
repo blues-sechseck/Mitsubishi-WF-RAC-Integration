@@ -61,6 +61,9 @@
     "cannot_connect": {
       "message": "Kon de airco op {device} niet bereiken."
     },
+    "update_failed": {
+      "message": "Het opvragen van de airco op {device} is mislukt: {error}"
+    },
     "temperature_required": {
       "message": "Een doeltemperatuur is verplicht."
     },

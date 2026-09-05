@@ -72,9 +72,21 @@ def _attached(hass, entity, entity_id):
     return entity
 
 
-@pytest.mark.parametrize("module", [binary_sensor, button, climate, number, select, sensor, switch, update])
-def test_platforms_serialize_updates(module):
+@pytest.mark.parametrize("module", [climate, number, select, switch])
+def test_platforms_that_write_serialize_updates(module):
+    """The module takes one connection at a time, so anything that reaches it
+    from an entity action has to queue rather than fan out."""
     assert module.PARALLEL_UPDATES == 1
+
+
+@pytest.mark.parametrize("module", [binary_sensor, button, sensor, update])
+def test_platforms_that_only_read_do_not_serialize(module):
+    """The coordinator already centralizes the polling, and none of these send
+    a request of their own - button and sensor both act on the integration's
+    own energy total, not on the device. The quality scale asks for 0 there
+    rather than a limit that throttles nothing.
+    """
+    assert module.PARALLEL_UPDATES == 0
 
 
 async def test_platform_entity_composition_and_metadata(hass, platform_device):

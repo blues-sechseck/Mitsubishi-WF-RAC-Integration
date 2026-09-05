@@ -61,6 +61,9 @@
     "cannot_connect": {
       "message": "Could not reach the Airco at {device}."
     },
+    "update_failed": {
+      "message": "Polling the Airco at {device} failed: {error}"
+    },
     "temperature_required": {
       "message": "A target temperature is required."
     },

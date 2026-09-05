@@ -61,6 +61,9 @@
     "cannot_connect": {
       "message": "無法連接到位於 {device} 的空調。"
     },
+    "update_failed": {
+      "message": "輪詢 {device} 上的空調失敗：{error}"
+    },
     "temperature_required": {
       "message": "需要指定目標溫度。"
     },

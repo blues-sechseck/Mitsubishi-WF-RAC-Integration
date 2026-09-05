@@ -14,6 +14,8 @@ from .coordinator import Device
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+# The module accepts one connection at a time and wants a second between
+# requests, so entity actions that reach the device run one after another.
 PARALLEL_UPDATES = 1
 
 

@@ -61,6 +61,9 @@
     "cannot_connect": {
       "message": "{device} のエアコンに到達できませんでした。"
     },
+    "update_failed": {
+      "message": "{device} のエアコンへの問い合わせに失敗しました: {error}"
+    },
     "temperature_required": {
       "message": "目標温度を指定してください。"
     },

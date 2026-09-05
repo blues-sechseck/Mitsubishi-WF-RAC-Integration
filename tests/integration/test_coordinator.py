@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -711,6 +712,36 @@ async def test_properties_reflect_constructor_args(device):
     assert device.swing_selects_enabled_default is True
     assert device.device_info["name"] == "Test AC"
     assert device.device_info["identifiers"] == {("mitsubishi_wf_rac", "airco-id")}
+
+
+async def test_device_info_claims_the_mac_only_when_the_id_is_one(hass):
+    """airconId is MAC-derived and in practice the bare MAC, but the shape is
+    the only evidence we have. Registering a connection for an id that isn't
+    one would merge this device with whatever really holds that address.
+    """
+    args = (hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443, "device-id", "operator-id")
+
+    not_a_mac = Device(*args, "airco-id", swing_selects_enabled_default=True)
+    assert "connections" not in not_a_mac.device_info
+    await not_a_mac.async_shutdown()
+
+    a_mac = Device(*args, "348E89C5A137", swing_selects_enabled_default=True)
+    assert a_mac.device_info["connections"] == {
+        (dr.CONNECTION_NETWORK_MAC, "34:8e:89:c5:a1:37")
+    }
+    await a_mac.async_shutdown()
+
+
+async def test_device_info_carries_the_model_number_as_model_id(device):
+    """ModelNr is a capability grouping, not a type name - it belongs in
+    model_id, and "model" stays empty rather than showing a bare digit.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    info = device.device_info
+    assert info["model_id"] == str(device.airco.ModelNrRaw)
+    assert "model" not in info
 
 
 async def test_delete_account_success(device):

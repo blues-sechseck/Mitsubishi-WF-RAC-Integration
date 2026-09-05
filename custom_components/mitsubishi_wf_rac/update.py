@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from homeassistant.components.update import UpdateDeviceClass, UpdateEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -14,7 +15,9 @@ from .coordinator import Device
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-PARALLEL_UPDATES = 1
+# Read-only as far as the device is concerned: the coordinator does the
+# polling, and nothing on this platform sends a request of its own.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -45,6 +48,10 @@ class FirmwareUpdateEntity(WfRacEntity, UpdateEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "firmware_update"
     _attr_device_class = UpdateDeviceClass.FIRMWARE
+    # Reports only; installing is the module's own business (see the class
+    # docstring), so this belongs with the diagnostics rather than among the
+    # controls on the device page.
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, device: Device) -> None:
         super().__init__(device)
