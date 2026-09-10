@@ -482,6 +482,15 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._apply_state()
 
+    @property
+    def available(self) -> bool:
+        """Unavailable on a unit that does not answer this channel at all.
+
+        Distinct from the unknown these report when a reading is merely
+        overdue: there, one is expected and late; here, none is coming.
+        """
+        return super().available and self._device.service_data_supported
+
     def _mark_state_unknown(self) -> None:
         self._attr_native_value = None
 

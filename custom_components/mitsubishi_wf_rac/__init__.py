@@ -34,6 +34,7 @@ from .coordinator import (
     Device,
     registration_full_issue_id,
     request_stops_unit_issue_id,
+    service_data_unanswered_issue_id,
     status_request_unsupported_issue_id,
 )
 from .services import async_setup_services
@@ -284,4 +285,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
     ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
     ir.async_delete_issue(
         hass, DOMAIN, status_request_unsupported_issue_id(entry.entry_id)
+    )
+    ir.async_delete_issue(
+        hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
     )

@@ -195,6 +195,18 @@ EMPTY_BLOCK_SETTINGS: Final = {
 # believing that is undoing the change they just made.
 EMPTY_BLOCK_MATCH_MIN: Final = 3
 
+# How many requests may come back answered but empty before we accept that this
+# unit does not have the operation-data channel at all. Ten, and only counting
+# requests the module accepted: on the unit this was written for (#329) not one
+# reading has ever arrived, in any beta, with either shape of frame - so every
+# minute spent asking is a write that takes the unit's lock for nothing.
+#
+# Not persisted, unlike the frame shape. Relearning that costs the user a unit
+# that clears its settings; relearning this costs ten requests, and leaving it
+# in memory means a module that starts answering is picked up again on the next
+# reload instead of being written off for good.
+SERVICE_DATA_UNANSWERED_LIMIT: Final = 10
+
 # The lock runs 60 seconds, so a longer wait than that means the deadline was
 # stamped by a client whose clock is off rather than that the lock is really
 # still running - cap it instead of leaving a service call hanging on someone
@@ -268,6 +280,11 @@ AVAILABILITY_FAILURE_LIMIT_MIN = 3
 def request_stops_unit_issue_id(entry_id: str) -> str:
     """Repair-issue id for a unit that applies the request meant only to ask."""
     return f"request_stops_unit_{entry_id}"
+
+
+def service_data_unanswered_issue_id(entry_id: str) -> str:
+    """Repair-issue id for a unit that answers operation-data requests empty."""
+    return f"service_data_unanswered_{entry_id}"
 
 
 def status_request_unsupported_issue_id(entry_id: str) -> str:
@@ -346,6 +363,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # The settings a status request was built from, kept until something
         # has been able to answer for them - see _check_request_was_applied().
         self._request_baseline: dict[str, Any] | None = None
+        self._service_data_unanswered = 0
+        self._service_data_unsupported = False
         self._account_expires: int | None = None
         self._led_status: int | None = None
         self._auto_heating: int | None = None
@@ -1007,6 +1026,17 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             and dt_util.utcnow() < self._foreign_activity_until
         )
 
+    @property
+    def service_data_supported(self) -> bool:
+        """Whether this unit has ever answered an operation-data request.
+
+        False only after SERVICE_DATA_UNANSWERED_LIMIT requests it accepted and
+        answered without a single segment. The sensors fed by that channel say
+        unavailable rather than unknown then: unknown means "no reading right
+        now", and this is "there will not be one".
+        """
+        return not self._service_data_unsupported
+
     def _status_request_is_allowed(self) -> bool:
         """Whether an operation-data request may go out right now.
 
@@ -1029,6 +1059,14 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         service_data_codes = self._subscribed_service_data_codes()
         if not service_data_codes:
+            return
+        if (
+            self._service_data_unsupported
+            and self._external_temperature_override is None
+        ):
+            # Nothing to read here. The frame still goes out for an armed
+            # temperature override, which rides on it without needing an
+            # answer.
             return
         if not self._status_request_is_allowed():
             return
@@ -1149,6 +1187,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # (#329). Checking only the answer would have reproduced the blind spot
         # this detector was rewritten to close.
         self._request_baseline = before
+        # _carry_forward_service_data() moves this whenever a segment arrives,
+        # so comparing it across the request says whether this one was answered
+        # - which the state itself cannot, the previous reading being carried
+        # forward into it.
+        answered_before = self._last_service_data_response
         for attempt in (1, 2):
             try:
                 await self.set_airco(
@@ -1161,6 +1204,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
                 self._check_request_was_applied(before)
+                self._note_whether_anything_answered(answered_before)
                 self._note_service_data_offset_survived()
                 # Notify, but deliberately not through async_set_updated_data():
                 # that resets the refresh timer, and this runs half a cycle
@@ -1411,6 +1455,43 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 return []
             matched.append("PresetTemp")
         return matched
+
+    def _note_whether_anything_answered(self, answered_before: datetime | None) -> None:
+        """Give up on a unit that takes the request and answers nothing.
+
+        Answering with no segment at all is not a refusal - the module accepted
+        the frame and replied - so nothing else in the request path notices it.
+        On the unit this was written for that is every request ever sent, which
+        leaves five sensors permanently unknown and a write going out every
+        minute to keep them that way.
+        """
+        if self._service_data_unsupported:
+            return
+        if self._last_service_data_response != answered_before:
+            self._service_data_unanswered = 0
+            return
+        self._service_data_unanswered += 1
+        if self._service_data_unanswered < SERVICE_DATA_UNANSWERED_LIMIT:
+            return
+        self._service_data_unsupported = True
+        _LOGGER.warning(
+            "[%s] has answered %s operation-data requests without reporting a "
+            "single value. This unit does not have that channel, so it will "
+            "not be asked again and its compressor, current, temperature and "
+            "EEV sensors are now unavailable. Nothing else is affected",
+            self.device_name,
+            SERVICE_DATA_UNANSWERED_LIMIT,
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            service_data_unanswered_issue_id(self.entry_id),
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="service_data_unanswered",
+            translation_placeholders={"device_name": self.device_name},
+        )
+        self.async_update_listeners()
 
     def _check_request_was_applied(self, before: Mapping[str, Any] | None) -> None:
         """Notice a unit that applies the request we only meant to ask with.
