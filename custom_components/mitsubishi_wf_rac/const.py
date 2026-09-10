@@ -37,9 +37,27 @@ CONF_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
 # New entries must not write this key.
 CONF_CREATE_SWING_MODE_SELECT = "create_swing_mode_select"
 CONF_CONNECTION_METHOD = "connection_method"
-# Learned, not configured: set once a module has shown that it applies the
-# operation-data request's empty power field as "switch off" (see
-# Device._check_request_stopped_unit).
+# Learned, not configured: which shape of operation-data request this unit can
+# be asked with. Written by Device._check_request_was_applied() the first time
+# the unit answers one by changing its own settings.
+#
+# strict  the request carries an empty command block, no set-bits. Correct
+#         everywhere the set-bit convention holds, which is everywhere we have
+#         measured except one module (#329).
+# echo    the block carries the unit's own settings, every set-bit set, read a
+#         moment before it goes out - so the frame confirms the settings a
+#         strict block would clear. What the manufacturer's app sends.
+# silent  no request at all. The last resort for a unit that changes its
+#         settings even when the frame confirms them: the operation-data
+#         sensors and the external-temperature override are given up so the
+#         unit stays usable.
+CONF_STATUS_REQUEST_MODE = "status_request_mode"
+STATUS_REQUEST_STRICT = "strict"
+STATUS_REQUEST_ECHO = "echo"
+STATUS_REQUEST_SILENT = "silent"
+
+# Superseded by CONF_STATUS_REQUEST_MODE and read only to carry entries written
+# by 2026.9.9-beta2..beta6 forward. True there means what "echo" means now.
 CONF_CARRY_POWER_STATE = "carry_power_state"
 ATTR_DEVICE_ID = "device_id"
 ATTR_CONNECTED_ACCOUNTS = "connected_accounts"

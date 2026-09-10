@@ -85,6 +85,9 @@
     },
     "status_request_read_failed": {
       "message": "Der Zustand des Klimageräts {device} ließ sich nicht lesen, die Statusanfrage wurde deshalb nicht gesendet."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant sendet an die Klimaanlage {device} keine Statusanfragen mehr, weil dieses Gerät sich daraufhin selbst verstellt."
     }
   },
   "issues": {
@@ -93,8 +96,12 @@
       "description": "Diese Klimaanlage hat Platz für vier registrierte Konten, und alle vier sind belegt - Home Assistant kann sich deshalb nicht registrieren. Das Modul gibt von sich aus keinen Platz frei: Registrierungen laufen nicht ab, und eine neue wird abgewiesen, statt eine ältere zu ersetzen. Entfernen Sie das Gerät in der Smart-M-Air-App auf einem Telefon, das es nicht mehr braucht - jedes Konto kann nur sich selbst entfernen, und mehrere Telefone mit demselben Smart-M-Air-Konto belegen zusammen nur einen Platz. Laden Sie danach diese Integration neu. Wenn niemand einen Platz freigeben kann - etwa weil ein längst abgegebenes Telefon einen belegt -, muss das Modul neu eingerichtet werden."
     },
     "request_stops_unit": {
-      "title": "{device_name} schaltet sich ab, wenn Betriebsdaten abgefragt werden",
-      "description": "Die Diagnosesensoren für Verdichter, Strom und Temperaturen werden einmal pro Minute mit einer zusätzlichen Anfrage geholt. Diese Anfrage enthält keine Einstellungen — sie fragt nur — aber dieses Modul wendet einen Teil davon trotzdem an und liest ihn als „ausschalten“, sodass das Gerät jedes Mal stehen bleibt.\n\nHome Assistant hat die Anfrage jetzt auf eine Form umgestellt, die dem Gerät bestätigt, dass es läuft, statt das Feld auf null zu lassen. Damit sollte das Abschalten aufhören, ohne dass die Sensoren ausfallen. Bestätigt wird ausschließlich „an“: solange Home Assistant dieses Gerät für ausgeschaltet hält, geht gar keine Anfrage hinaus, und diese Sensoren behalten so lange ihren letzten Wert. Bitte einige Minuten beobachten.\n\nSchaltet es sich weiterhin ab, deaktivieren Sie an diesem Gerät die Betriebsdaten-Sensoren (Verdichterfrequenz, Betriebsstrom, Heißgastemperatur, EEV-Position und die Wärmetauschertemperaturen) und entfernen Sie eine in den Optionen eingetragene Raumtemperaturquelle — beides hängt an dieser Anfrage. Melden Sie es anschließend bitte, mit der Firmwareversion Ihres Moduls: Dieses Verhalten unterscheidet sich je Gerät, und nur eine Meldung von einem betroffenen kann es klären."
+      "title": "{device_name} verstellt sich selbst, wenn Betriebsdaten abgefragt werden",
+      "description": "Die Diagnosesensoren für Verdichter, Strom und Temperaturen werden einmal pro Minute mit einer zusätzlichen Anfrage geholt. Diese Anfrage enthält keine Einstellungen — sie fragt nur — aber dieses Modul wendet sie trotzdem an, und jedes leer gelassene Feld wird als Wert gelesen: das Gerät schaltet ab, der Modus springt auf Automatik, Lüfter und Lamellen fallen auf die erste Stufe, und der Sollwert sinkt auf den niedrigsten Wert, den das Gerät zulässt.\n\nHome Assistant hat die Anfrage jetzt so umgestellt, dass sie die Einstellungen dieses Geräts mitführt, unmittelbar vorher gelesen — der Frame bestätigt sie also, statt sie zu löschen. Genau so macht es auch die App des Herstellers. Die verlorenen Einstellungen wurden zurückgeschrieben. Solange Home Assistant dieses Gerät für ausgeschaltet hält, geht gar keine Anfrage hinaus, und diese Sensoren behalten so lange ihren letzten Wert.\n\nEs ist nichts weiter zu tun — bitte einige Minuten beobachten. Verstellt sich das Gerät weiterhin von selbst, stellt Home Assistant die Anfrage ganz ein und meldet das hier."
+    },
+    "status_request_unsupported": {
+      "title": "Von {device_name} lassen sich keine Betriebsdaten lesen",
+      "description": "Dieses Gerät verstellt sich selbst, sobald Betriebsdaten abgefragt werden — auch dann, wenn die Anfrage seine aktuellen Einstellungen mitführt. Es bleibt nichts mehr, was sich in diese Anfrage schreiben ließe und das Gerät in Ruhe lässt, deshalb sendet Home Assistant sie nicht mehr.\n\nWas das kostet: die daraus gespeisten Diagnosesensoren (Verdichterfrequenz, Betriebsstrom, Heißgastemperatur, EEV-Position und die Wärmetauscher-Temperaturen) werden nicht mehr aktualisiert, und eine in den Optionen eingestellte Raumtemperaturquelle lässt sich dem Gerät nicht mehr übergeben — beides hängt an dieser einen Anfrage. Alles andere bleibt unberührt: Ein/Aus, Modus, Temperatur, Lüfter und Lamellen gehen als gewöhnliche Befehle hinaus.\n\nBitte melden Sie das, zusammen mit der Firmware-Version Ihres Moduls. Nur von wenigen Geräten ist dieses Verhalten bekannt, und ohne Meldung lässt sich nicht daran arbeiten."
     }
   },
   "options": {

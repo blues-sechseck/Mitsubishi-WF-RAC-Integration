@@ -7,7 +7,7 @@ from collections import deque
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -24,16 +24,19 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     AC_CERT_FILENAME,
-    CONF_CARRY_POWER_STATE,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
+    CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     MIN_TIME_BETWEEN_UPDATES,
     OPERATION_MODE_COOL,
     OPERATION_MODE_DRY,
     OPERATION_MODE_HEAT,
+    STATUS_REQUEST_ECHO,
+    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STRICT,
 )
 from pywfrac import (
     Aircon,
@@ -171,11 +174,26 @@ FOREIGN_ACTIVITY_BACKOFF = timedelta(minutes=3)
 # point.
 WRITE_LOCK_RETRY_DELAY = timedelta(seconds=10)
 
-# How often a unit has to stop inside our own operation-data request before we
-# accept that the request is what stops it. See _check_request_stopped_unit():
-# the signal we have cannot separate us from another local client, so one
-# occurrence is a coincidence and two in a row is not.
-STOPPED_ON_REQUEST_BEFORE_CARRYING = 2
+# What the settings look like on a unit that applied an all-zero command block.
+# Every field in it decodes to the lowest value it can hold: power off, mode
+# auto, fan and both vane axes to their first position. The setpoint is not
+# listed because its zero is clamped by the unit to a floor we cannot know from
+# here (10 C on the one module that does this) - it is checked as "moved down"
+# instead. See _check_request_was_applied().
+EMPTY_BLOCK_SETTINGS: Final = {
+    "Operation": False,
+    "OperationMode": 0,
+    "AirFlow": 1,
+    "WindDirectionUD": 1,
+    "WindDirectionLR": 1,
+}
+
+# How many of those fields have to land on their zero value at once before we
+# call it applied rather than coincidence. Three, and only when no field moved
+# anywhere else in the same answer: somebody turning the fan down to step 1 and
+# the setpoint down with it would otherwise read as the fault, and the cost of
+# believing that is undoing the change they just made.
+EMPTY_BLOCK_MATCH_MIN: Final = 3
 
 # The lock runs 60 seconds, so a longer wait than that means the deadline was
 # stamped by a client whose clock is off rather than that the lock is really
@@ -248,8 +266,18 @@ AVAILABILITY_FAILURE_LIMIT_MIN = 3
 
 
 def request_stops_unit_issue_id(entry_id: str) -> str:
-    """Repair-issue id for a unit that stops when asked for operation data."""
+    """Repair-issue id for a unit that applies the request meant only to ask."""
     return f"request_stops_unit_{entry_id}"
+
+
+def status_request_unsupported_issue_id(entry_id: str) -> str:
+    """Repair-issue id for a unit we have stopped asking altogether.
+
+    Its own id rather than a second wording under the one above: the two say
+    different things and the second replaces the first, so the first has to be
+    withdrawn rather than overwritten.
+    """
+    return f"status_request_unsupported_{entry_id}"
 
 
 def registration_full_issue_id(entry_id: str) -> str:
@@ -283,7 +311,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             availability_failure_limit: int = AVAILABILITY_FAILURE_LIMIT_MIN,
             firmware_update_check_enabled: bool = False,
             connection_method: str | None = None,
-            status_request_carries_state: bool = False,
+            status_request_mode: str = STATUS_REQUEST_STRICT,
     ) -> None:
         self._api = Repository(
             async_get_clientsession(hass),
@@ -298,7 +326,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # Carried over from a previous run: a module that applies a frame it
         # was not asked to apply has always done so, and relearning costs the
         # unit the same disturbance every time.
-        self._parser.status_request_carries_state = status_request_carries_state
+        self._status_request_mode = status_request_mode
+        self._parser.status_request_carries_state = (
+            status_request_mode == STATUS_REQUEST_ECHO
+        )
 
         # Protected state
         self._airco = Aircon()
@@ -312,7 +343,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firmware = ""
         self._connected_accounts = -1
         self._updated_by: str | None = None
-        self._stopped_on_request = 0
         self._account_expires: int | None = None
         self._led_status: int | None = None
         self._auto_heating: int | None = None
@@ -970,15 +1000,18 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             and dt_util.utcnow() < self._foreign_activity_until
         )
 
-    def _power_state_is_safe_to_carry(self) -> bool:
+    def _status_request_is_allowed(self) -> bool:
         """Whether an operation-data request may go out right now.
 
-        Only False on a unit that carries its state (#329) while we believe it
-        is off, because there the block is applied rather than ignored. Sending
-        it empty instead is the original fault - the module reads the zeros as
-        a command to clear the settings - and a reading taken while the unit is
-        off is worth little, so it waits for a poll that finds it running.
+        False on a unit we have given up asking (#329), and false on one that
+        carries its state while we believe it is off: there the block is
+        applied rather than ignored, so an "off" read a moment before the frame
+        goes out would be written back as a command if the remote switched the
+        unit on in between. A reading taken while the unit is off is worth
+        little anyway, so it waits for a poll that finds it running.
         """
+        if self._status_request_mode == STATUS_REQUEST_SILENT:
+            return False
         return not self._parser.status_request_carries_state or bool(
             self._airco is not None and self._airco.Operation
         )
@@ -990,7 +1023,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         service_data_codes = self._subscribed_service_data_codes()
         if not service_data_codes:
             return
-        if not self._power_state_is_safe_to_carry():
+        if not self._status_request_is_allowed():
             return
         if self.foreign_activity:
             # Skipped entirely rather than deferred: this request would take
@@ -1085,19 +1118,23 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             and not await self._async_read_before_echo()
         ):
             return
-        if not self._power_state_is_safe_to_carry():
+        if not self._status_request_is_allowed():
             # Re-checked after the sleep, not only when the request was
             # scheduled: the offset is up to half a minute, and the unit going
             # off inside it is exactly the window this protects.
             _LOGGER.debug(
-                "Skipping the operation-data request for [%s]: the unit is "
-                "off and this request would carry its power state",
+                "Skipping the operation-data request for [%s]: it is either "
+                "not sent to this unit at all, or the unit is off and the "
+                "request would carry that state back to it",
                 self.device_name,
             )
             return
         params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
         timestamp_offset = -round(self._service_data_stamp_backdate().total_seconds())
-        was_running = self._airco is not None and self._airco.Operation
+        # Taken here rather than at the poll: what the response has to be read
+        # against is the state this very frame was built from, and on the echo
+        # path _async_read_before_echo() has just refreshed it.
+        before = self._settings_snapshot()
         for attempt in (1, 2):
             try:
                 await self.set_airco(
@@ -1109,7 +1146,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
-                self._check_request_stopped_unit(was_running)
+                self._check_request_was_applied(before)
                 self._note_service_data_offset_survived()
                 # Notify, but deliberately not through async_set_updated_data():
                 # that resets the refresh timer, and this runs half a cycle
@@ -1330,78 +1367,160 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             SERVICE_DATA_OFFSET_GOOD_CYCLES,
         )
 
-    def _check_request_stopped_unit(self, was_running: bool) -> None:
-        """Notice a unit that switches off because we asked it for readings.
+    def _empty_block_matches(self, before: Mapping[str, Any]) -> list[str]:
+        """The settings that moved to exactly what an all-zero command block
+        encodes, comparing the state before our own status request with the one
+        the unit answered it with. Empty when anything moved somewhere else.
 
-        The operation-data request carries no set-bits, so on the hardware this
-        was developed against it changes nothing. On at least one module
-        (firmType WCBN4612L, issue #329) the zero in command[2] is applied as
-        "power off" instead, and since the request repeats every 60s the unit
-        cannot be kept running at all while any operation-data sensor is
-        enabled.
+        That veto is what separates this from an ordinary change. A block
+        applied as zeros lands every field on its minimum at once; a person at
+        the remote picks values, and one field moving to a value of its own is
+        enough to say this was not our frame being applied.
 
-        Rather than guess from firmType - the bridge MCU handles this frame
-        identically across firmware branches, so the branch is the wrong thing
-        to gate on - this watches for the symptom and reacts once. From then on
-        the request carries the unit's own power state back to it, which
-        confirms the state instead of changing it.
-
-        updatedBy is what keeps this honest: "aircon" means the change was made
-        at the unit, so somebody reached for the remote in the same second and
-        this is not our doing.
+        The setpoint counts when it moved *down*: its zero is clamped by the
+        unit to a floor we do not know from here, so the value cannot be
+        predicted - only the direction can. Upwards it is a contradiction like
+        any other.
         """
-        if not was_running or self._parser.status_request_carries_state:
+        if self._airco is None:
+            return []
+        matched: list[str] = []
+        for name, zero in EMPTY_BLOCK_SETTINGS.items():
+            if before.get(name) == getattr(self._airco, name):
+                continue
+            if getattr(self._airco, name) != zero:
+                return []
+            matched.append(name)
+        setpoint_before = before.get("PresetTemp")
+        if setpoint_before is not None and self._airco.PresetTemp != setpoint_before:
+            if self._airco.PresetTemp > setpoint_before:
+                return []
+            matched.append("PresetTemp")
+        return matched
+
+    def _check_request_was_applied(self, before: Mapping[str, Any] | None) -> None:
+        """Notice a unit that applies the request we only meant to ask with.
+
+        A status request has no set-bits, so on every unit we have measured it
+        changes nothing. On at least one it is applied field by field instead
+        (issue #329): the zeros become power off, mode auto, fan and both vanes
+        to position 1, and a setpoint of zero clamped up to the unit's heating
+        floor. Since the request repeats every minute, such a unit cannot be
+        held at any setting at all while one operation-data sensor is enabled.
+
+        What is watched for is that whole pattern, not the shutdown alone. The
+        shutdown is only its most visible part and it is also the part a unit
+        that is already off can no longer show - which is where the earlier
+        version of this got stuck, on the one unit it was written for.
+
+        One occurrence is enough. The test is not that something moved but that
+        everything that moved landed on its minimum at the moment of our own
+        request, and nothing else does that: the remote and the app write the
+        values somebody chose.
+
+        Escalates rather than gives up. First occurrence switches the request
+        to carrying the unit's own settings, which is the shape the
+        manufacturer's app uses and should make the frame confirm them. A
+        second occurrence in that shape means the frame is not what the unit
+        objects to, and then the only honest answer is to stop sending it.
+        """
+        if before is None or self._status_request_mode == STATUS_REQUEST_SILENT:
             return
-        if self._airco is None or self._airco.Operation:
-            self._stopped_on_request = 0
+        matched = self._empty_block_matches(before)
+        if len(matched) < EMPTY_BLOCK_MATCH_MIN:
             return
-        # Deliberately not filtered by updatedBy. It is only ever refreshed by
-        # a poll, so at this point it names whoever wrote last *before* us -
-        # and on a unit started with the IR remote that is the remote, every
-        # time. Requiring it to name a local writer would have meant never
-        # detecting the fault on a unit its owner switches on by remote, which
-        # is the likeliest way to meet it at all. The repetition below carries
-        # the weight instead.
-        self._stopped_on_request += 1
-        if self._stopped_on_request < STOPPED_ON_REQUEST_BEFORE_CARRYING:
-            # Once is a coincidence worth surviving: "local" covers us and any
-            # app on the same network, so an app switching the unit off in the
-            # second our request lands looks exactly like this. The real fault
-            # repeats every cycle; a coincidence does not repeat twice running.
-            _LOGGER.debug(
-                "[%s] stopped during our operation-data request (%s of %s "
-                "before the request starts carrying the power state)",
+        changed = ", ".join(
+            f"{name} {before[name]} -> {getattr(self._airco, name)}"
+            for name in matched
+        )
+        if self._status_request_mode == STATUS_REQUEST_STRICT:
+            self._adopt_status_request_mode(STATUS_REQUEST_ECHO)
+            _LOGGER.warning(
+                "[%s] applied the settings in the request that asked it for "
+                "operation data, which carries none: %s. From now on that "
+                "request carries the unit's own settings back to it, so the "
+                "frame confirms them instead of clearing them",
                 self.device_name,
-                self._stopped_on_request,
-                STOPPED_ON_REQUEST_BEFORE_CARRYING,
+                changed,
             )
-            return
-        self._parser.status_request_carries_state = True
-        # Written down, not just remembered: this is a property of the module
-        # in front of us, and a restart that forgot it would put the unit
-        # through the same shutdowns again to learn the same thing.
-        entry = self.config_entry
-        self.hass.config_entries.async_update_entry(
-            entry, data={**entry.data, CONF_CARRY_POWER_STATE: True}
-        )
-        _LOGGER.warning(
-            "[%s] switched off in the same request in which we asked it for "
-            "operation data. That request carries no settings, so this module "
-            "applies a field it should ignore. From now on the request carries "
-            "the unit's own power state back to it, which should stop this. "
-            "If the unit keeps switching off, disable its operation-data "
-            "sensors (compressor, current, temperatures) and please report it",
-            self.device_name,
-        )
+        else:
+            self._adopt_status_request_mode(STATUS_REQUEST_SILENT)
+            _LOGGER.warning(
+                "[%s] changed its settings during an operation-data request "
+                "that carried its own state: %s. Nothing this integration can "
+                "put in that frame leaves the unit alone, so it will not be "
+                "sent again. The operation-data sensors and the external "
+                "temperature override stop working on this unit; everything "
+                "else is unaffected",
+                self.device_name,
+                changed,
+            )
+        self.hass.async_create_task(self._async_restore_settings(before))
+        if self._status_request_mode == STATUS_REQUEST_SILENT:
+            # The advice in the first issue - watch it for a few minutes - has
+            # been overtaken by what just happened.
+            ir.async_delete_issue(
+                self.hass, DOMAIN, request_stops_unit_issue_id(self.entry_id)
+            )
         ir.async_create_issue(
             self.hass,
             DOMAIN,
-            request_stops_unit_issue_id(self.entry_id),
+            request_stops_unit_issue_id(self.entry_id)
+            if self._status_request_mode == STATUS_REQUEST_ECHO
+            else status_request_unsupported_issue_id(self.entry_id),
             is_fixable=False,
             severity=ir.IssueSeverity.WARNING,
-            translation_key="request_stops_unit",
+            translation_key=(
+                "request_stops_unit"
+                if self._status_request_mode == STATUS_REQUEST_ECHO
+                else "status_request_unsupported"
+            ),
             translation_placeholders={"device_name": self.device_name},
         )
+
+    def _adopt_status_request_mode(self, mode: str) -> None:
+        """Switch the shape of the status request and write the choice down.
+
+        Persisted because it is a property of the unit in front of us, not of
+        this run: a restart that forgot it would put the unit through the same
+        disturbance again to learn the same thing - which is exactly what the
+        counter this replaced did, every time an update restarted Home
+        Assistant.
+        """
+        self._status_request_mode = mode
+        self._parser.status_request_carries_state = mode == STATUS_REQUEST_ECHO
+        entry = self.config_entry
+        self.hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_STATUS_REQUEST_MODE: mode}
+        )
+
+    async def _async_restore_settings(self, before: Mapping[str, Any]) -> None:
+        """Put back what the request just cleared.
+
+        The values are one round trip old rather than current, which is the
+        same freshness the echo itself runs on - and the alternative is
+        leaving the unit on settings nobody chose until somebody notices. Only
+        reached on the one frame that revealed the fault, so it cannot become
+        a loop: by the time it runs, the mode has already changed.
+        """
+        try:
+            await self.set_airco(
+                {
+                    AirconCommands.Operation: before["Operation"],
+                    AirconCommands.OperationMode: before["OperationMode"],
+                    AirconCommands.PresetTemp: before["PresetTemp"],
+                    AirconCommands.AirFlow: before["AirFlow"],
+                    AirconCommands.WindDirectionUD: before["WindDirectionUD"],
+                    AirconCommands.WindDirectionLR: before["WindDirectionLR"],
+                },
+                log_failure=False,
+            )
+        except (WfRacError, KeyError, TypeError, ValueError) as ex:
+            _LOGGER.warning(
+                "Could not restore the settings [%s] lost to our own request: %s",
+                self.device_name,
+                ex,
+            )
 
     def _report_registration_full(self) -> None:
         ir.async_create_issue(
@@ -1625,6 +1744,14 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         a setting up to a poll old and undo whatever was done at the unit since
         - including switching a unit off that somebody just turned on.
         """
+        if self._status_request_mode == STATUS_REQUEST_SILENT:
+            # This unit changes its settings whatever we put in the frame, so
+            # the frame is not sent at all any more (#329).
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="status_request_not_sent",
+                translation_placeholders={"device": self.device_name},
+            )
         if (
             self._parser.status_request_carries_state
             and not await self._async_read_before_echo()

@@ -21,16 +21,20 @@ from .const import (
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CARRY_POWER_STATE,
+    CONF_STATUS_REQUEST_MODE,
     CONF_CONNECTION_METHOD,
     CONF_FIRMWARE_UPDATE_CHECK,
     CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
     DOMAIN,
+    STATUS_REQUEST_ECHO,
+    STATUS_REQUEST_STRICT,
 )
 from .coordinator import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
     Device,
     registration_full_issue_id,
     request_stops_unit_issue_id,
+    status_request_unsupported_issue_id,
 )
 from .services import async_setup_services
 
@@ -211,15 +215,22 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
         CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN
     )
     connection_method: str | None = entry.data.get(CONF_CONNECTION_METHOD)
-    # The stored key predates the fix and named only the power bit; the flag
-    # it sets now decides whether the whole state is carried.
-    carries_state: bool = bool(entry.data.get(CONF_CARRY_POWER_STATE, False))
+    # Not migrated in async_migrate_entry: this is learned state, not
+    # configuration, and an entry that has never met the fault simply has
+    # neither key. The old one is honoured where it exists so a beta tester
+    # who already paid for the discovery does not pay again.
+    status_request_mode: str = entry.data.get(
+        CONF_STATUS_REQUEST_MODE,
+        STATUS_REQUEST_ECHO
+        if entry.data.get(CONF_CARRY_POWER_STATE, False)
+        else STATUS_REQUEST_STRICT,
+    )
     _device = Device(hass, entry, name, device, port, device_id, operator_id, airco_id,
                      swing_selects_enabled_default,
                      availability_failure_limit=availability_failure_limit,
                      firmware_update_check_enabled=firmware_update_check_enabled,
                      connection_method=connection_method,
-                     status_request_carries_state=carries_state)
+                     status_request_mode=status_request_mode)
     return _device
 
 
@@ -271,3 +282,6 @@ async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
     # pointing at an entry_id that no longer resolves to anything.
     ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
     ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
+    ir.async_delete_issue(
+        hass, DOMAIN, status_request_unsupported_issue_id(entry.entry_id)
+    )
