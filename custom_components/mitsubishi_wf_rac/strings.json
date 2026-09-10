@@ -64,6 +64,10 @@
     "status_request_unsupported": {
       "title": "Operation data cannot be read from {device_name}",
       "description": "This unit changes its own settings whenever it is asked for operation data, and it does so even when the request carries its current settings back to it. There is nothing left to put in that request that this unit leaves alone, so Home Assistant has stopped sending it.\n\nWhat that costs: the diagnostic sensors fed by it (compressor frequency, operating current, hot gas temperature, EEV position and the coil temperatures) no longer update, and an indoor temperature source configured in the integration's options can no longer be passed to the unit - both ride on that one request. Everything else is unaffected: power, mode, temperature, fan and louvres are sent as ordinary commands and are not touched by this.\n\nPlease report this, including your module's firmware version. Only two units are known to behave this way, and a report is the only way it can be worked on."
+    },
+    "service_data_unanswered": {
+      "title": "Operation data is not available from {device_name}",
+      "description": "The diagnostic sensors for compressor, current, temperatures and EEV position are read with an extra request once a minute. This unit accepts that request and answers it, but has never returned a single segment in it - so those sensors were never going to show a value, whatever the request looks like.\n\nHome Assistant has stopped asking. The sensors now say unavailable rather than unknown, which is the honest difference: a reading is not late, there is none. You can disable them on this device; nothing is lost, and it takes them out of view.\n\nEverything else is unaffected - power, mode, temperature, fan and louvres are ordinary commands and do not use this channel. An indoor temperature source set in the integration's options keeps working too: it travels on the same request, which is still sent for it.\n\nReloading the integration makes it try again, in case this was temporary."
     }
   },
   "options": {

@@ -57,6 +57,7 @@ from pywfrac.parser import (
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
+    SERVICE_DATA_PROTECTION_RAW,
     SERVICE_DATA_HOT_GAS_TEMP,
     SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
     SERVICE_DATA_INDOOR_COIL_RAW,
@@ -98,6 +99,23 @@ def _build_stat_response(content: list[int]) -> str:
     prefix = [0] * 21
     tail = [0, 0]
     raw = bytes((b & 0xFF) for b in (prefix + list(content) + tail))
+    return base64.b64encode(raw).decode()
+
+
+def _build_stat_response_with_segments(
+    content: list[int], segments: list[tuple[int, int, int, int]]
+) -> str:
+    """Like _build_stat_response, plus operation-data segments in the trailer.
+
+    translate_bytes() reads the trailer from start_length + 19 to the last two
+    bytes, so the one byte between the state block and the segments is skipped
+    on the way in and only has to be there.
+    """
+    assert len(content) == 18
+    body = [0] * 21 + list(content) + [0]
+    for segment in segments:
+        body += list(segment)
+    raw = bytes((b & 0xFF) for b in (body + [0, 0]))
     return base64.b64encode(raw).decode()
 
 
@@ -2013,6 +2031,15 @@ async def _run_service_data_request(device, monkeypatch, ceiling_ms: int = 1):
     await asyncio.sleep(0.05)
 
 
+def _content_of(payload: str) -> list[int]:
+    """The 18 state bytes inside a captured payload."""
+    raw = [
+        (256 - b) * (-1) if b > 127 else b for b in base64.b64decode(payload)
+    ]
+    start = raw[18] * 4 + 21
+    return raw[start:start + 18]
+
+
 def _cleared_payload() -> str:
     """A running unit's capture rewritten to what an applied all-zero command
     block leaves behind: off, mode auto, fan and both vanes at position 1, and
@@ -2165,6 +2192,79 @@ async def test_a_change_after_a_real_command_is_not_blamed_on_the_request(
     await device.update()
 
     assert device._parser.status_request_carries_state is False
+
+
+async def test_a_reading_of_zero_counts_as_an_answer(device, monkeypatch):
+    """Giving up must never rest on the value.
+
+    Several of these fields sit at zero for hours quite legitimately - the
+    overload-protection byte reads 0 on every unit measured so far, including
+    while the protection is demonstrably engaged. What is counted is whether a
+    segment arrived at all, which is why the check is `is not None` and not a
+    truth test.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    answered_with_zero = _build_stat_response_with_segments(
+        _content_of(ON_COOL_PAYLOAD),
+        [(SERVICE_DATA_PROTECTION_RAW, 0xFF, 0, 0)],
+    )
+    device._api.send_airco_command = AsyncMock(return_value=answered_with_zero)
+    for _ in range(coordinator_module.SERVICE_DATA_UNANSWERED_LIMIT * 2):
+        await _run_service_data_request(device, monkeypatch)
+
+    assert device.airco.ProtectionRaw == 0
+    assert device.service_data_supported is True
+
+
+async def test_a_unit_that_answers_nothing_at_all_is_given_up_on(
+    device, monkeypatch
+):
+    """Wasbiertje's unit (#329): it takes the request and replies, but has
+    never once put a segment in the reply - so the sensors were never going to
+    have a value, and asking every minute is a write spent on nothing.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    empty_answer = _build_stat_response_with_segments(
+        _content_of(ON_COOL_PAYLOAD), []
+    )
+    device._api.send_airco_command = AsyncMock(return_value=empty_answer)
+    for _ in range(coordinator_module.SERVICE_DATA_UNANSWERED_LIMIT):
+        await _run_service_data_request(device, monkeypatch)
+
+    assert device.service_data_supported is False
+
+    # And it stops asking.
+    device._api.send_airco_command = AsyncMock(return_value=empty_answer)
+    await _run_service_data_request(device, monkeypatch)
+    device._api.send_airco_command.assert_not_awaited()
+
+
+async def test_giving_up_on_the_channel_is_not_written_down(device, monkeypatch):
+    """Unlike the frame shape. Relearning that costs the user a unit that
+    clears its settings; relearning this costs ten requests - so a module that
+    starts answering is picked up again after a reload rather than written off
+    for good.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    empty_answer = _build_stat_response_with_segments(
+        _content_of(ON_COOL_PAYLOAD), []
+    )
+    device._api.send_airco_command = AsyncMock(return_value=empty_answer)
+    for _ in range(coordinator_module.SERVICE_DATA_UNANSWERED_LIMIT):
+        await _run_service_data_request(device, monkeypatch)
+
+    assert device.service_data_supported is False
+    assert CONF_STATUS_REQUEST_MODE not in device.config_entry.data
+    assert "service_data_unsupported" not in device.config_entry.data
 
 
 async def test_an_echo_that_still_moves_the_unit_stops_the_request(
