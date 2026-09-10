@@ -624,10 +624,16 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                 )
             ),
         }
-        # The overshoot corrections act on the room temperature handed to the
-        # unit, so without a source there is no value to bend and the fields
-        # do nothing at all. They appear once a source is picked and saved -
-        # a form cannot rebuild itself while it is open.
+        # Tied to the source picker on purpose, and not because the correction
+        # needs one: _corrected_external_temperature() bends whatever value is
+        # armed, including one set from the action. A source entity is what
+        # makes the corrections worth offering - it is watched, so a reading
+        # that goes unavailable or unusable clears the override and hands the
+        # unit back to its own sensor, while a value armed from the action
+        # stays until something clears it. Showing the fields without a source
+        # would recommend the arrangement that has no fallback (#218). They
+        # appear once a source is picked and saved - a form cannot rebuild
+        # itself while it is open.
         if self._source_configured:
             source_fields.update(
                 {
