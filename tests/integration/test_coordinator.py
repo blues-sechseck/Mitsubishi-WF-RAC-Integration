@@ -2121,6 +2121,52 @@ async def test_a_unit_that_is_already_off_is_still_detected(device, monkeypatch)
     assert device._parser.status_request_carries_state is True
 
 
+async def test_a_change_that_only_shows_up_at_the_next_poll_is_still_detected(
+    device, monkeypatch
+):
+    """The timing the affected unit actually has (#329, log of 10.09.2026).
+
+    The module answers our request out of its own cache, and the frame's trip
+    down the CNS bus to the indoor unit need not have finished by then: his
+    request went out at 19:25:37 and the cleared setpoint, fan and both vanes
+    appeared in the poll at 19:26:08, not in the answer. A detector reading
+    only the answer would have the same blind spot as the one it replaced.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    # The answer still shows the unit as it was.
+    device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
+    await _run_service_data_request(device, monkeypatch)
+    assert device._parser.status_request_carries_state is False
+
+    device._api.get_aircon_stats.return_value = _stats_response(CLEARED_PAYLOAD)
+    await device.update()
+
+    assert device._parser.status_request_carries_state is True
+    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_ECHO
+
+
+async def test_a_change_after_a_real_command_is_not_blamed_on_the_request(
+    device, monkeypatch
+):
+    """A command of our own explains what moves after it, so the status
+    request before it stops having to answer for the next poll."""
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
+    await _run_service_data_request(device, monkeypatch)
+    await device.set_airco({AirconCommands.Operation: False})
+
+    device._api.get_aircon_stats.return_value = _stats_response(CLEARED_PAYLOAD)
+    await device.update()
+
+    assert device._parser.status_request_carries_state is False
+
+
 async def test_an_echo_that_still_moves_the_unit_stops_the_request(
     device, monkeypatch
 ):

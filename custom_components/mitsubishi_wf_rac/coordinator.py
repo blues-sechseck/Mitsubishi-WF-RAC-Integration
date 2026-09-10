@@ -343,6 +343,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firmware = ""
         self._connected_accounts = -1
         self._updated_by: str | None = None
+        # The settings a status request was built from, kept until something
+        # has been able to answer for them - see _check_request_was_applied().
+        self._request_baseline: dict[str, Any] | None = None
         self._account_expires: int | None = None
         self._led_status: int | None = None
         self._auto_heating: int | None = None
@@ -832,6 +835,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._note_unexpected_settings(
             wrote_settings or (expires_moved and not wrote)
         )
+        # After the settings diff, because the poll that carries the evidence
+        # is the one that has just refreshed the state it is read from.
+        self._check_request_was_applied(self._request_baseline)
+        self._request_baseline = None
         self._report_foreign_activity()
 
     def _note_foreign_write(self, evidence: str) -> None:
@@ -1131,10 +1138,17 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             return
         params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
         timestamp_offset = -round(self._service_data_stamp_backdate().total_seconds())
-        # Taken here rather than at the poll: what the response has to be read
+        # Taken here rather than at the poll: what the answer has to be read
         # against is the state this very frame was built from, and on the echo
         # path _async_read_before_echo() has just refreshed it.
         before = self._settings_snapshot()
+        # Kept for the poll as well. The module answers our request with its
+        # own cached state, and the frame's trip down the CNS bus to the indoor
+        # unit need not have finished by then - measured on the affected unit,
+        # the settings it cleared showed up a poll later, not in the answer
+        # (#329). Checking only the answer would have reproduced the blind spot
+        # this detector was rewritten to close.
+        self._request_baseline = before
         for attempt in (1, 2):
             try:
                 await self.set_airco(
@@ -1455,6 +1469,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self.device_name,
                 changed,
             )
+        # Answered for: without this the poll would read the same change again
+        # and escalate a step that has just been taken.
+        self._request_baseline = None
         self.hass.async_create_task(self._async_restore_settings(before))
         if self._status_request_mode == STATUS_REQUEST_SILENT:
             # The advice in the first issue - watch it for a few minutes - has
@@ -1661,6 +1678,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # our expectation would swallow whole.
                 if not is_status_request:
                     self._expected_settings = self._settings_snapshot()
+                    # A real command explains any settings that move after it,
+                    # so the status request before it no longer has to.
+                    self._request_baseline = None
                 # After the write, and only for what the frame really carried:
                 # a command sent while the unit is off writes the sentinel, not
                 # the override.
