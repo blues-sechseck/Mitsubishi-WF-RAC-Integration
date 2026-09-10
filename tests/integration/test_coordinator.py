@@ -19,7 +19,9 @@ from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.const import (
-    CONF_CARRY_POWER_STATE,
+    CONF_STATUS_REQUEST_MODE,
+    STATUS_REQUEST_ECHO,
+    STATUS_REQUEST_SILENT,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
@@ -2011,101 +2013,181 @@ async def _run_service_data_request(device, monkeypatch, ceiling_ms: int = 1):
     await asyncio.sleep(0.05)
 
 
-async def test_a_unit_that_stops_on_our_request_twice_gets_its_power_state_carried(
+def _cleared_payload() -> str:
+    """A running unit's capture rewritten to what an applied all-zero command
+    block leaves behind: off, mode auto, fan and both vanes at position 1, and
+    a setpoint of zero clamped up to the 10 C heating floor - the four fields
+    Wasbiertje's log showed moving together (#329).
+    """
+    raw = [
+        (256 - b) * (-1) if b > 127 else b
+        for b in base64.b64decode(ON_COOL_PAYLOAD)
+    ]
+    start = raw[18] * 4 + 21
+    content = raw[start:start + 18]
+    content[2] = 0
+    content[3] = 0
+    content[4] = 20  # the unit's own floor, not the zero it was sent
+    content[11] = 0
+    content[12] = 0
+    return _build_stat_response(content)
+
+
+CLEARED_PAYLOAD = _cleared_payload()
+
+
+async def test_a_unit_that_applies_our_request_is_switched_to_carrying_its_state(
     device, monkeypatch
 ):
     """The request carries no set-bits, so nothing should change - but one
-    module applies command[2] anyway and reads the zero as "off" (#329).
+    module applies every field anyway (#329), and the zeros land as power off,
+    mode auto, fan and vanes at 1 and the setpoint on the unit's floor.
 
-    Detected from the symptom rather than from firmType: the bridge MCU
+    Detected from that whole pattern rather than from firmType: the bridge MCU
     handles this frame identically across firmware branches, so the branch
-    would be the wrong thing to gate on. Twice, because the signal cannot
-    separate us from another client on the same network.
+    would be the wrong thing to gate on. One occurrence is enough - the test is
+    not that something moved but that everything that moved landed on its
+    minimum, and nothing else does that.
     """
     # Registered, so the entry can actually be written to - see _set_options.
     device.config_entry.add_to_hass(device.hass)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
-    assert device.airco.Operation is True
     assert device._parser.status_request_carries_state is False
 
-    # The unit answers our own request having switched itself off.
-    device._api.send_airco_command = AsyncMock(return_value=OFF_PAYLOAD)
+    device._api.send_airco_command = AsyncMock(return_value=CLEARED_PAYLOAD)
     await _run_service_data_request(device, monkeypatch)
-    assert device._parser.status_request_carries_state is False
 
+    assert device._parser.status_request_carries_state is True
+    # Written down, so the next start does not put the unit through the same
+    # disturbance to learn the same thing (#329, reported again after an update
+    # had reset the counter this replaced).
+    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_ECHO
+
+
+async def test_the_settings_the_request_cleared_are_written_back(
+    device, monkeypatch
+):
+    """Detection alone would leave the unit on values nobody chose.
+
+    The values put back are one round trip old, which is the same freshness
+    the echo itself runs on - and the alternative is a unit sitting at 10 C
+    until somebody notices.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    before = device._settings_snapshot()
+
+    sent: list[dict] = []
+    real_set_airco = device.set_airco
+
+    async def _record(params, **kwargs):
+        sent.append(params)
+        await real_set_airco(params, **kwargs)
+
+    monkeypatch.setattr(device, "set_airco", _record)
+    device._api.send_airco_command = AsyncMock(return_value=CLEARED_PAYLOAD)
+    await _run_service_data_request(device, monkeypatch)
+    await asyncio.sleep(0.05)
+
+    assert len(sent) == 2, "expected the request, then a frame putting it back"
+    restore = sent[-1]
+    assert restore[AirconCommands.PresetTemp] == before["PresetTemp"]
+    assert restore[AirconCommands.Operation] == before["Operation"]
+    assert restore[AirconCommands.OperationMode] == before["OperationMode"]
+    assert restore[AirconCommands.AirFlow] == before["AirFlow"]
+
+
+async def test_a_unit_that_is_already_off_is_still_detected(device, monkeypatch):
+    """The case the earlier detector could not see.
+
+    It watched for the unit switching off, which a unit that is already off can
+    no longer do - so on the one unit it was written for it stopped firing
+    after the first shutdown, while every following request went on clearing
+    the setpoint, the mode, the fan and both vanes.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    running_but_off = _stats_response(ON_COOL_PAYLOAD)
+    device._api.get_aircon_stats.return_value = running_but_off
+    await device.update()
+    # Off, but with its settings intact - the state his unit sat in for five
+    # betas.
+    device._airco.Operation = False
+
+    device._api.send_airco_command = AsyncMock(return_value=CLEARED_PAYLOAD)
+    await _run_service_data_request(device, monkeypatch)
+
+    assert device._parser.status_request_carries_state is True
+
+
+async def test_an_echo_that_still_moves_the_unit_stops_the_request(
+    device, monkeypatch
+):
+    """The escalation. If the frame confirms the unit's own settings and the
+    unit changes them anyway, the frame is not what it objects to - and then
+    the only honest answer is to stop sending it, rather than to keep the unit
+    unusable for the sake of five diagnostic sensors.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device._status_request_mode = STATUS_REQUEST_ECHO
+    device._parser.status_request_carries_state = True
+
+    device._api.send_airco_command = AsyncMock(return_value=CLEARED_PAYLOAD)
+    await _run_service_data_request(device, monkeypatch)
+
+    assert device._status_request_mode == STATUS_REQUEST_SILENT
+    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_SILENT
+
+    # And nothing is asked of it again.
+    device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     await _run_service_data_request(device, monkeypatch)
-    assert device._parser.status_request_carries_state is True
-    # Written down, so the next start does not put the unit through the same
-    # shutdowns to learn the same thing (#329, reported again after an update
-    # had reset it).
-    assert device.config_entry.data[CONF_CARRY_POWER_STATE] is True
+    device._api.send_airco_command.assert_not_awaited()
 
 
-async def test_a_learned_power_state_quirk_survives_a_restart(hass):
-    """A module that needs the power state has always needed it.
-
-    The flag used to live only in memory, so every restart and every reload
-    started the count from zero - and the unit paid for it again each time.
+async def test_an_ordinary_change_at_the_unit_is_not_read_as_the_fault(
+    device, monkeypatch
+):
+    """Somebody using the remote while our request is in flight moves fields to
+    the values they chose. Only the fault sweeps the whole block to the bottom.
     """
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_CARRY_POWER_STATE: True})
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    device._api.send_airco_command = AsyncMock(return_value=FAN_SPEED_4_PAYLOAD)
+    await _run_service_data_request(device, monkeypatch)
+
+    assert device._parser.status_request_carries_state is False
+    assert CONF_STATUS_REQUEST_MODE not in device.config_entry.data
+
+
+async def test_a_learned_status_request_mode_survives_a_restart(hass):
+    """A module that applies the request has always applied it.
+
+    The decision used to live only in memory as a counter, so every restart
+    and every reload started it from zero - and the unit paid for it again
+    each time. An update restarts Home Assistant, which is how the one
+    affected tester never reached the threshold at all.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_ECHO}
+    )
     entry.add_to_hass(hass)
     device = Device(
         hass, entry, "Test AC", "127.0.0.1", 51443, "device-id", "operator-id",
         "airco-id", swing_selects_enabled_default=True,
-        status_request_carries_state=bool(entry.data.get(CONF_CARRY_POWER_STATE, False)),
+        status_request_mode=entry.data[CONF_STATUS_REQUEST_MODE],
     )
     device._api = AsyncMock()
 
     assert device._parser.status_request_carries_state is True
 
     await device.async_shutdown()
-
-
-async def test_a_single_stop_during_our_request_is_not_enough(device, monkeypatch):
-    """"local" is what the module reports for us and for any app on the same
-    network alike, so one occurrence can just as well be somebody switching
-    the unit off in the second our request lands. The real fault repeats.
-    """
-    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    await device.update()
-    device._api.send_airco_command = AsyncMock(return_value=OFF_PAYLOAD)
-    await _run_service_data_request(device, monkeypatch)
-
-    # A cycle in which the unit keeps running clears the count again.
-    device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
-    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    await device.update()
-    await _run_service_data_request(device, monkeypatch)
-
-    device._api.send_airco_command = AsyncMock(return_value=OFF_PAYLOAD)
-    await device.update()
-    await _run_service_data_request(device, monkeypatch)
-
-    assert device._parser.status_request_carries_state is False
-
-
-async def test_a_unit_started_by_remote_is_still_detected(device, monkeypatch):
-    """The likeliest way to meet this fault is to switch the unit on at the
-    unit and watch it stop.
-
-    updatedBy is only refreshed by a poll, so at the moment of the check it
-    names whoever wrote last *before* us - on a unit started by remote, the
-    remote. Filtering the check by it would have meant never detecting the
-    fault on exactly the units whose owners run into it.
-    """
-    running_by_remote = _stats_response(ON_COOL_PAYLOAD)
-    running_by_remote["updatedBy"] = "aircon"
-    device._api.get_aircon_stats.return_value = running_by_remote
-    device._api.send_airco_command = AsyncMock(return_value=OFF_PAYLOAD)
-
-    for _ in range(2):
-        await device.update()
-        await _run_service_data_request(device, monkeypatch)
-
-    assert device._parser.status_request_carries_state is True
 
 
 async def test_a_unit_switched_off_at_the_unit_is_not_blamed_on_us(

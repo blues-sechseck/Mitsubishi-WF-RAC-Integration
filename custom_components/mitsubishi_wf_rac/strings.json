@@ -58,8 +58,12 @@
       "description": "This unit has room for four registered accounts and all four are taken, so Home Assistant cannot register itself. The module never frees a slot by itself: registrations do not expire, and a new one is refused rather than replacing an older one. In the Smart M-Air app, remove this unit from a phone that no longer needs it - each account can only remove itself, and several phones sharing one Smart M-Air account take up a single slot between them. Then reload this integration. If nobody can free a slot - a phone that is long gone still holds one - the module has to be set up again from scratch."
     },
     "request_stops_unit": {
-      "title": "{device_name} switches off when asked for operation data",
-      "description": "The diagnostic sensors for compressor, current and temperatures are read with an extra request once a minute. That request carries no settings - it only asks - but this module applies part of it anyway and reads it as \"switch off\", so the unit stops every time it arrives.\n\nHome Assistant has switched that request to a form that confirms the unit is running instead of leaving the field at zero, which should stop the unit switching off while keeping the sensors working. It only ever confirms \"on\": while Home Assistant believes this unit is off, no request goes out at all, so these sensors hold their last value until it is running again. Watch it for a few minutes.\n\nIf it still switches off, turn off the operation-data sensors on this device (compressor frequency, operating current, hot gas temperature, EEV position and the coil temperatures) and remove any indoor temperature source configured in the integration's options - both rely on that request. Then please report it, including your module's firmware version: this behaviour differs between units and only a report from an affected one can settle it."
+      "title": "{device_name} changes its own settings when asked for operation data",
+      "description": "The diagnostic sensors for compressor, current and temperatures are read with an extra request once a minute. That request carries no settings - it only asks - but this module applies it anyway, and every field it leaves empty is read as a value: the unit switches off, the mode goes to auto, fan and louvres drop to their first position, and the setpoint falls to the lowest one the unit allows.\n\nHome Assistant has switched that request to carry this unit's own settings, read a moment before it is sent, so the frame confirms them instead of clearing them. That is the shape the manufacturer's own app uses. The settings the request cleared have been written back. While Home Assistant believes this unit is off, no request goes out at all, so these sensors hold their last value until it is running again.\n\nNothing else needs doing - watch it for a few minutes. If the unit still changes its settings on its own, Home Assistant will stop sending the request altogether and say so here."
+    },
+    "status_request_unsupported": {
+      "title": "Operation data cannot be read from {device_name}",
+      "description": "This unit changes its own settings whenever it is asked for operation data, and it does so even when the request carries its current settings back to it. There is nothing left to put in that request that this unit leaves alone, so Home Assistant has stopped sending it.\n\nWhat that costs: the diagnostic sensors fed by it (compressor frequency, operating current, hot gas temperature, EEV position and the coil temperatures) no longer update, and an indoor temperature source configured in the integration's options can no longer be passed to the unit - both ride on that one request. Everything else is unaffected: power, mode, temperature, fan and louvres are sent as ordinary commands and are not touched by this.\n\nPlease report this, including your module's firmware version. Only two units are known to behave this way, and a report is the only way it can be worked on."
     }
   },
   "options": {
@@ -155,6 +159,9 @@
     },
     "status_request_read_failed": {
       "message": "Could not read the state of the Airco at {device}, so the status request was not sent."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant no longer sends status requests to the Airco at {device}, because this unit changes its own settings in response to them."
     }
   },
   "entity": {
