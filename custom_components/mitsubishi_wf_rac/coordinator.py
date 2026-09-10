@@ -738,9 +738,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
         firmware = f"{firm_type}, mcu: {mcu_ver}, wireless: {wireless_ver}"
         if firmware != self._firmware:
-            # BETA DEBUG (#329) - remove before the final release. Which
-            # firmware branch a report comes from decided the whole diagnosis
-            # there, and it was two rounds of asking to find out.
+            # Logged because which firmware branch a report comes from
+            # decided the whole diagnosis in #329, and finding it out cost two
+            # rounds of asking. Debug level, once per change, so it is only
+            # ever there when somebody is already collecting a log.
             _LOGGER.debug("[%s] reports firmware %s", self.device_name, firmware)
         self._firmware = firmware
 
