@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
@@ -13,6 +13,7 @@ from homeassistant.const import (
     CONF_HOST,
     CONF_PORT,
     CONF_DEVICE_ID,
+    EVENT_HOMEASSISTANT_STOP,
     Platform,
 )
 
@@ -191,6 +192,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
         )
 
     entry.runtime_data = MitsubishiWfRacData(_device)
+
+    async def _handle_stop(_event: Event) -> None:
+        """Hand an armed external temperature override back on the way down.
+
+        Only on Home Assistant stopping, deliberately not in
+        async_unload_entry(): an unload is also what a reload is, and saving
+        the options reloads the entry - clearing the override there would put
+        the unit back on its own sensor for a moment on every settings change.
+        A stop is the case where nothing of ours writes again, which is the
+        one that leaves the value standing at the unit.
+        """
+        await _device.async_release_external_temperature()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _handle_stop)
+    )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True

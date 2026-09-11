@@ -474,6 +474,72 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._external_temperature_override = value
         self._sync_external_temperature_carrier()
 
+    async def async_release_external_temperature(self) -> None:
+        """Hand the unit back to its own sensor before we stop writing.
+
+        The injected value has no expiry at the unit: whatever byte 5 last
+        carried is what it regulates on, until another frame replaces it or it
+        loses power. While the entry runs, the carrier frame refreshes it every
+        cycle and a source that stops reporting clears it - but once Home
+        Assistant stops, nothing writes at all and the value would simply
+        stand. So an orderly stop spends one last frame on clearing it, and the
+        unit measures for itself again until the entry comes back and re-arms
+        the override.
+
+        Only an orderly stop: a reload is not one (saving the options reloads
+        the entry, and the override is re-armed seconds later), and a crash or
+        a lost network cannot send anything at all. That residue is the
+        unit's, not ours to fix.
+        """
+        if self._external_temperature_override is None:
+            return
+        applied = self.external_temperature_applied
+        self.set_external_temperature_override(None)
+        if not applied:
+            # Nothing on the unit to undo: it is on its own sensor already,
+            # because it is off, in fan_only, or no frame ever carried the
+            # value (see external_temperature_applied).
+            return
+        if not self._status_request_is_allowed():
+            # The guard the periodic request answers to as well - a unit we
+            # have given up asking, or one that applies the state a carrying
+            # frame echoes while we believe it is off (#329). Handing control
+            # back is not worth a frame that might switch the unit.
+            return
+        if (
+            self._parser.status_request_carries_state
+            and not await self._async_read_before_echo()
+        ):
+            return
+        try:
+            await self.set_airco(
+                {
+                    AirconCommands.ServiceDataStatusRequest: (
+                        SERVICE_DATA_INDOOR_COIL_RAW,
+                    )
+                },
+                log_failure=False,
+                timestamp_offset=-round(
+                    self._service_data_stamp_backdate().total_seconds()
+                ),
+                is_status_request=True,
+                retry_when_locked=False,
+            )
+        except (WfRacError, KeyError, TypeError, ValueError) as ex:
+            # Debug, not a warning: this runs while Home Assistant is going
+            # down, there is nobody to act on it, and the next start re-arms
+            # the override anyway.
+            _LOGGER.debug(
+                "Could not hand [%s] back to its own sensor before stopping: %s",
+                self.device_name,
+                ex,
+            )
+        else:
+            _LOGGER.debug(
+                "Handed [%s] back to its own room sensor before stopping",
+                self.device_name,
+            )
+
     async def async_shutdown(self) -> None:
         """Release the subscription and both tasks along with the coordinator.
 

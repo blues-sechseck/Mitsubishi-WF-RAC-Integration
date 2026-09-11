@@ -132,7 +132,13 @@ async def test_options_flow_reloads_itself(hass: HomeAssistant):
         options={},
     )
     entry.add_to_hass(hass)
-    device = MagicMock(available=True, connection_method=None, update=AsyncMock())
+    device = MagicMock(
+        available=True,
+        connection_method=None,
+        update=AsyncMock(),
+        # Awaited when hass stops at the end of the test.
+        async_release_external_temperature=AsyncMock(),
+    )
     with (
         patch(
             "custom_components.mitsubishi_wf_rac.create_device_from_entry",

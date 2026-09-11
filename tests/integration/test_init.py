@@ -11,7 +11,7 @@ import pytest
 from pywfrac import WfRacConnectionError, WfRacError
 
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -260,6 +260,42 @@ async def test_a_failed_platform_unload_keeps_the_coordinator(
             await hass.async_block_till_done()
 
         assert device.last_update_success
+
+        await device.async_shutdown()
+
+
+async def test_stopping_home_assistant_hands_the_override_back(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    """A stop is the one case where nothing of ours writes again, so the value
+    the unit was handed would stand there. A reload must not do this: the
+    override is re-armed seconds later, and the unit would flick back to its
+    own sensor on every saved option.
+    """
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=repository,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        device = entry.runtime_data.device
+
+        with patch.object(
+            device, "async_release_external_temperature", AsyncMock()
+        ) as release:
+            await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+            release.assert_not_awaited()
+
+        device = entry.runtime_data.device
+        with patch.object(
+            device, "async_release_external_temperature", AsyncMock()
+        ) as release:
+            hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
+            await hass.async_block_till_done()
+            release.assert_awaited_once()
 
         await device.async_shutdown()
 
