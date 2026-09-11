@@ -705,9 +705,45 @@ Two things that do **not** work as one might expect `[HW]`:
   path from the trailer to it. The reply's own `OP1` says which sensor answered
   (§5.1), but that is the answer's field, not a way to ask.
 
+**An unknown code is refused, not ignored — and it takes the whole trailer with
+it.** If the indoor unit does not know one of the codes you asked for, the
+response carries `result: 11` and **none** of that request's segments are
+answered, including the valid ones. `[HW]` (On the meaning of `11` in general,
+see §2.7: it says "refused", not why.)
+
+Two consequences, and the second is the one that bites:
+
+- You can probe the code space without decoding anything. `result: 0` means the
+  unit knows the code, `result: 11` means it does not. Sweeping the whole space
+  on that basis is what §5.4 does. Be ready for a third outcome: a refusal
+  arrives as an unreadable response body often enough to matter (§5.4), so
+  retry once before recording a code as unknown.
+- **Batching is useless for exploration.** One unknown code voids the request,
+  so a batch of candidates reports only that the batch failed, never which
+  member was at fault. Ask one code per request while you are mapping unknown
+  territory; batch only codes you have already confirmed.
+
 **Limits.** The bridge does not clamp the segment count and copies `count × 4`
-bytes into a queue with room for 22 entries. `[FW]` Keep the count small (1–3);
-a large count is a buffer overrun on a device you cannot debug.
+bytes into a queue with room for 22 entries `[FW]` — but 22 is not the limit you
+will hit. The HTTP path in front of that queue gives out much earlier, measured
+on an SRK20ZS-WF running `WF-RAC-HTTPS 025/200` `[HW]`:
+
+| Segments | Result |
+| --- | --- |
+| 1–11 | clean. `result: 0`, every segment answered (6 of 6 runs at 11) |
+| 13 | unreliable. Three runs gave one malformed body, one `result: 11`, one clean |
+| 14 and above | never clean — either `result: 11` with nothing answered, or a response body that is not valid UTF-8 |
+
+"Malformed body" is the same failure mode as a malformed request field (§5.1):
+the module stops producing valid JSON at all. No lasting damage was observed —
+mode, setpoint and sensor readings were unchanged after every failure — but the
+request is lost.
+
+**Keep the count at 10 or below.** That leaves a step of headroom under the
+first observed wobble. And note that a failure contaminates the next request:
+immediately after a malformed response, a request was refused that went through
+six times in a row when retried on its own. If you probe near the boundary,
+pause and repeat before believing the result.
 
 **Timing.** SPI frames run at roughly 20/s `[EXT]`, one request per frame, so a
 handful of requests resolve in well under a second. Anything slower than that is
@@ -722,6 +758,9 @@ once with the compressor idle, once under load (setpoint forced 6 K below room
 temperature). Where a value moved sensibly between the two, that is noted —
 those readings are consistent with the MHI-AC-Ctrl formulas `[EXT]`, but two
 operating points are not a calibration, so the formulas stay `[INF]`.
+
+This table is the decoded subset. The whole code space has since been swept and
+49 codes answer in all — the rest are mapped at the end of this section.
 
 | Code | Name | Formula | Measured (compressor idle) |
 | --- | --- | --- | --- |
@@ -869,8 +908,9 @@ and the channel in §5.3 does not consult it — `0x05` and `0x7C` both answer w
 being absent from it. `[FW]` `[HW]` Judge a code by trying it, not by that list.
 
 `0x7C` is requested alongside the rest, as `Protection Number (raw)` — it sits
-in the same operation-data address space, and a code the module does not serve
-simply leaves its value empty, which costs nothing. It does answer,
+in the same operation-data address space. Batching it is safe because it is
+confirmed to answer, not because a miss would be harmless: a code the unit does
+not serve voids the whole request it rode in on (§5.3). It does answer,
 confirmed on three units across single- and multi-split `[HW]`, but it only
 ever reads `0`: a controlled test that reproduced a real overload clamp (see
 §5.7) left it unmoved. Read together with the stop-code table
@@ -879,8 +919,76 @@ stops rather than the speed-limit clamps in §5.7, the code appears to track
 protective *stops* only — it is not a general-purpose "unit is protecting
 itself" flag.
 
-`0x0C` has not been tried. On the reasoning above it is worth a request: a
-defrost flag is not otherwise available here, and asking costs one segment.
+**`0x0C` does answer**, tried on an SRK20ZS-WF `[HW]`: the segment comes back as
+`10 ff ff` — the unit accepts the code, but reports no value. The unit was
+switched off at the time, which is exactly when a defrost flag has nothing to
+say, so this neither confirms nor rules out a usable flag. It needs re-reading
+during a heating run that goes through a defrost cycle.
+
+#### The rest of the code space
+
+Every code value was requested one at a time, using `result: 0` vs.
+`result: 11` (§5.3) as the oracle. That is 255 questions, not 256: `0xFF` is
+the sentinel and cannot be asked for (see below). SRK20ZS-WF on
+`WF-RAC-HTTPS 025/200`, unit
+**switched off** throughout, two confirmation passes that returned the same 49
+codes with the same bytes. `[HW]`
+
+**49 codes answer in total, and 30 of them have no known meaning** — neither in
+the table above nor anywhere else in this section. Grouped by what they did at
+rest:
+
+| Behaviour | Codes |
+| --- | --- |
+| carries a value at rest | `0xAE` (`10 9c ff`), `0xAD` (`10 1e ff`), `0xD2` (`10 01 ff`) |
+| reports `0` while the unit is off | `0x10` `0x15` `0x22` `0x2A` `0x3E` `0x7B` `0x84` `0x86` `0x88` `0x8D` `0xA0` `0xA1` `0xA3` `0xA4` `0xA5` `0xB0` `0xD5` |
+| answers with no value (`OP2 = 0xFF`) | `0x02` (selector `0x12`), `0x0C` `0x14` `0x1C` `0x1D` `0x23` `0x45` |
+| answers all-`0xFF` | `0x44` `0xF1` |
+| answers with selector `0x80` | `0xDD` (`80 00 00`) |
+
+Read this as a map of where something exists, not as a set of new sensors. A
+value of `0` from a unit that is standing still carries no information, and 17
+of the 30 are in exactly that state — they have to be read again under load
+before any of them means anything. The three that do carry a value at rest are
+the ones worth chasing first, and one of them has a visible lead:
+
+- **`0xAE` tracks the indoor air temperature.** It moved with `0x80`/`sel 0x20`
+  (the return-air sensor, §5.2) across the sweep and the confirmation passes,
+  on the same scale, never more than one 0.25 K step apart, and the two agreed
+  exactly on the second pass. An unfiltered or differently-rounded read of the
+  same sensor is the obvious reading, but it has only been seen on a still
+  room — confirm it on a room whose temperature is actually moving before
+  relying on it.
+- **`0xAD` sat at `0x1E` (30) and `0xD2` at `0x01`** through every pass.
+  Nothing distinguishes a constant from a parameter that simply did not change
+  while the unit was off.
+- **`0xDD` answers with selector `0x80`**, a value that appears nowhere else in
+  any reply. Unexplained.
+
+**A refusal does not always arrive as JSON.** Of the 206 codes that were
+refused, 127 came back as `result: 11` and **79 came back as a response body
+that is not valid UTF-8** — the same malformed output an oversized request
+produces (§5.3). This is not a property of particular codes: the 79 were
+scattered across 47 separate runs of one to four consecutive codes, and not one
+of the 49 answering codes ever did it, across three passes. Treat a malformed
+body as a refusal you could not read, retry it once, and do not conclude
+anything about the code from it alone.
+
+The device state was unchanged after every such failure (mode, setpoint and
+sensor readings all identical), so it is a serialisation fault in the module,
+not damage. The request is lost, and it can disturb the one that follows it
+(§5.3).
+
+**A refused code and an empty answer are different things.** A refusal returns
+nothing at all in the trailer; a code the unit knows but has no reading for
+comes back as a segment with `OP2 = 0xFF`. Seven of the codes above are in that
+second group. So "no value" is itself information — it says the unit accepts the
+code — and it is only visible if you look at whether the segment arrived, not at
+its contents.
+
+`0xFF` is the one value you cannot probe: as a trailer code it is the
+"nothing to send" sentinel (§3.3), and the bridge discards it without queueing
+anything.
 
 ### 5.5 Code `248` — the one the app does use
 
@@ -1189,7 +1297,7 @@ segment.
 | --- | --- |
 | `0xE236` | 18-byte COMMAND state, as received from the Wi-Fi side |
 | `0xE248` | COMMAND segment count; segments from `0xE249` |
-| `0xE1DE` | request queue, count in `0xFE3B6`, room for 22 segments — the count from `0xE248` is **not** bounds-checked, so do not exceed it |
+| `0xE1DE` | request queue, count in `0xFE3B6`, room for 22 segments — the count from `0xE248` is **not** bounds-checked. This is not the limit a client hits: the HTTP path in front of it gives out around 12 segments (§5.3) |
 | `0xE186` | response cache, count in `0xFE3B9`, 22 segments |
 | `0xE17A` | unsolicited-push cache, 3 slots; ROM table at `0x3025` = `80 01`, `80 00`, `94 01` |
 | `0xE2F5` | 18-byte RECEIVE state (what §4 calls `state[0..17]`) |
