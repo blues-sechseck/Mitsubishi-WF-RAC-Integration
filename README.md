@@ -362,7 +362,7 @@ You can select a sensor under **Indoor temperature source** in the integration o
 
 Most integrations already handle this: ESPHome, Z-Wave JS and ZHA mark a device unavailable once it stops answering. Where yours does not, give it an availability rule of its own - `expire_after` on an MQTT sensor, or a template sensor wrapping the original and going unavailable when `last_updated` falls behind. Anything that produces `unavailable` hands the unit back to its internal sensor.
 
-One case nothing here can cover: if Home Assistant itself stops - host down, network gone - no frame goes out at all and the unit keeps the last value it was given. Worth weighing before arming an override for a room that is heated while nobody is home.
+**Shutting Home Assistant down hands the unit back; losing it does not.** An orderly stop spends one last frame clearing the override, so the unit measures for itself while Home Assistant is away and takes the override up again when it returns. An abrupt end cannot do that: a host that loses power or a network that disappears sends nothing, and the unit keeps the last value it was given until something else writes or it is switched off at the wall. Worth weighing before arming an override for a room that is heated while nobody is home.
 
 What an armed override costs is one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
 

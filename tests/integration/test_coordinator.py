@@ -505,6 +505,67 @@ async def test_arming_an_override_asks_for_the_frame_that_carries_it(device, mon
     set_airco.assert_not_awaited()
 
 
+async def test_release_hands_the_unit_back_before_stopping(device, monkeypatch):
+    """Home Assistant stopping is the case nothing else covers: the carrier
+    frame stops, and the value it last carried would stand at the unit until
+    something else wrote or the power went. One frame with byte 5 on 255 ends
+    that.
+    """
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    raw = round(18.7 * 4) + 61
+    device.set_external_temperature_override(18.7)
+    device._external_temperature_written.append(raw)
+    device.airco.ControllerRoomTempRaw = raw
+    assert device.external_temperature_applied is True
+
+    captured = {}
+
+    async def _capture_and_echo(airco_id, command, **_kwargs):
+        captured["command"] = command
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    await device.async_release_external_temperature()
+
+    assert device.external_temperature_override is None
+    assert base64.b64decode(captured["command"])[5] == 0xFF
+
+
+async def test_release_sends_nothing_when_the_unit_never_took_the_value(
+    device, monkeypatch
+):
+    """Armed but not applied means the unit is on its own sensor already -
+    off, in fan_only, or no frame carried it yet. Spending a frame there would
+    take the write lock for nothing on the way down.
+    """
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    device.set_external_temperature_override(18.7)
+    device.airco.ControllerRoomTempRaw = 0xFF
+    device._api.send_airco_command = AsyncMock()
+
+    await device.async_release_external_temperature()
+
+    assert device.external_temperature_override is None
+    device._api.send_airco_command.assert_not_awaited()
+
+
+async def test_release_is_a_no_op_without_an_override(device):
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device._api.send_airco_command = AsyncMock()
+
+    await device.async_release_external_temperature()
+
+    device._api.send_airco_command.assert_not_awaited()
+
+
 async def test_external_temperature_applied_reads_the_echoed_byte(device):
     # The unit echoes an injected value back in byte 5 unchanged, so the byte
     # it reports matching one a recent frame carried is the whole question.
