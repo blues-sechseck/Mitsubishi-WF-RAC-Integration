@@ -435,6 +435,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # off and on again on every value a source sensor feeds in.
         self._external_temperature_written: deque[int] = deque(maxlen=2)
         self._external_temperature_carrier: Callable[[], None] | None = None
+        # Set when an override goes away after a frame has carried it: the
+        # unit holds the last value it was given until a frame carries the
+        # sentinel instead, so clearing on our side is only half of letting
+        # go. Cleared again by the frame that does it - see set_airco().
+        self._external_temperature_release_pending = False
         self._consecutive_failures = 0
         self._availability_failure_limit = max(
             AVAILABILITY_FAILURE_LIMIT_MIN, availability_failure_limit
@@ -493,9 +498,22 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
         Nothing here says the unit has been told - see
         external_temperature_applied, which reads that off the wire.
+
+        Clearing is not symmetrical with arming. Byte 5 has no set-bit, so the
+        unit keeps regulating on the last value we sent it until a frame
+        carries the sentinel - and the carrier that frame rides on is dropped
+        by this very call. A clear therefore leaves a release outstanding
+        whenever a frame really did carry a value, and the carrier stays up
+        until one has carried the sentinel (#218 follow-up).
         """
         if value is None:
+            if self._external_temperature_written:
+                self._external_temperature_release_pending = True
             self._external_temperature_written.clear()
+        else:
+            # Arming again is its own release: whatever goes out next carries
+            # the new value, and the unit was never handed back in between.
+            self._external_temperature_release_pending = False
         self._external_temperature_override = value
         self._sync_external_temperature_carrier()
 
@@ -565,6 +583,20 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self.device_name,
             )
 
+    def request_external_temperature_release(self) -> None:
+        """Ask for a frame that hands the unit back to its own sensor.
+
+        For the case this coordinator cannot see for itself: the frames that
+        carried a value went out before a reload, so _external_temperature_
+        written is empty here and nothing in this object knows the unit is
+        still being fed. The climate entity knows, from its restored state -
+        see AircoClimate.async_added_to_hass().
+        """
+        if self._external_temperature_override is not None:
+            return
+        self._external_temperature_release_pending = True
+        self._sync_external_temperature_carrier()
+
     async def async_shutdown(self) -> None:
         """Shut the coordinator down.
 
@@ -605,7 +637,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     def _sync_external_temperature_carrier(self) -> None:
         """Subscribe to an operation-data segment for as long as an override is
-        armed, and drop the subscription again when it is cleared.
+        armed - and for the one frame that hands the unit back afterwards,
+        which is why a pending release holds the subscription up just as an
+        armed value does.
 
         The override needs a frame to ride on, and the operation-data request
         is the one frame that goes out on its own without writing anything
@@ -617,11 +651,17 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         Costs what an enabled operation-data sensor costs: one extra request
         per poll cycle, holding the unit's write lock for part of it.
         """
-        if self._external_temperature_override is not None:
+        if (
+            self._external_temperature_override is not None
+            or self._external_temperature_release_pending
+        ):
+            needs_request = self._external_temperature_release_pending
             if self._external_temperature_carrier is None:
+                needs_request = True
                 self._external_temperature_carrier = self.async_add_listener(
                     lambda: None, context=SERVICE_DATA_INDOOR_COIL_RAW
                 )
+            if needs_request:
                 # Ask for the carrier frame now rather than waiting for a poll
                 # to schedule one. Only a poll calls this otherwise, and the
                 # poll that runs during setup happens before the entities
@@ -1863,6 +1903,17 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 written = self._parser.external_temperature_raw_in_frame(airco_stat)
                 if written is None:
                     self._external_temperature_written.clear()
+                    if (
+                        self._external_temperature_release_pending
+                        and self._external_temperature_override is None
+                    ):
+                        # This frame carried the sentinel, so the unit is back
+                        # on its own sensor and the carrier has nothing left
+                        # to carry. Any frame will do - a command the user
+                        # sent settles the release as well as the
+                        # operation-data request asked for on purpose.
+                        self._external_temperature_release_pending = False
+                        self._release_external_temperature_carrier()
                 else:
                     self._external_temperature_written.append(written)
                 # Proof of reachability like a poll: once a unit counts as

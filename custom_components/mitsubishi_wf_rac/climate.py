@@ -95,6 +95,12 @@ class ExternalTemperatureOverrideData(ExtraStoredData):
     # the latter is a standing intent worth restoring: a value a source left
     # behind belongs to a source that may since have been removed, and
     # re-arming it would leave the unit regulating on a reading nobody updates.
+    #
+    # Recorded when the value is armed, not when it is saved. Saving happens
+    # while the entity is being removed, and removing the source is what
+    # reloads the entry (OptionsFlowWithReload) - so by then the options no
+    # longer name a source, and asking them would write False for exactly the
+    # value this flag exists to catch.
     from_source: bool = False
 
     def as_dict(self) -> dict[str, Any]:
@@ -110,10 +116,24 @@ def _without_3d_auto(modes: list[str]) -> list[str]:
     return [mode for mode in modes if mode != SWING_3D_AUTO]
 
 
+def _stored_external_temperature_is_set(stored: ExtraStoredData | None) -> bool:
+    """Whether anything was armed when this entity was last taken down.
+
+    Only its presence is asked for: what the value was does not matter to the
+    caller, which is deciding whether the unit may still be holding one.
+    """
+    if stored is None:
+        return False
+    return stored.as_dict().get("external_temperature_override") is not None
+
+
 class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     """Representation of a climate entity."""
 
     _external_temperature_override: float | None = None
+    # Provenance of the value above, kept for extra_restore_state_data - see
+    # ExternalTemperatureOverrideData.from_source.
+    _external_temperature_from_source: bool = False
 
     _attr_supported_features: ClimateEntityFeature = SUPPORT_FLAGS
     _attr_temperature_unit: str = UnitOfTemperature.CELSIUS
@@ -170,12 +190,23 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         """Register with the coordinator and publish the first state."""
         await super().async_added_to_hass()
         source = self._external_temperature_source
+        stored = await self.async_get_last_extra_data()
         if source is None:
-            self._restore_external_temperature_override(await self.async_get_last_extra_data())
+            self._restore_external_temperature_override(stored)
         else:
             # A source's current state is more authoritative than restore data:
             # the latter can be stale precisely when the source stopped reporting.
             self._set_external_temperature_from_source_state(self.hass.states.get(source))
+            if (
+                self._external_temperature_override is None
+                and _stored_external_temperature_is_set(stored)
+            ):
+                # Something was armed before this reload and the source has
+                # nothing usable to put in its place. The frames that fed the
+                # unit went out in the previous life of the coordinator, so it
+                # cannot know the unit is still holding that value - only this
+                # entity's restored state says so.
+                self.coordinator.request_external_temperature_release()
             self.async_on_remove(
                 async_track_state_change_event(
                     self.hass, source, self._handle_external_temperature_source_change
@@ -225,9 +256,12 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             return None
         return value
 
-    def _set_external_temperature_override(self, temperature: float | None) -> None:
+    def _set_external_temperature_override(
+        self, temperature: float | None, *, from_source: bool = False
+    ) -> None:
         """Arm an override and immediately publish its integration-side state."""
         self._external_temperature_override = temperature
+        self._external_temperature_from_source = from_source and temperature is not None
         self.coordinator.set_external_temperature_override(temperature)
         self._apply_state()
         self.async_write_ha_state()
@@ -237,7 +271,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         temperature = self._external_temperature_from_source_state(state)
         if temperature == self._external_temperature_override:
             return
-        self._set_external_temperature_override(temperature)
+        self._set_external_temperature_override(temperature, from_source=True)
 
     @callback
     def _handle_external_temperature_source_change(
@@ -268,6 +302,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                 "Dropping the restored external temperature override: it came "
                 "from a source entity that is no longer configured"
             )
+            # Dropping it here only stops us sending it again. The unit was
+            # last told that value and holds it until a frame says otherwise,
+            # so the release has to be asked for.
+            self.coordinator.request_external_temperature_release()
             return
         try:
             value = float(restored)
@@ -298,7 +336,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         """What async_added_to_hass() reads back after a restart or reload."""
         return ExternalTemperatureOverrideData(
             self._external_temperature_override,
-            self._external_temperature_source is not None,
+            self._external_temperature_from_source,
         )
 
     @property
@@ -585,7 +623,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         next frame that goes out anyway - the operation-data request once a
         cycle, or any command in between - and the same is true of clearing
         it, since a frame without an override carries 0xFF and puts the unit
-        back on its own sensor.
+        back on its own sensor. Clearing keeps the carrier up until such a
+        frame has gone out (Device.set_external_temperature_override): the
+        unit holds the last value it was given, so dropping the carrier the
+        moment the override goes would leave nothing to tell it otherwise.
 
         A command frame of this action's own would cost more than the wait.
         Byte 5 has no set-bit, so it cannot be written on its own: the frame
