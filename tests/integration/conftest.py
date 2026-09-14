@@ -20,7 +20,12 @@ async def platform_device(hass):
     device._api = AsyncMock()
     device._api.get_aircon_stats.return_value = {"numOfAccount": 1, "airconStat": LIVE_CAPTURES["on_cool"][0]}
     await device.update()
-    return device
+    yield device
+    # Same teardown the other Device fixtures have. A test that leaves a
+    # listener on the coordinator - an armed override's carrier frame, or the
+    # release one owed after it is cleared - leaves its refresh timer
+    # scheduled with it, which the harness flags as a lingering timer.
+    await device.async_shutdown()
 
 
 @pytest.fixture
