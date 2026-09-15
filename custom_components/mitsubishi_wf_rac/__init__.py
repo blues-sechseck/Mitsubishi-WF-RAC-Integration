@@ -212,6 +212,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
 
 
 async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> Device:
+    """Build the coordinator for a config entry."""
     device: str = entry.data[CONF_HOST]
     # The entry title, not a stored name: that is what Home Assistant's own
     # rename changes, and a name kept in entry.data would quietly ignore it.
@@ -294,8 +295,6 @@ async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
             temp_device.airco_id,
         )
 
-    # Entry-scoped, so it would otherwise dangle in the repair list forever
-    # pointing at an entry_id that no longer resolves to anything.
     ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
     ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
     ir.async_delete_issue(

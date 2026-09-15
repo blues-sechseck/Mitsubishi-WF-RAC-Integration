@@ -22,11 +22,7 @@ MIN_TIME_BETWEEN_UPDATES=timedelta(seconds=60)
 
 CONF_OPERATOR_ID = "operator_id"
 CONF_AIRCO_ID = "airco_id"
-# Removed option, kept only so async_migrate_entry can strip it from entries
-# that predate v5. Nothing outside the migration reads it.
 CONF_AVAILABILITY_CHECK = "availability_check"
-# Consecutive failed polls before the device is reported unavailable; floored
-# at coordinator.py's AVAILABILITY_FAILURE_LIMIT_MIN.
 CONF_AVAILABILITY_RETRY_LIMIT = "availability_retry_limit"
 # Gates all outbound internet traffic (as opposed to local-network device
 # polling) - the manufacturer's getFirmware endpoint. Off by default: unlike
@@ -121,9 +117,6 @@ OVERSHOOT_MAX = 3.0
 # the applied value is known to flip Vacant.
 HOME_LEAVE_TEMP_HEAT = 10.0
 HOME_LEAVE_TEMP_COOL = 31.0
-# Temperature to restore when leaving Home Leave mode. There's no reliable way
-# to recall whatever temperature was set before Home Leave was turned on (the
-# unit itself doesn't report it), so this is a plain, reasonable default.
 NORMAL_TEMP = 21.0
 
 SERVICE_SET_HORIZONTAL_SWING_MODE = "set_horizontal_swing_mode"
@@ -242,9 +235,6 @@ SUPPORTED_FAN_MODES = [
 
 
 
-# Optional certificate for the unit's HTTPS stack, looked up in the HA config
-# directory. Without it the connection falls back to a permissive SSL context.
-# Create it by running this in that directory:
 #   openssl s_client -connect <AC_IP_ADDRESS>:51443 -showcerts </dev/null 2>/dev/null \
 #       | openssl x509 -outform PEM > ac_cert.pem
 AC_CERT_FILENAME = "ac_cert.pem"

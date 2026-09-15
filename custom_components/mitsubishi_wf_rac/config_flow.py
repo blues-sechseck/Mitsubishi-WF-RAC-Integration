@@ -79,7 +79,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _find_entry_matching(
         self, key: str, matches: Callable[[Any], bool]
     ) -> config_entries.ConfigEntry | None:
-        """Returns the first entry where matches(entry.data[key]) returns True"""
+        """Returns the first entry where matches(entry.data[key]) returns True."""
         for entry in self._async_current_entries():
             if key in entry.data and matches(entry.data[key]):
                 return entry
@@ -221,14 +221,14 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return data
 
     async def _async_fetch_operator_id(self) -> str:
-        """Fetch UUID operator id if exists otherwise create it"""
+        """Fetch UUID operator id if exists otherwise create it."""
         entry = self._find_entry_matching(CONF_OPERATOR_ID, bool)
         if entry:
             return str(entry.data[CONF_OPERATOR_ID])
         return f"hassio-{str(uuid4())[7:]}"
 
     async def _async_fetch_device_id(self) -> str:
-        """Fetch unique device id if exists otherwise create it"""
+        """Fetch unique device id if exists otherwise create it."""
         entry = self._find_entry_matching(CONF_DEVICE_ID, bool)
         if entry:
             return str(entry.data[CONF_DEVICE_ID])
@@ -263,8 +263,6 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
                 data_input = user_input.copy()
-                # Form-only: it decides whether a duplicate host is accepted
-                # while adding, and means nothing to a stored entry.
                 data_input.pop(CONF_FORCE_UPDATE, None)
                 options_input = {
                     CONF_AVAILABILITY_RETRY_LIMIT: AVAILABILITY_FAILURE_LIMIT_MIN,
@@ -297,14 +295,9 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # configured, already in progress - not an unexpected error.
                 raise
             except Exception:  # pylint: disable=broad-except
-                # Intentionally broad: this is the outermost boundary of the config
-                # flow step, so any bug here should show the user a graceful
-                # "unexpected_error" instead of crashing the flow.
                 _LOGGER.error("Unexpected exception", exc_info=True)
                 errors[CONF_BASE] = "unexpected_error"
 
-        # If there is no user input or there were errors, show the form again, including any errors
-        # that were found with the input.
         return self.async_show_form(
             step_id=step_id,
             data_schema=build_schema(),
@@ -319,7 +312,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         which: Callable[..., Any],
         default: Any = None,
     ) -> Any:
-        """Helper for creating schema fields"""
+        """Helper for creating schema fields."""
         value = user_input.get(name, default) if user_input else default
         description = None
         if value is not None:
@@ -750,24 +743,23 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
 class KnownError(exceptions.HomeAssistantError):
     """Base class for errors known to this config flow.
 
-    [error_name] is the value passed to [errors] in async_show_form, which should match a key
-    under "errors" in strings.json
-
-    [applies_to_field] is the name of the field name that contains the error (for
-    async_show_form); if the field doesn't exist in the form CONF_BASE will be used instead.
+    Deliberately not a HomeAssistantError: none of these leaves the flow, so
+    error_name is a key under "error" in strings.json rather than a
+    translation key, and applies_to_field falls back to CONF_BASE.
     """
 
     error_name = "unknown_error"
     applies_to_field = CONF_BASE
 
     def __init__(self, *args: object, **kwargs: str) -> None:
+        """Keep the placeholders the message needs alongside the error."""
         super().__init__(*args)
         self._extra_info = kwargs
 
     def get_errors_and_placeholders(
         self, schema: Any
     ) -> tuple[dict[str, str], dict[str, str]]:
-        """Return dicts of errors and description_placeholders, for adding to async_show_form"""
+        """Return dicts of errors and description_placeholders, for adding to async_show_form."""
         key = self.applies_to_field
         # An error only shows if its key is in the form; anything else falls
         # back to CONF_BASE.
@@ -790,14 +782,14 @@ class InvalidHost(KnownError):
 
 
 class HostAlreadyConfigured(KnownError):
-    """Error to indicate there is an duplicate hostname."""
+    """Error to indicate there is a duplicate hostname."""
 
     error_name = "host_already_configured"
     applies_to_field = CONF_HOST
 
 
 class TooManyDevicesRegistered(KnownError):
-    """Error to indicate that there are too many devices registered"""
+    """Error to indicate that there are too many devices registered."""
 
     error_name = "too_many_devices_registered"
     applies_to_field = CONF_BASE

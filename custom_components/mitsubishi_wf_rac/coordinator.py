@@ -300,9 +300,8 @@ def status_request_unsupported_issue_id(entry_id: str) -> str:
 def registration_full_issue_id(entry_id: str) -> str:
     """Repair-issue id for a full account table on this entry's airco.
 
-    Shared between Device (which raises/clears it) and async_unload_entry
-    (which clears it on removal, so a deleted entry doesn't leave a dangling
-    issue behind) - one format, so the two can never drift apart.
+    Shared with async_remove_entry, which clears it when the entry is deleted.
+    An unload leaves it standing: the condition outlives a reload.
     """
     return f"too_many_devices_{entry_id}"
 
@@ -334,7 +333,7 @@ def result_code(answer: Any) -> int | None:
 
 
 class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instance-attributes
-    """Device Class"""
+    """Device Class."""
 
     # Narrowed from the base class's optional: this integration never builds a
     # Device without one.
@@ -356,6 +355,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             connection_method: str | None = None,
             status_request_mode: str = STATUS_REQUEST_STRICT,
     ) -> None:
+        """Set up the coordinator for one airco."""
         self._api = Repository(
             async_get_clientsession(hass),
             hostname,
@@ -437,9 +437,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._external_temperature_written: deque[int] = deque(maxlen=2)
         self._external_temperature_carrier: Callable[[], None] | None = None
         self._consecutive_failures = 0
-        # Clamped rather than validated: an entry can carry a lower value from
-        # an older version, and refusing to set up over it would be worse than
-        # quietly giving it the tolerance it should have had.
         self._availability_failure_limit = max(
             AVAILABILITY_FAILURE_LIMIT_MIN, availability_failure_limit
         )
@@ -467,7 +464,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def entry_id(self) -> str:
-        """Id of the config entry that owns this device - see options above."""
+        """Id of the config entry that owns this device."""
         return self.config_entry.entry_id
 
     @property
@@ -568,19 +565,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             )
 
     async def async_shutdown(self) -> None:
-        """Release the subscription and both tasks along with the coordinator.
+        """Shut the coordinator down.
 
-        Neither task is owned by DataUpdateCoordinator, and hass only cancels
-        background tasks when hass itself stops - which an entry unload is
-        not. The operation-data one matters most: it spends most of its life
-        asleep waiting out its offset, so a reload catches it mid-sleep and
-        its request would go out from the old entry through a second
-        Repository while the new one is already polling. Two connections at
-        once is what the module will not take.
-
-        Failures are logged and swallowed: an unload that raises leaves
-        entities loaded on an entry that no longer updates, and both tasks
-        report what matters elsewhere.
+        Both tasks run on hass rather than under DataUpdateCoordinator, so
+        they are cancelled here: one that survived would publish to entities
+        that are gone, and take the single connection the reload needs.
+        Failures are logged and swallowed - an unload that raises leaves
+        entities on an entry that no longer updates.
         """
         self._release_external_temperature_carrier()
         for task in (self._consolidation_task, self._service_data_task):
@@ -758,9 +749,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def update(self) -> bool:
         """Fetch one status block, and say whether the unit answered.
 
-        Notifies nobody: on the poll path _async_update_data() does that when
-        it returns, the initial fetch runs before any entity exists, and
-        set_airco()'s fallback fetch is followed by a command that notifies.
+        Notifies nobody: _async_update_data() does that when it returns, the
+        initial fetch runs before any entity exists, and set_airco()'s
+        fallback fetch is followed by a command that notifies.
         """
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
@@ -1024,20 +1015,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def _async_write_lock_delay(self) -> float:
         """Seconds to wait before retrying a write the unit just refused.
 
-        The refusal carries no deadline with it, and the `expires` from the
-        last poll is our own stale one - the lock in the way was taken after
-        that poll, which is why we did not see it coming. So ask: a
-        getAirconStat is cheap and takes no lock of its own, and it reports
-        when the lock currently held lapses.
-
-        That deadline can be read against our own clock directly, because the
-        module has none: it takes its time from the `timestamp` field of every
-        request it receives, so the request asking the question sets the clock
-        the answer is measured against. What that cannot fix is a deadline
-        stamped by a client whose own clock was off - hence the cap.
-
-        Falls back to WRITE_LOCK_RETRY_DELAY when the unit does not answer or
-        reports no `expires` at all.
+        The refusal carries no deadline and the last poll's `expires` is
+        stale, so ask: a getAirconStat takes no lock of its own and reports
+        when the one in the way lapses. It reads against our own clock, since
+        the module takes its time from each request's `timestamp` - what that
+        cannot fix is a deadline stamped by a client whose clock was off,
+        hence the cap. Falls back to WRITE_LOCK_RETRY_DELAY when the unit does
+        not answer or reports no `expires`.
         """
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
@@ -1436,7 +1420,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return result
 
     async def add_account(self) -> dict[str, Any] | None:
-        """Add account (operator id) from the airco"""
+        """Add account (operator id) from the airco."""
         try:
             result = await self._api.update_account_info(
                 self._airco_id, self.hass.config.time_zone
@@ -1728,28 +1712,24 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         is_status_request: bool = False,
         retry_when_locked: bool = True,
     ) -> None:
-        """Method to send airco command.
+        """Send one command frame to the airco.
 
-        log_failure=False leaves the reporting to the caller, for requests that
-        have their own retry and a quieter failure story than a user command
-        that never reached the unit - see _async_request_service_data().
+        log_failure=False leaves the reporting to the caller, for requests
+        that have their own retry.
 
         is_status_request marks a frame that asks for readings instead of
-        changing anything: its block carries no set-bits (see
-        RacParser.status_request_to_byte), so the settings it echoes back are
-        the unit's own and claiming them as our expectation would hide
-        whatever the IR remote did while the request was in flight.
+        changing anything: its block carries no set-bits, so what it echoes
+        back is the unit's own state rather than our expectation.
 
-        retry_when_locked=False hands the refusal straight back to the caller
-        instead of waiting the foreign write lock out below. For an optional
-        read that is the whole answer - the caller skips the cycle - and the
-        wait itself is the harm: it runs inside _send_lock, where a real user
-        command would be stuck behind it for up to WRITE_LOCK_MAX_WAIT.
+        retry_when_locked=False hands a refusal straight back instead of
+        waiting the foreign write lock out below - that wait runs inside
+        _send_lock, where a user command would sit behind it for up to
+        WRITE_LOCK_MAX_WAIT.
 
-        timestamp_offset shifts the `timestamp` this request stamps, and so the
-        write lock it takes (deadline is timestamp + 60, the module has no RTC).
-        Negative for operation-data requests, to give up part of the lock - see
-        SERVICE_DATA_STAMP_BACKDATE. Left at 0 for real commands.
+        timestamp_offset shifts the `timestamp` this request stamps, and so
+        the write lock it takes (deadline is timestamp + 60, the module has no
+        clock). Negative for operation-data requests, to give up part of the
+        lock; 0 for real commands.
         """
         _LOGGER.debug("Setting airco: %s", params)
         # Held for the whole read-modify-send-update sequence, not just the
@@ -1863,11 +1843,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 raise
 
     async def async_queue_command(self, params: dict[AirconCommands, Any]) -> None:
-        """Queue an airco command, coalescing with any other calls made within
-        UPDATE_CONSOLIDATION_PERIOD into a single set_airco() call. Used by all
-        entities instead of calling set_airco() directly, so that e.g. a fan
-        speed change and a temperature change issued moments apart end up in
-        the same request instead of racing each other.
+        """Queue an airco command, coalescing calls made close together.
+
+        Calls within UPDATE_CONSOLIDATION_PERIOD become one set_airco(). Every
+        entity uses this rather than set_airco(), so a fan change and a
+        setpoint change issued together share a request instead of racing.
         """
         self._consolidated_params.update(params)
         if self._consolidation_task is None:
@@ -2023,11 +2003,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def device_info(self) -> DeviceInfo:
         """Return a device description for device registry.
 
-        No "model": the only model field the protocol offers is ModelNr, a
-        capability grouping (0/1/2/3/64...), not a type name - it would put a
-        bare digit where users expect "SRK35ZS-WF". It goes into model_id
-        instead, which is what a machine-readable model identifier is for, and
-        stays available as its own diagnostic sensor.
+        No "model": ModelNr is a capability grouping (0/1/2/3/64...), not a
+        type name, so it would put a bare digit where users expect
+        "SRK35ZS-WF". It goes into model_id instead.
         """
         info: DeviceInfo = {
             "sw_version": self._firmware,
@@ -2035,10 +2013,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             "manufacturer": "Mitsubishi Heavy Industries",
             "name": self.device_name,
         }
-        # airconId is MAC-derived, and on every module seen so far it is the
-        # bare MAC. Only claim it when it has exactly that shape - a differently
-        # shaped id would otherwise register as somebody else's hardware and
-        # merge two unrelated devices in the registry.
         if re.fullmatch(r"[0-9a-fA-F]{12}", self.airco_id):
             info["connections"] = {(CONNECTION_NETWORK_MAC, format_mac(self.airco_id))}
         model_nr = getattr(self.airco, "ModelNrRaw", None)
@@ -2115,17 +2089,17 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def device_name(self) -> str:
-        """Get given Airco name"""
+        """Get given Airco name."""
         return self._name
 
     @property
     def airco_id(self) -> str:
-        """Return Airco ID"""
+        """Return Airco ID."""
         return self._airco_id
 
     @property
     def airco(self) -> Aircon:
-        """Return parsed Aircon object if set otherwise None"""
+        """Return parsed Aircon object if set otherwise None."""
         return self._airco
 
     @property
