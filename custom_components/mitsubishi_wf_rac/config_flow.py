@@ -175,11 +175,21 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data[CONF_AIRCO_ID] = airco_id
         if not airco_id:
             raise CannotConnect(reason="unknown reason")
-        if (
-            expected_airco_id is not None
-            and airco_id.lower() != expected_airco_id.lower()
-        ):
-            raise AbortFlow("wrong_device")
+        if expected_airco_id is not None:
+            if airco_id.lower() != expected_airco_id.lower():
+                raise AbortFlow("wrong_device")
+        else:
+            # The airco id is what zeroconf keys on (the module announces
+            # itself as <mac>.local), so setting it here lets a discovery
+            # recognise a hand-added entry and catches a unit reached at a
+            # second address. Lower case on both sides: discovery reads it
+            # from the hostname, every other path from the airconId.
+            #
+            # Before registering, not after: registering takes one of the
+            # module's four account slots, and only the manufacturer's app
+            # frees one. A reconfigure has its own guard above.
+            await self.async_set_unique_id(airco_id.lower())
+            self._abort_if_unique_id_configured()
 
         _LOGGER.debug("Registering this controller on airco [%s]", airco_id)
         try:
@@ -245,18 +255,6 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 info = await self._async_register_airco(
                     self.hass, user_input, allow_port_fallback=allow_port_fallback
                 )
-
-                # The airco id is the unit's own identity, and the one
-                # zeroconf keys on: the module announces itself as
-                # <mac>.local and the airco id is that same MAC. Registering
-                # it here is what lets a discovery recognise a manually added
-                # entry later - and it aborts a unit reached at a second
-                # address, which would otherwise become a second entry whose
-                # entities collide with the first one's. Lower case on both
-                # sides: discovery reads it from the announced hostname and
-                # every other path from the airconId the unit reports.
-                await self.async_set_unique_id(info[CONF_AIRCO_ID].lower())
-                self._abort_if_unique_id_configured()
 
                 data_input = user_input.copy()
                 # Form-only: it decides whether a duplicate host is accepted

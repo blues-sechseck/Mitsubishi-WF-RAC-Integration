@@ -434,12 +434,12 @@ async def test_fan_speed_select_recognises_an_unreadable_fan_step(platform_devic
     AIRFLOW_UNKNOWN nibble used to take the whole select platform with it.
     """
     platform_device.airco.AirFlow = AIRFLOW_UNKNOWN
-    platform_device._set_availability(True)
+    platform_device._record_reachable()
 
     fan = select.FanSpeedSelect(platform_device)
 
     assert fan.current_option is None
-    assert platform_device.available is True
+    assert platform_device.last_update_success is True
 
 
 async def test_home_leave_air_flow_select_recognises_an_unreadable_step(
@@ -449,12 +449,12 @@ async def test_home_leave_air_flow_select_recognises_an_unreadable_step(
     platform_device.airco.HomeLeaveModeForCooling = HomeLeaveModeSetting(
         TempRule=35.0, TempSetting=33.0, AirFlow=AIRFLOW_UNKNOWN
     )
-    platform_device._set_availability(True)
+    platform_device._record_reachable()
 
     entity = select.HomeLeaveAirFlowSelect(platform_device, "cooling")
 
     assert entity.current_option is None
-    assert platform_device.available is True
+    assert platform_device.last_update_success is True
 
 
 async def test_marking_the_climate_state_unknown_clears_all_of_it(platform_device):
@@ -510,7 +510,7 @@ async def test_a_swing_select_survives_a_vane_value_it_cannot_read(
     entity = cls(platform_device)
 
     assert entity.current_option is None
-    assert platform_device.available is True
+    assert platform_device.last_update_success is True
 
 
 async def test_the_climate_entity_is_the_device_itself(platform_device):

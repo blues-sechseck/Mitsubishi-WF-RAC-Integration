@@ -307,6 +307,20 @@ def registration_full_issue_id(entry_id: str) -> str:
     return f"too_many_devices_{entry_id}"
 
 
+def result_code(answer: Any) -> int | None:
+    """The result code of a module answer, or None if it carries none.
+
+    The parsed body arrives as it came, so neither its shape nor the field's
+    type is guaranteed.
+    """
+    if not isinstance(answer, dict):
+        return None
+    try:
+        return int(answer["result"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instance-attributes
     """Device Class"""
 
@@ -355,7 +369,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._host = hostname
         self._port = port
         self._airco_id = airco_id
-        self._available = False
+        self._poll_counted = False
+        self._last_poll_error: BaseException | None = None
         self._name = name
         self._firmware = ""
         self._connected_accounts = -1
@@ -729,34 +744,24 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return tuple(sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES)))
 
     async def update(self) -> bool:
-        """Update the device information from API.
+        """Fetch one status block, and say whether the unit answered.
 
-        Called both directly (initial fetch in __init__.py before entities
-        exist, and set_airco()'s own fallback fetch) and by the coordinator
-        via _async_update_data() below. Deliberately does not call
-        async_refresh()/async_set_updated_data() itself: on the coordinator
-        poll path, listeners are already notified automatically once
-        _async_update_data() returns, and calling async_refresh() here would
-        re-enter _async_update_data() -> update() from within that same path.
-        The other two call sites don't need a notification either - the
-        initial fetch runs before any entity/listener exists, and
-        set_airco()'s fallback fetch is immediately followed by a command
-        whose completion already triggers async_set_updated_data() (see
-        Device.async_queue_command()).
+        Notifies nobody: on the poll path _async_update_data() does that when
+        it returns, the initial fetch runs before any entity exists, and
+        set_airco()'s fallback fetch is followed by a command that notifies.
         """
-
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
 
             if response is None:
-                self._set_availability(False)
+                self._record_failed_poll(WfRacError("answered without any data"))
                 _LOGGER.warning("Received no data for device %s", self._airco_id)
                 return False
         except WfRacConnectionError as ex:
-            self._record_connection_failure(ex)
+            self._record_failed_poll(ex)
             return False
         except (WfRacError, KeyError) as ex:
-            self._set_availability(False)
+            self._record_failed_poll(ex)
             _LOGGER.warning(
                 "Error: something went wrong updating the airco [%s] values",
                 self.device_name,
@@ -788,12 +793,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._account_expires = response.get("expires")
             self._led_status = response.get("ledStat")
             self._auto_heating = response.get("autoHeating")
-            became_available = self._set_availability(True)
-            if became_available:
-                _LOGGER.info("Airco [%s] is available again", self.device_name)
+            self._record_reachable()
         except (KeyError, TypeError, ValueError) as ex:
             _LOGGER.warning("Could not parse airco data", exc_info=ex)
-            self._set_availability(False)
+            self._record_failed_poll(ex)
             return False
 
         # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
@@ -1403,12 +1406,21 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         )
 
     async def delete_account(self) -> dict[str, Any] | None:
-        """Delete account (operator id) from the airco"""
+        """Delete account (operator id) from the airco.
+
+        None means the slot was not released - the request failed, or the
+        answer did not confirm it. Nothing but a result code of 0 does: the
+        refusal, the rate limit and the module's internal error all leave the
+        slot where it was.
+        """
         try:
-            return await self._api.del_account_info(self._airco_id)
+            result = await self._api.del_account_info(self._airco_id)
         except (WfRacError, KeyError, TypeError):
             _LOGGER.warning("Could not delete account from airco %s", self._airco_id)
             return None
+        if result_code(result) != 0:
+            return None
+        return result
 
     async def add_account(self) -> dict[str, Any] | None:
         """Add account (operator id) from the airco"""
@@ -1420,22 +1432,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             _LOGGER.warning("Could not add account from airco %s", self._airco_id)
             return None
 
-        # On updateAccountInfo specifically, result:2 does mean the account
-        # table is full: the module answers it when no slot matches our id and
-        # none is free. (The same code means other things on setAirconStat -
-        # see RESULT_CODES - but this endpoint never talks to the indoor unit,
-        # so those paths cannot reach it here.)
-        #
-        # Nothing frees a slot on its own: registrations do not expire and are
-        # never evicted, so re-registering cannot succeed until someone
-        # removes one from the official app - or the module is set up afresh.
-        # That is a standing condition worth a repair issue rather than a
-        # warning that scrolls out of the log every cycle; a normal-looking
-        # response means whatever caused it is gone, so the issue (if any)
-        # clears itself.
-        if result and int(result.get("result", 0)) == 2:
+        # Here result:2 means the account table is full, and nothing frees a
+        # slot but the official app - a standing condition for Repairs, ended
+        # by a registration that went through and by nothing else.
+        code = result_code(result)
+        if code == 2:
             self._report_registration_full()
-        else:
+        elif code == 0:
             self._clear_registration_full_issue()
         return result
 
@@ -1837,6 +1840,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self._external_temperature_written.clear()
                 else:
                     self._external_temperature_written.append(written)
+                # Proof of reachability like a poll: once a unit counts as
+                # away, the service layer drops the calls that would show it
+                # is there.
+                self._record_reachable()
             except (WfRacError, KeyError, TypeError, ValueError) as ex:
                 if log_failure:
                     _LOGGER.warning("Could not send airco data: %s", str(ex))
@@ -1961,14 +1968,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         try:
             await self.set_airco(params)
         except (WfRacError, KeyError, TypeError, ValueError) as ex:
-            # Already logged in set_airco(). Push the current state out first
-            # so entities pick up self.available if the same failure flipped
-            # it, then report: async_queue_command() awaits this task, so the
-            # error lands on the action that issued the command instead of
-            # becoming an orphaned "Task exception was never retrieved".
-            # Wrapped rather than re-raised - a library exception in a service
-            # call is a traceback, not something the user can read.
-            self.async_set_updated_data(self._airco)
+            # Already logged in set_airco(). A failed command says nothing
+            # about the poll before it, so the listeners hear the state without
+            # the coordinator being declared successful. Wrapped rather than
+            # re-raised - a library exception in a service call is a traceback,
+            # not something the user can read - and async_queue_command()
+            # awaits this task, so it lands on the action that issued it.
+            self.async_update_listeners()
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="command_failed",
@@ -1977,58 +1983,28 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     "error": str(ex),
                 },
             ) from ex
-        # Immediately push the (possibly unchanged, on failure) state to all
-        # entities instead of leaving them to wait for the next poll (up to
-        # MIN_TIME_BETWEEN_UPDATES later).
+        # The unit's answer reaches the entities now, not a poll later.
         self.async_set_updated_data(self._airco)
 
-    def _set_availability(self, available: bool) -> bool:
-        """Mark the device available, or unavailable once it has missed
-        self._availability_failure_limit polls in a row.
+    def _record_reachable(self) -> None:
+        """Start the tolerance over, after the unit has answered."""
+        self._consecutive_failures = 0
 
-        Return True only when the failure threshold is first reached or a
-        later successful poll recovers from that threshold. Keeping the
-        counter saturated while offline prevents a long outage from looking
-        like a new transition every few polls.
+    def _record_failed_poll(self, error: BaseException) -> None:
+        """Count one failed poll and keep what went wrong with it.
+
+        Once per poll: the re-registration that follows a rejected answer is
+        a second request under the same deadline. Saturated at the limit, and
+        the error is kept for the poll that crosses it.
         """
-        if available:
-            became_available = (
-                self._consecutive_failures >= self._availability_failure_limit
-            )
-            self._consecutive_failures = 0
-            self._available = True
-            return became_available
-
-        previous_failures = self._consecutive_failures
+        if self._poll_counted:
+            return
+        self._poll_counted = True
         self._consecutive_failures = min(
-            previous_failures + 1, self._availability_failure_limit
+            self._consecutive_failures + 1, self._availability_failure_limit
         )
-        if self._consecutive_failures >= self._availability_failure_limit:
-            self._available = False
-        return (
-            previous_failures < self._availability_failure_limit
-            <= self._consecutive_failures
-        )
-
-    def _record_connection_failure(self, error: BaseException) -> None:
-        """Count one failed poll, and log it at the level it deserves.
-
-        Every poll still reaches entities (_async_update_data returns the last
-        data on an expected failure), so crossing the threshold needs no
-        notification of its own - only the line that says it happened.
-        """
-        became_unavailable = self._set_availability(False)
-        if became_unavailable:
-            _LOGGER.warning(
-                "Airco [%s] is unavailable after %s failed polls",
-                self.device_name,
-                self._availability_failure_limit,
-            )
-            _LOGGER.debug("Update of [%s] failed", self.device_name, exc_info=error)
-        else:
-            _LOGGER.debug(
-                "Could not reach the airco [%s]: %s", self.device_name, error
-            )
+        self._last_poll_error = error
+        _LOGGER.debug("Could not reach the airco [%s]: %s", self.device_name, error)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -2140,11 +2116,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return self._airco
 
     @property
-    def available(self) -> bool:
-        """Return True if device is available"""
-        return self._available
-
-    @property
     def swing_selects_enabled_default(self) -> bool:
         """Return the registry default for the standalone swing selects."""
         return self._swing_selects_enabled_default
@@ -2167,25 +2138,20 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def _async_update_data(self) -> Aircon:
         """Update data via library.
 
-        A missed poll is not an update failure. These modules restart their
-        WiFi about once an hour on their own, so single failures are routine
-        and carry no consequence: _set_availability() rides them out, and
-        entities follow Device.available rather than the coordinator's own
-        success flag. Raising UpdateFailed for one would put an error in every
-        user's log once an hour for a condition nobody can act on - and the
-        entities would flick to unavailable a poll before our own threshold
-        says they should. So an expected failure returns the last data instead,
-        and only the availability transition is worth a line.
+        One missed poll is not an update failure yet - the modules restart
+        their WiFi about once an hour. A failure below the threshold returns
+        the last data; a run of them fails the update.
         """
+        # The poll starts here, not in update(): set_airco() calls that too,
+        # and the count has to hold for exactly one poll.
+        self._poll_counted = False
         try:
             async with asyncio.timeout(POLL_TIMEOUT.total_seconds()):
-                await self.update()
-        except asyncio.TimeoutError as error:
-            # The outer deadline can expire before the repository's individual
-            # connection attempts do. Treat that exactly like any other missed
-            # poll so transient outages stay quiet and the entity only becomes
-            # unavailable at the configured threshold.
-            self._record_connection_failure(
+                answered = await self.update()
+        except asyncio.TimeoutError:
+            # The outer deadline can expire before the repository's own
+            # attempts do. That is a missed poll like any other.
+            self._record_failed_poll(
                 WfRacConnectionError(
                     f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
                 )
@@ -2199,5 +2165,22 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     "error": str(error),
                 },
             ) from error
+        else:
+            if answered:
+                return self._airco
 
-        return self._airco
+        # Within tolerance and no failure reported yet. A reported one ends
+        # when a poll answers, not on the next routine dropout.
+        if (
+            self._consecutive_failures < self._availability_failure_limit
+            and self.last_update_success
+        ):
+            return self._airco
+        raise UpdateFailed(
+            translation_domain=DOMAIN,
+            translation_key="update_failed",
+            translation_placeholders={
+                "device": self.device_name,
+                "error": str(self._last_poll_error),
+            },
+        )

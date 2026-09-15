@@ -780,7 +780,7 @@ async def test_set_preset_none_restores_a_normal_setpoint(device):
 
 async def test_unknown_fan_step_leaves_the_entity_constructed(device):
     device.airco.AirFlow = AIRFLOW_UNKNOWN
-    device._set_availability(True)
+    device._record_reachable()
 
     # Constructing must not raise: the platform would never finish setting up
     # and the entry would load without a climate entity at all.
@@ -789,7 +789,7 @@ async def test_unknown_fan_step_leaves_the_entity_constructed(device):
     # The unit answered and still takes commands, so only this entity's state
     # is unknown - the device stays as available as it was.
     assert entity.hvac_mode is None
-    assert device.available is True
+    assert device.last_update_success is True
 
 
 async def test_unknown_fan_step_is_recognised_by_name(device, monkeypatch):

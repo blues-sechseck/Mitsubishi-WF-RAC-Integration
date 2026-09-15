@@ -69,16 +69,6 @@ class WfRacEntity(CoordinatorEntity[Device]):
             override = None
         return float(base_offset if override is None else override)
 
-    @property
-    def available(self) -> bool:
-        """Return whether the airco is currently reachable."""
-        # Device tracks its own retry-tolerant availability (see
-        # Device._set_availability()): an expected missed poll leaves the
-        # coordinator successful on purpose, so last_update_success alone
-        # would not hold the entity up. It still has to be honoured, though -
-        # an unexpected failure raises UpdateFailed and only shows there.
-        return super().available and self._device.available
-
     def _mark_state_unknown(self) -> None:
         """Drop the attributes that carry this entity's state.
 

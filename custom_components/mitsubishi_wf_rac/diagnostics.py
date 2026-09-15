@@ -26,7 +26,7 @@ async def async_get_config_entry_diagnostics(
             "version": entry.version,
         },
         "device": {
-            "available": device.available,
+            "available": device.last_update_success,
             "connection_method": device.connection_method,
             "wireless_firmware_version": device.wireless_firmware_version,
             "latest_wireless_firmware_version": (

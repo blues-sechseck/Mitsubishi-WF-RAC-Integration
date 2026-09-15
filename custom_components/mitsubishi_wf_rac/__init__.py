@@ -105,7 +105,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # reassociates on its own roughly once an hour, which a 60s poll
         # interval turns into a visible outage. Turn the check on, and lift
         # limits below 2, which are equivalent to it being off (Device.
-        # _set_availability() needs limit-1 consecutive failures to tolerate).
+        # the tolerance needs limit-1 consecutive failures to ride out).
         new_options[CONF_AVAILABILITY_CHECK] = True
         if new_options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3) < 2:
             new_options[CONF_AVAILABILITY_RETRY_LIMIT] = 3
@@ -164,12 +164,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
     device: str = entry.data[CONF_HOST]
     _device = await create_device_from_entry(entry, hass)
 
-    await _device.update()  # initial update to get fresh values
-    # update() catches its own errors and reflects them via .available instead
-    # of raising (see coordinator.py) - check that instead of try/except so a
-    # device that's unreachable at startup gets HA's automatic retry-with-backoff
-    # rather than a silently "loaded" entry with no working entities.
-    if not _device.available:
+    # update() reports a failure in its return value rather than raising, so
+    # an unreachable device gets HA's retry-with-backoff here.
+    if not await _device.update():
         # No positional message: HomeAssistantError only renders the
         # translation when it is constructed without one.
         raise ConfigEntryNotReady(
