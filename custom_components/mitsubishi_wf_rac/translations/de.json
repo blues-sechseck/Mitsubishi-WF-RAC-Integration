@@ -35,7 +35,7 @@
           "port": "Port"
         },
         "data_description": {
-          "port": "Der vom Modul angekündigte Port. Normalerweise 51443 — bei Abweichung hier korrigieren."
+          "port": "Der Port, unter dem das Modul erreichbar ist. Normalerweise 51443 — weicht der oben angekündigte Wert ab, hier korrigieren."
         }
       },
       "reconfigure": {

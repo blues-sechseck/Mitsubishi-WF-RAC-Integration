@@ -140,7 +140,6 @@ SIGNAL_SET_ENERGY_TOTAL = f"{DOMAIN}_set_energy_total"
 
 SUPPORT_FLAGS = (
     ClimateEntityFeature.FAN_MODE
-    | ClimateEntityFeature.SWING_HORIZONTAL_MODE
     | ClimateEntityFeature.SWING_MODE
     | ClimateEntityFeature.TARGET_TEMPERATURE
     | ClimateEntityFeature.TURN_OFF

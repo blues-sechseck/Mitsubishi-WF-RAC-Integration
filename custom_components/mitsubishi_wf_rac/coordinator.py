@@ -307,6 +307,18 @@ def registration_full_issue_id(entry_id: str) -> str:
     return f"too_many_devices_{entry_id}"
 
 
+def _revision(value: Any) -> str:
+    """One firmware string of a status answer, or "unknown" where none came."""
+    return str(value) if value else "unknown"
+
+
+def _firmware_version(section: Any) -> str:
+    """The firmVer of one section of a status answer, or "unknown"."""
+    if not isinstance(section, dict):
+        return "unknown"
+    return _revision(section.get("firmVer"))
+
+
 def result_code(answer: Any) -> int | None:
     """The result code of a module answer, or None if it carries none.
 
@@ -802,10 +814,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
         # "mcu"/"wireless" sub-keys entirely, so their versions are optional
         # and fall back to "unknown" instead of failing the update.
-        firm_type = response.get("firmType", "unknown")
-        mcu_ver = (response.get("mcu") or {}).get("firmVer", "unknown")
-        wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
-        firmware = f"{firm_type}, mcu: {mcu_ver}, wireless: {wireless_ver}"
+        firmware = (
+            f"{_revision(response.get('firmType'))}, "
+            f"mcu: {_firmware_version(response.get('mcu'))}, "
+            f"wireless: {_firmware_version(response.get('wireless'))}"
+        )
         if firmware != self._firmware:
             # Logged because which firmware branch a report comes from
             # decided the whole diagnosis in #329, and finding it out cost two

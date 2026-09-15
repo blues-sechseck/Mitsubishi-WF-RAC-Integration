@@ -276,13 +276,19 @@ async def test_climate_commands_and_state_branches(platform_device):
     # next, so it is held to what the unit accepts anywhere rather than to the
     # 18C floor of a mode nobody asked for (#317).
     entity._attr_hvac_mode = HVACMode.OFF
-    assert (entity.min_temp, entity.max_temp) == (16, 30)
     await entity.async_set_temperature(temperature=16)
     assert platform_device.async_queue_command.await_args.args[0][AirconCommands.PresetTemp] == 16
+    # What is advertised does not follow the running mode: climate measures a
+    # call against min_temp/max_temp before this entity sees hvac_mode, so a
+    # range that moved with the mode would reject a setpoint the same call
+    # switches into a mode that allows it. It is the union over every mode,
+    # widened to the away setpoints this unit offers.
+    assert (entity.min_temp, entity.max_temp) == (10, 31)
     entity._attr_hvac_mode = HVACMode.FAN_ONLY
-    assert entity.min_temp == 16
+    assert (entity.min_temp, entity.max_temp) == (10, 31)
     entity._attr_hvac_mode = HVACMode.HEAT
-    assert entity.min_temp == 18
+    assert (entity.min_temp, entity.max_temp) == (10, 31)
+    # The mode's own range still bites inside the call.
     with pytest.raises(ServiceValidationError) as too_low:
         await entity.async_set_temperature(temperature=16)
     assert too_low.value.translation_key == "temperature_below_minimum"

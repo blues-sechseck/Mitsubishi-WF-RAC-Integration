@@ -237,12 +237,18 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_create_common(
             self,
             step_id: str,
-            data_schema: vol.Schema,
+            build_schema: Callable[[], vol.Schema],
             user_input: dict[str, Any] | None = None,
             description_placeholders: dict[str, str] | None = None,
             allow_port_fallback: bool = False,
     ) -> ConfigFlowResult:
-        """Create a new entry"""
+        """Create a new entry.
+
+        The schema is built twice: a submission can leave the values it was
+        checked against behind, and a form shown again has to suggest those
+        rather than the ones that did not work.
+        """
+        data_schema = build_schema()
         errors: dict[str, str] = {}
         description_placeholders = description_placeholders or {}
 
@@ -301,7 +307,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # that were found with the input.
         return self.async_show_form(
             step_id=step_id,
-            data_schema=data_schema,
+            data_schema=build_schema(),
             errors=errors,
             description_placeholders=description_placeholders,
         )
@@ -335,21 +341,26 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input[CONF_HOST] = self._discovery_info[CONF_HOST]
             user_input.setdefault(CONF_PORT, self._discovery_info[CONF_PORT])
 
-        field = partial(self._field, user_input)
-        data_schema = vol.Schema(
-            {
-                field(
-                    CONF_PORT, vol.Optional, self._discovery_info[CONF_PORT]
-                ): cv.port,
-            }
-        )
+        def build_schema() -> vol.Schema:
+            # Both halves of the field follow the port the flow is working
+            # with: after a fallback, clearing the field has to land on the
+            # port that answered rather than back on the announced one.
+            port = (user_input or self._discovery_info)[CONF_PORT]
+            field = partial(self._field, user_input)
+            return vol.Schema(
+                {
+                    field(CONF_PORT, vol.Optional, port): cv.port,
+                }
+            )
 
         return await self._async_create_common(
             step_id="discovery_confirm",
-            data_schema=data_schema,
+            build_schema=build_schema,
             user_input=user_input,
             description_placeholders=description_placeholders,
-            allow_port_fallback=True,
+            # A port corrected in the form is a decision, not an announcement.
+            allow_port_fallback=not user_input
+            or user_input[CONF_PORT] == self._discovery_info[CONF_PORT],
         )
 
     @staticmethod
@@ -365,17 +376,18 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle adding device manually."""
 
-        field = partial(self._field, user_input)
-        data_schema = vol.Schema(
-            {
-                field(CONF_HOST, vol.Required): cv.string,
-                field(CONF_PORT, vol.Optional, DEFAULT_PORT): cv.port,
-                field(CONF_FORCE_UPDATE, vol.Optional, False): cv.boolean,
-            }
-        )
+        def build_schema() -> vol.Schema:
+            field = partial(self._field, user_input)
+            return vol.Schema(
+                {
+                    field(CONF_HOST, vol.Required): cv.string,
+                    field(CONF_PORT, vol.Optional, DEFAULT_PORT): cv.port,
+                    field(CONF_FORCE_UPDATE, vol.Optional, False): cv.boolean,
+                }
+            )
 
         return await self._async_create_common(
-            step_id="user", data_schema=data_schema, user_input=user_input
+            step_id="user", build_schema=build_schema, user_input=user_input
         )
 
     async def async_step_reconfigure(
@@ -451,10 +463,16 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle zeroconf discovery."""
 
-        local_name = discovery_info.hostname.rstrip(".")
+        # Lower case before anything is cut off it: DNS is case-insensitive,
+        # and an announcement shouting .LOCAL. would otherwise keep the suffix
+        # and never match the unit that is already configured.
+        local_name = discovery_info.hostname.rstrip(".").lower()
         node_name = local_name.removesuffix(".local")
         host = discovery_info.host
-        port = discovery_info.port
+        # An announcement without a port is still this module: the port is
+        # fixed in the firmware, and a form field with nothing behind it
+        # cannot be filled in or cleared.
+        port = discovery_info.port or DEFAULT_PORT
 
         _LOGGER.debug(
             "zeroconf discovery: hostname=%r, host=%r, port=%r",
@@ -463,14 +481,11 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             discovery_info.port,
         )
 
-        # Lower case on both sides: this id comes from the announced
-        # hostname while every other path takes it from the airconId the unit
-        # reports, and a difference in case would leave discovery unable to
-        # recognise an entry it had matched on before.
-        await self.async_set_unique_id(node_name.lower())
-        # The address only. A module that moved gets followed; its port is
-        # what setup was configured with, and a rediscovery announcing a
-        # different one would take a working entry offline.
+        # One case on both sides: this id comes from the hostname and every
+        # other path from the airconId the unit reports.
+        await self.async_set_unique_id(node_name)
+        # The address only, so a module that moved gets followed: modules have
+        # been seen announcing 5353 where the API port belongs.
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
 
         info = {CONF_HOST: host, CONF_PORT: port}
