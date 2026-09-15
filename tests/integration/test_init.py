@@ -181,9 +181,14 @@ async def test_an_entry_from_before_the_host_moved_still_sets_up(hass: HomeAssis
     """
     entry = _entry(hass, 5, _DATA, {CONF_HOST: "192.168.1.50"})
 
+    # A real dict, not a bare mock: the poll reads named fields out of the
+    # answer, and a mock answers every one of them with another mock.
+    repository = AsyncMock()
+    repository.get_aircon_stats.return_value = {}
+
     with patch(
         "custom_components.mitsubishi_wf_rac.coordinator.Repository",
-        return_value=AsyncMock(),
+        return_value=repository,
     ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -318,7 +323,7 @@ async def test_removal_says_so_when_the_slot_is_not_released(
     ):
         await async_remove_entry(hass, entry)
 
-    assert "Could not delete operator ID" in caplog.text
+    assert "Could not release the controller slot" in caplog.text
 
 
 async def test_migrate_v6_registers_the_airco_id_as_unique_id(hass: HomeAssistant):

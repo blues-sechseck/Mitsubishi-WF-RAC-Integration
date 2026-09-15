@@ -46,7 +46,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN
-from pywfrac import Repository, WfRacError
+from pywfrac import RESULT_CODES, Repository, WfRacError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,8 +65,12 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # new step that is not reflected here never runs.
     VERSION = 7
     DOMAIN = DOMAIN
-    # Annotated, not assigned: a dict here would be shared by every flow.
-    _discovery_info: dict[str, Any]
+
+    def __init__(self) -> None:
+        """Start a flow with no identifiers generated yet."""
+        self._discovery_info: dict[str, Any] = {}
+        self._generated_operator_id: str | None = None
+        self._generated_device_id: str | None = None
 
     def is_matching(self, other_flow: "WfRacConfigFlow") -> bool:
         """Return True if two flows are attempting to configure the same device."""
@@ -217,6 +221,24 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             raise CannotConnect(reason="unreadable registration answer") from unreadable
         if registration_result == 2:
             raise TooManyDevicesRegistered
+        # Every other code the library knows says the registration did not
+        # happen, so the form says so rather than storing an entry that cannot
+        # poll.
+        if registration_result != 0 and registration_result in RESULT_CODES:
+            raise CannotConnect(reason=RESULT_CODES[registration_result])
+        if registration_result != 0:
+            # Not refused: the handler of the firmware we can read maps its
+            # return value onto 0/1/2/11/12 and nothing else, so this is a
+            # branch we have never seen. Taking it for a failure would leave a
+            # unit that answers it unusable, so it is logged and let through -
+            # and the log line is the evidence we do not have yet.
+            _LOGGER.warning(
+                "Airco [%s] answered the registration with result %s, which is "
+                "not a code this integration knows. Setup continues. Please "
+                "report this together with the module's firmware version",
+                data[CONF_AIRCO_ID],
+                registration_result,
+            )
 
         return data
 
@@ -225,14 +247,20 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._find_entry_matching(CONF_OPERATOR_ID, bool)
         if entry:
             return str(entry.data[CONF_OPERATOR_ID])
-        return f"hassio-{str(uuid4())[7:]}"
+        # Once per flow, not per submission: a registration whose answer was
+        # lost has still taken one of the four slots.
+        if self._generated_operator_id is None:
+            self._generated_operator_id = f"hassio-{str(uuid4())[7:]}"
+        return self._generated_operator_id
 
     async def _async_fetch_device_id(self) -> str:
         """Fetch unique device id if exists otherwise create it."""
         entry = self._find_entry_matching(CONF_DEVICE_ID, bool)
         if entry:
             return str(entry.data[CONF_DEVICE_ID])
-        return f"homeassistant-device-{uuid4().hex[21:]}"
+        if self._generated_device_id is None:
+            self._generated_device_id = f"homeassistant-device-{uuid4().hex[21:]}"
+        return self._generated_device_id
 
     async def _async_create_common(
             self,
@@ -317,7 +345,11 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         description = None
         if value is not None:
             description = {"suggested_value": value}
-        return which(name, description=description)
+        if default is None:
+            return which(name, description=description)
+        # A suggestion only pre-fills: a cleared field leaves the key out of
+        # user_input altogether, and the schema default keeps it present.
+        return which(name, description=description, default=default)
 
     async def async_step_discovery_confirm(
         self, user_input: dict[str, Any] | None = None

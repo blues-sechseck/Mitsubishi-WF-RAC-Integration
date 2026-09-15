@@ -448,6 +448,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._send_lock = asyncio.Lock()
         self._consolidated_params: dict[AirconCommands, Any] = {}
         self._consolidation_task: asyncio.Task[None] | None = None
+        # _consolidation_task is only the one still taking parameters.
+        self._running_flushes: set[asyncio.Task[None]] = set()
 
         super().__init__(
             hass,
@@ -574,7 +576,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         entities on an entry that no longer updates.
         """
         self._release_external_temperature_carrier()
-        for task in (self._consolidation_task, self._service_data_task):
+        # A flush that has taken its parameters lets go of
+        # _consolidation_task, so that alone leaves nothing to cancel: the
+        # send finishes afterwards and publishes to entities that are gone,
+        # over the one connection the reload needs.
+        self._consolidation_task = None
+        for task in (*self._running_flushes, self._service_data_task):
             if task is None:
                 continue
             task.cancel()
@@ -764,26 +771,20 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._record_failed_poll(ex)
             return False
         except (WfRacError, KeyError) as ex:
+            # Not logged here: being dropped from the account table is one
+            # outage, not one per poll, and _record_failed_poll() reports it
+            # on the transition.
             self._record_failed_poll(ex)
-            _LOGGER.warning(
-                "Error: something went wrong updating the airco [%s] values",
-                self.device_name,
-                exc_info=ex,
-            )
-            # The WF-RAC module keeps only a small, fixed-size table of registered
-            # accounts (operator ids). Opening the official app or adding phones can
-            # silently evict Home Assistant from that table, after which polls fail
-            # until the integration is reloaded. Proactively re-register our account
-            # on failure so we recover automatically on the next poll if we were
-            # evicted. An evicted account still answers (HTTP 400 / result:2, see
-            # Repository.get_aircon_stats), so this is skipped above when the unit
-            # was simply unreachable - re-registering can't succeed over a
-            # connection that isn't there. add_account() swallows its own errors.
+            # The official app can evict us from the module's small account
+            # table, and polls fail until we register again. An evicted
+            # account still answers - unlike the branch above.
             await self.add_account()
             return False
 
         try:
-            self._connected_accounts = int(response["numOfAccount"])
+            # .get(): this only feeds a diagnostic sensor, and a revision that
+            # does not send it must not cost the poll that read the state block.
+            self._connected_accounts = int(response.get("numOfAccount", -1))
             new_airco = self._parser.translate_bytes(response["airconStat"])
             self._carry_forward_home_leave_mode(new_airco)
             self._carry_forward_service_data(new_airco)
@@ -1426,7 +1427,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self._airco_id, self.hass.config.time_zone
             )
         except (WfRacError, KeyError, TypeError):
-            _LOGGER.warning("Could not add account from airco %s", self._airco_id)
+            _LOGGER.debug("Could not add account from airco %s", self._airco_id)
             return None
 
         # Here result:2 means the account table is full, and nothing frees a
@@ -1850,16 +1851,17 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         setpoint change issued together share a request instead of racing.
         """
         self._consolidated_params.update(params)
-        if self._consolidation_task is None:
-            self._consolidation_task = self.hass.async_create_task(
-                self._async_flush_queued_command()
-            )
+        if (flush := self._consolidation_task) is None:
+            flush = self.hass.async_create_task(self._async_flush_queued_command())
+            self._consolidation_task = flush
+            self._running_flushes.add(flush)
+            flush.add_done_callback(self._running_flushes.discard)
         # Every caller awaits the one flush its parameters ended up in, so a
         # refusal by the unit reaches the action that caused it instead of
         # being logged into the void. Shielded because the task is shared: a
         # caller giving up (a cancelled service call) must not take the other
         # callers' command down with it.
-        await asyncio.shield(self._consolidation_task)
+        await asyncio.shield(flush)
 
     def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
         """The unit reports the Tag-248 HomeLeaveMode extension segment exactly

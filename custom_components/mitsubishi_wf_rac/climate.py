@@ -501,7 +501,15 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         )
         target_temp = max(device_low, min(device_high, target_temp))
 
-        opts: dict[AirconCommands, Any] = {AirconCommands.PresetTemp: target_temp}
+        # Home Assistant validates the advertised range but not the step, so a
+        # value between two halves arrives here intact - and the frame would
+        # truncate it, turning 21.4 into 21.0 rather than the 21.5 it is
+        # nearer to. Rounded rather than refused: the unit cannot hold it
+        # either way, and an automation that has always sent tenths should not
+        # start failing over it.
+        opts: dict[AirconCommands, Any] = {
+            AirconCommands.PresetTemp: round(target_temp * 2) / 2
+        }
 
         if requested_hvac_mode is not None:
             opts.update(
