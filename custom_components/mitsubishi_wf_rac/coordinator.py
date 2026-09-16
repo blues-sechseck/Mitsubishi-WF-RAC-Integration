@@ -1023,9 +1023,20 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         cannot fix is a deadline stamped by a client whose clock was off,
         hence the cap. Falls back to WRITE_LOCK_RETRY_DELAY when the unit does
         not answer or reports no `expires`.
+
+        The answer is kept, not just its deadline: it carries what the other
+        client wrote, and the retry's block is built from it.
         """
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
+            fresh = self._parser.translate_bytes(response["airconStat"])
+            # Through the carry-forward helpers, not straight onto _airco: a
+            # fresh block has no HomeLeaveMode and no service data in it, and
+            # dropping those here would blank the diagnostic sensors for a
+            # cycle exactly as an unprompted poll once did.
+            self._carry_forward_home_leave_mode(fresh)
+            self._carry_forward_service_data(fresh)
+            self._airco = fresh
             expires = response["expires"]
         except (WfRacError, KeyError, TypeError, ValueError):
             return WRITE_LOCK_RETRY_DELAY.total_seconds()
@@ -1704,6 +1715,36 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self.hass, DOMAIN, registration_full_issue_id(self.entry_id)
         )
 
+    def _build_command(self, params: dict[AirconCommands, Any]) -> AirconStat:
+        """Build the full state block for a command.
+
+        A block, not a delta: every field the caller did not name goes out as
+        we last saw it. It is therefore only as current as self._airco, which
+        is why the retry below builds a second one instead of re-sending this.
+        """
+        if self._airco is None:
+            raise ValueError("Airco object is empty")
+
+        airco_stat = AirconStat.from_aircon(self._airco)
+
+        # Not a command parameter: the override has no set-bit of its own
+        # and is never written for its own sake, it only rides along on
+        # frames that were going out anyway (see AircoClimate.
+        # async_set_external_temperature). Applied to every frame, since
+        # one that leaves byte 5 alone reverts the unit to its own sensor.
+        airco_stat.ExternalTemperature = self._external_temperature_override
+
+        for key, value in params.items():
+            setattr(airco_stat, key, value)
+
+        # After the parameters, not before: the correction depends on the
+        # mode this frame is putting the unit into, which a command in
+        # params may just have changed.
+        airco_stat.ExternalTemperature = self._corrected_external_temperature(
+            airco_stat.ExternalTemperature, airco_stat.OperationMode
+        )
+        return airco_stat
+
     async def set_airco(
         self,
         params: dict[AirconCommands, Any],
@@ -1750,24 +1791,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             if self._airco is None:
                 raise ValueError("Airco object is empty")
 
-            airco_stat = AirconStat.from_aircon(self._airco)
-
-            # Not a command parameter: the override has no set-bit of its own
-            # and is never written for its own sake, it only rides along on
-            # frames that were going out anyway (see AircoClimate.
-            # async_set_external_temperature). Applied to every frame, since
-            # one that leaves byte 5 alone reverts the unit to its own sensor.
-            airco_stat.ExternalTemperature = self._external_temperature_override
-
-            for key, value in params.items():
-                setattr(airco_stat, key, value)
-
-            # After the parameters, not before: the correction depends on the
-            # mode this frame is putting the unit into, which a command in
-            # params may just have changed.
-            airco_stat.ExternalTemperature = self._corrected_external_temperature(
-                airco_stat.ExternalTemperature, airco_stat.OperationMode
-            )
+            airco_stat = self._build_command(params)
 
             try:
                 command = self._parser.to_base64(airco_stat)
@@ -1786,8 +1810,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     if not retry_when_locked:
                         raise
                     await asyncio.sleep(await self._async_write_lock_delay())
+                    # Rebuilt rather than re-sent: the wait read the unit
+                    # again, so self._airco now carries what the other client
+                    # wrote while it held the lock. The block encoded before
+                    # the refusal still carries the state from before that,
+                    # and sending it would hand their change straight back.
+                    airco_stat = self._build_command(params)
                     response = await self._api.send_airco_command(
-                        self._airco_id, command, timestamp_offset=timestamp_offset
+                        self._airco_id,
+                        self._parser.to_base64(airco_stat),
+                        timestamp_offset=timestamp_offset,
                     )
                 except WfRacRegistrationError:
                     # Our operator id is not in the airco's account table.
