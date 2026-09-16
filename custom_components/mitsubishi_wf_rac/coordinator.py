@@ -2176,8 +2176,19 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
                 )
             )
-        # Anything else is a bug in here rather than a device that went
-        # quiet, and DataUpdateCoordinator logs it with its traceback.
+        except Exception as error:
+            # Not a device that went quiet but a fault, and it has to stay an
+            # UpdateFailed: DataUpdateCoordinator logs that one once, with the
+            # traceback at debug, while its own catch-all writes a traceback
+            # on every poll for as long as the fault lasts.
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={
+                    "device": self.device_name,
+                    "error": str(error),
+                },
+            ) from error
         else:
             if answered:
                 return self._airco
