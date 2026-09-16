@@ -105,7 +105,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # reassociates on its own roughly once an hour, which a 60s poll
         # interval turns into a visible outage. Turn the check on, and lift
         # limits below 2, which are equivalent to it being off (Device.
-        # _set_availability() needs limit-1 consecutive failures to tolerate).
+        # the tolerance needs limit-1 consecutive failures to ride out).
         new_options[CONF_AVAILABILITY_CHECK] = True
         if new_options.get(CONF_AVAILABILITY_RETRY_LIMIT, 3) < 2:
             new_options[CONF_AVAILABILITY_RETRY_LIMIT] = 3
@@ -164,12 +164,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
     device: str = entry.data[CONF_HOST]
     _device = await create_device_from_entry(entry, hass)
 
-    await _device.update()  # initial update to get fresh values
-    # update() catches its own errors and reflects them via .available instead
-    # of raising (see coordinator.py) - check that instead of try/except so a
-    # device that's unreachable at startup gets HA's automatic retry-with-backoff
-    # rather than a silently "loaded" entry with no working entities.
-    if not _device.available:
+    # update() reports a failure in its return value rather than raising, so
+    # an unreachable device gets HA's retry-with-backoff here.
+    if not await _device.update():
         # No positional message: HomeAssistantError only renders the
         # translation when it is constructed without one.
         raise ConfigEntryNotReady(
@@ -215,6 +212,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEnt
 
 
 async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> Device:
+    """Build the coordinator for a config entry."""
     device: str = entry.data[CONF_HOST]
     # The entry title, not a stored name: that is what Home Assistant's own
     # rename changes, and a name kept in entry.data would quietly ignore it.
@@ -281,24 +279,20 @@ async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
     """Handle removal of an entry."""
 
     temp_device = await create_device_from_entry(entry, hass)
-    # delete_account() returns None on failure rather than raising, so the
-    # result is what says whether the slot was actually released.
+    # delete_account() returns None for everything short of a confirmed
+    # release, which is what decides between the two lines.
     result = await temp_device.delete_account()
     if result is not None:
         _LOGGER.info(
-            "Deleted operator ID [%s] from airco [%s]",
-            temp_device.operator_id,
-            temp_device.airco_id,
+            "Released the controller slot on airco [%s]", temp_device.airco_id
         )
     else:
         _LOGGER.warning(
-            "Could not delete operator ID [%s] from airco [%s]",
-            temp_device.operator_id,
+            "Could not release the controller slot on airco [%s]. Free it in "
+            "the manufacturer's app if you want it back",
             temp_device.airco_id,
         )
 
-    # Entry-scoped, so it would otherwise dangle in the repair list forever
-    # pointing at an entry_id that no longer resolves to anything.
     ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
     ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
     ir.async_delete_issue(

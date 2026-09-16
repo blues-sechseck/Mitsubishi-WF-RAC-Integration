@@ -300,15 +300,40 @@ def status_request_unsupported_issue_id(entry_id: str) -> str:
 def registration_full_issue_id(entry_id: str) -> str:
     """Repair-issue id for a full account table on this entry's airco.
 
-    Shared between Device (which raises/clears it) and async_unload_entry
-    (which clears it on removal, so a deleted entry doesn't leave a dangling
-    issue behind) - one format, so the two can never drift apart.
+    Shared with async_remove_entry, which clears it when the entry is deleted.
+    An unload leaves it standing: the condition outlives a reload.
     """
     return f"too_many_devices_{entry_id}"
 
 
+def _revision(value: Any) -> str:
+    """One firmware string of a status answer, or "unknown" where none came."""
+    return str(value) if value else "unknown"
+
+
+def _firmware_version(section: Any) -> str:
+    """The firmVer of one section of a status answer, or "unknown"."""
+    if not isinstance(section, dict):
+        return "unknown"
+    return _revision(section.get("firmVer"))
+
+
+def result_code(answer: Any) -> int | None:
+    """The result code of a module answer, or None if it carries none.
+
+    The parsed body arrives as it came, so neither its shape nor the field's
+    type is guaranteed.
+    """
+    if not isinstance(answer, dict):
+        return None
+    try:
+        return int(answer["result"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instance-attributes
-    """Device Class"""
+    """Device Class."""
 
     # Narrowed from the base class's optional: this integration never builds a
     # Device without one.
@@ -330,6 +355,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             connection_method: str | None = None,
             status_request_mode: str = STATUS_REQUEST_STRICT,
     ) -> None:
+        """Set up the coordinator for one airco."""
         self._api = Repository(
             async_get_clientsession(hass),
             hostname,
@@ -355,7 +381,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._host = hostname
         self._port = port
         self._airco_id = airco_id
-        self._available = False
+        self._poll_counted = False
+        self._last_poll_error: BaseException | None = None
         self._name = name
         self._firmware = ""
         self._connected_accounts = -1
@@ -410,9 +437,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._external_temperature_written: deque[int] = deque(maxlen=2)
         self._external_temperature_carrier: Callable[[], None] | None = None
         self._consecutive_failures = 0
-        # Clamped rather than validated: an entry can carry a lower value from
-        # an older version, and refusing to set up over it would be worse than
-        # quietly giving it the tolerance it should have had.
         self._availability_failure_limit = max(
             AVAILABILITY_FAILURE_LIMIT_MIN, availability_failure_limit
         )
@@ -424,6 +448,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._send_lock = asyncio.Lock()
         self._consolidated_params: dict[AirconCommands, Any] = {}
         self._consolidation_task: asyncio.Task[None] | None = None
+        # _consolidation_task is only the one still taking parameters.
+        self._running_flushes: set[asyncio.Task[None]] = set()
 
         super().__init__(
             hass,
@@ -440,7 +466,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def entry_id(self) -> str:
-        """Id of the config entry that owns this device - see options above."""
+        """Id of the config entry that owns this device."""
         return self.config_entry.entry_id
 
     @property
@@ -541,22 +567,21 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             )
 
     async def async_shutdown(self) -> None:
-        """Release the subscription and both tasks along with the coordinator.
+        """Shut the coordinator down.
 
-        Neither task is owned by DataUpdateCoordinator, and hass only cancels
-        background tasks when hass itself stops - which an entry unload is
-        not. The operation-data one matters most: it spends most of its life
-        asleep waiting out its offset, so a reload catches it mid-sleep and
-        its request would go out from the old entry through a second
-        Repository while the new one is already polling. Two connections at
-        once is what the module will not take.
-
-        Failures are logged and swallowed: an unload that raises leaves
-        entities loaded on an entry that no longer updates, and both tasks
-        report what matters elsewhere.
+        Both tasks run on hass rather than under DataUpdateCoordinator, so
+        they are cancelled here: one that survived would publish to entities
+        that are gone, and take the single connection the reload needs.
+        Failures are logged and swallowed - an unload that raises leaves
+        entities on an entry that no longer updates.
         """
         self._release_external_temperature_carrier()
-        for task in (self._consolidation_task, self._service_data_task):
+        # A flush that has taken its parameters lets go of
+        # _consolidation_task, so that alone leaves nothing to cancel: the
+        # send finishes afterwards and publishes to entities that are gone,
+        # over the one connection the reload needs.
+        self._consolidation_task = None
+        for task in (*self._running_flushes, self._service_data_task):
             if task is None:
                 continue
             task.cancel()
@@ -729,53 +754,37 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return tuple(sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES)))
 
     async def update(self) -> bool:
-        """Update the device information from API.
+        """Fetch one status block, and say whether the unit answered.
 
-        Called both directly (initial fetch in __init__.py before entities
-        exist, and set_airco()'s own fallback fetch) and by the coordinator
-        via _async_update_data() below. Deliberately does not call
-        async_refresh()/async_set_updated_data() itself: on the coordinator
-        poll path, listeners are already notified automatically once
-        _async_update_data() returns, and calling async_refresh() here would
-        re-enter _async_update_data() -> update() from within that same path.
-        The other two call sites don't need a notification either - the
-        initial fetch runs before any entity/listener exists, and
-        set_airco()'s fallback fetch is immediately followed by a command
-        whose completion already triggers async_set_updated_data() (see
-        Device.async_queue_command()).
+        Notifies nobody: _async_update_data() does that when it returns, the
+        initial fetch runs before any entity exists, and set_airco()'s
+        fallback fetch is followed by a command that notifies.
         """
-
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
 
             if response is None:
-                self._set_availability(False)
+                self._record_failed_poll(WfRacError("answered without any data"))
                 _LOGGER.warning("Received no data for device %s", self._airco_id)
                 return False
         except WfRacConnectionError as ex:
-            self._record_connection_failure(ex)
+            self._record_failed_poll(ex)
             return False
         except (WfRacError, KeyError) as ex:
-            self._set_availability(False)
-            _LOGGER.warning(
-                "Error: something went wrong updating the airco [%s] values",
-                self.device_name,
-                exc_info=ex,
-            )
-            # The WF-RAC module keeps only a small, fixed-size table of registered
-            # accounts (operator ids). Opening the official app or adding phones can
-            # silently evict Home Assistant from that table, after which polls fail
-            # until the integration is reloaded. Proactively re-register our account
-            # on failure so we recover automatically on the next poll if we were
-            # evicted. An evicted account still answers (HTTP 400 / result:2, see
-            # Repository.get_aircon_stats), so this is skipped above when the unit
-            # was simply unreachable - re-registering can't succeed over a
-            # connection that isn't there. add_account() swallows its own errors.
+            # Not logged here: being dropped from the account table is one
+            # outage, not one per poll, and _record_failed_poll() reports it
+            # on the transition.
+            self._record_failed_poll(ex)
+            # The official app can evict us from the module's small account
+            # table, and polls fail until we register again. An evicted
+            # account still answers - unlike the branch above.
             await self.add_account()
             return False
 
         try:
-            self._connected_accounts = int(response["numOfAccount"])
+            # .get(): this only feeds a diagnostic sensor, and a revision that
+            # does not send it must not cost the poll that read the state block.
+            self._connected_accounts = int(response.get("numOfAccount", -1))
             new_airco = self._parser.translate_bytes(response["airconStat"])
             self._carry_forward_home_leave_mode(new_airco)
             self._carry_forward_service_data(new_airco)
@@ -788,21 +797,20 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._account_expires = response.get("expires")
             self._led_status = response.get("ledStat")
             self._auto_heating = response.get("autoHeating")
-            became_available = self._set_availability(True)
-            if became_available:
-                _LOGGER.info("Airco [%s] is available again", self.device_name)
+            self._record_reachable()
         except (KeyError, TypeError, ValueError) as ex:
             _LOGGER.warning("Could not parse airco data", exc_info=ex)
-            self._set_availability(False)
+            self._record_failed_poll(ex)
             return False
 
         # Cosmetic (diagnostic sensor only). Some firmware revisions omit the
         # "mcu"/"wireless" sub-keys entirely, so their versions are optional
         # and fall back to "unknown" instead of failing the update.
-        firm_type = response.get("firmType", "unknown")
-        mcu_ver = (response.get("mcu") or {}).get("firmVer", "unknown")
-        wireless_ver = (response.get("wireless") or {}).get("firmVer", "unknown")
-        firmware = f"{firm_type}, mcu: {mcu_ver}, wireless: {wireless_ver}"
+        firmware = (
+            f"{_revision(response.get('firmType'))}, "
+            f"mcu: {_firmware_version(response.get('mcu'))}, "
+            f"wireless: {_firmware_version(response.get('wireless'))}"
+        )
         if firmware != self._firmware:
             # Logged because which firmware branch a report comes from
             # decided the whole diagnosis in #329, and finding it out cost two
@@ -1008,20 +1016,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def _async_write_lock_delay(self) -> float:
         """Seconds to wait before retrying a write the unit just refused.
 
-        The refusal carries no deadline with it, and the `expires` from the
-        last poll is our own stale one - the lock in the way was taken after
-        that poll, which is why we did not see it coming. So ask: a
-        getAirconStat is cheap and takes no lock of its own, and it reports
-        when the lock currently held lapses.
-
-        That deadline can be read against our own clock directly, because the
-        module has none: it takes its time from the `timestamp` field of every
-        request it receives, so the request asking the question sets the clock
-        the answer is measured against. What that cannot fix is a deadline
-        stamped by a client whose own clock was off - hence the cap.
-
-        Falls back to WRITE_LOCK_RETRY_DELAY when the unit does not answer or
-        reports no `expires` at all.
+        The refusal carries no deadline and the last poll's `expires` is
+        stale, so ask: a getAirconStat takes no lock of its own and reports
+        when the one in the way lapses. It reads against our own clock, since
+        the module takes its time from each request's `timestamp` - what that
+        cannot fix is a deadline stamped by a client whose clock was off,
+        hence the cap. Falls back to WRITE_LOCK_RETRY_DELAY when the unit does
+        not answer or reports no `expires`.
         """
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
@@ -1403,39 +1404,39 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         )
 
     async def delete_account(self) -> dict[str, Any] | None:
-        """Delete account (operator id) from the airco"""
+        """Delete account (operator id) from the airco.
+
+        None means the slot was not released - the request failed, or the
+        answer did not confirm it. Nothing but a result code of 0 does: the
+        refusal, the rate limit and the module's internal error all leave the
+        slot where it was.
+        """
         try:
-            return await self._api.del_account_info(self._airco_id)
+            result = await self._api.del_account_info(self._airco_id)
         except (WfRacError, KeyError, TypeError):
             _LOGGER.warning("Could not delete account from airco %s", self._airco_id)
             return None
+        if result_code(result) != 0:
+            return None
+        return result
 
     async def add_account(self) -> dict[str, Any] | None:
-        """Add account (operator id) from the airco"""
+        """Add account (operator id) from the airco."""
         try:
             result = await self._api.update_account_info(
                 self._airco_id, self.hass.config.time_zone
             )
         except (WfRacError, KeyError, TypeError):
-            _LOGGER.warning("Could not add account from airco %s", self._airco_id)
+            _LOGGER.debug("Could not add account from airco %s", self._airco_id)
             return None
 
-        # On updateAccountInfo specifically, result:2 does mean the account
-        # table is full: the module answers it when no slot matches our id and
-        # none is free. (The same code means other things on setAirconStat -
-        # see RESULT_CODES - but this endpoint never talks to the indoor unit,
-        # so those paths cannot reach it here.)
-        #
-        # Nothing frees a slot on its own: registrations do not expire and are
-        # never evicted, so re-registering cannot succeed until someone
-        # removes one from the official app - or the module is set up afresh.
-        # That is a standing condition worth a repair issue rather than a
-        # warning that scrolls out of the log every cycle; a normal-looking
-        # response means whatever caused it is gone, so the issue (if any)
-        # clears itself.
-        if result and int(result.get("result", 0)) == 2:
+        # Here result:2 means the account table is full, and nothing frees a
+        # slot but the official app - a standing condition for Repairs, ended
+        # by a registration that went through and by nothing else.
+        code = result_code(result)
+        if code == 2:
             self._report_registration_full()
-        else:
+        elif code == 0:
             self._clear_registration_full_issue()
         return result
 
@@ -1712,28 +1713,24 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         is_status_request: bool = False,
         retry_when_locked: bool = True,
     ) -> None:
-        """Method to send airco command.
+        """Send one command frame to the airco.
 
-        log_failure=False leaves the reporting to the caller, for requests that
-        have their own retry and a quieter failure story than a user command
-        that never reached the unit - see _async_request_service_data().
+        log_failure=False leaves the reporting to the caller, for requests
+        that have their own retry.
 
         is_status_request marks a frame that asks for readings instead of
-        changing anything: its block carries no set-bits (see
-        RacParser.status_request_to_byte), so the settings it echoes back are
-        the unit's own and claiming them as our expectation would hide
-        whatever the IR remote did while the request was in flight.
+        changing anything: its block carries no set-bits, so what it echoes
+        back is the unit's own state rather than our expectation.
 
-        retry_when_locked=False hands the refusal straight back to the caller
-        instead of waiting the foreign write lock out below. For an optional
-        read that is the whole answer - the caller skips the cycle - and the
-        wait itself is the harm: it runs inside _send_lock, where a real user
-        command would be stuck behind it for up to WRITE_LOCK_MAX_WAIT.
+        retry_when_locked=False hands a refusal straight back instead of
+        waiting the foreign write lock out below - that wait runs inside
+        _send_lock, where a user command would sit behind it for up to
+        WRITE_LOCK_MAX_WAIT.
 
-        timestamp_offset shifts the `timestamp` this request stamps, and so the
-        write lock it takes (deadline is timestamp + 60, the module has no RTC).
-        Negative for operation-data requests, to give up part of the lock - see
-        SERVICE_DATA_STAMP_BACKDATE. Left at 0 for real commands.
+        timestamp_offset shifts the `timestamp` this request stamps, and so
+        the write lock it takes (deadline is timestamp + 60, the module has no
+        clock). Negative for operation-data requests, to give up part of the
+        lock; 0 for real commands.
         """
         _LOGGER.debug("Setting airco: %s", params)
         # Held for the whole read-modify-send-update sequence, not just the
@@ -1837,29 +1834,34 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self._external_temperature_written.clear()
                 else:
                     self._external_temperature_written.append(written)
+                # Proof of reachability like a poll: once a unit counts as
+                # away, the service layer drops the calls that would show it
+                # is there.
+                self._record_reachable()
             except (WfRacError, KeyError, TypeError, ValueError) as ex:
                 if log_failure:
                     _LOGGER.warning("Could not send airco data: %s", str(ex))
                 raise
 
     async def async_queue_command(self, params: dict[AirconCommands, Any]) -> None:
-        """Queue an airco command, coalescing with any other calls made within
-        UPDATE_CONSOLIDATION_PERIOD into a single set_airco() call. Used by all
-        entities instead of calling set_airco() directly, so that e.g. a fan
-        speed change and a temperature change issued moments apart end up in
-        the same request instead of racing each other.
+        """Queue an airco command, coalescing calls made close together.
+
+        Calls within UPDATE_CONSOLIDATION_PERIOD become one set_airco(). Every
+        entity uses this rather than set_airco(), so a fan change and a
+        setpoint change issued together share a request instead of racing.
         """
         self._consolidated_params.update(params)
-        if self._consolidation_task is None:
-            self._consolidation_task = self.hass.async_create_task(
-                self._async_flush_queued_command()
-            )
+        if (flush := self._consolidation_task) is None:
+            flush = self.hass.async_create_task(self._async_flush_queued_command())
+            self._consolidation_task = flush
+            self._running_flushes.add(flush)
+            flush.add_done_callback(self._running_flushes.discard)
         # Every caller awaits the one flush its parameters ended up in, so a
         # refusal by the unit reaches the action that caused it instead of
         # being logged into the void. Shielded because the task is shared: a
         # caller giving up (a cancelled service call) must not take the other
         # callers' command down with it.
-        await asyncio.shield(self._consolidation_task)
+        await asyncio.shield(flush)
 
     def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
         """The unit reports the Tag-248 HomeLeaveMode extension segment exactly
@@ -1961,14 +1963,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         try:
             await self.set_airco(params)
         except (WfRacError, KeyError, TypeError, ValueError) as ex:
-            # Already logged in set_airco(). Push the current state out first
-            # so entities pick up self.available if the same failure flipped
-            # it, then report: async_queue_command() awaits this task, so the
-            # error lands on the action that issued the command instead of
-            # becoming an orphaned "Task exception was never retrieved".
-            # Wrapped rather than re-raised - a library exception in a service
-            # call is a traceback, not something the user can read.
-            self.async_set_updated_data(self._airco)
+            # Already logged in set_airco(). A failed command says nothing
+            # about the poll before it, so the listeners hear the state without
+            # the coordinator being declared successful. Wrapped rather than
+            # re-raised - a library exception in a service call is a traceback,
+            # not something the user can read - and async_queue_command()
+            # awaits this task, so it lands on the action that issued it.
+            self.async_update_listeners()
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="command_failed",
@@ -1977,68 +1978,36 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     "error": str(ex),
                 },
             ) from ex
-        # Immediately push the (possibly unchanged, on failure) state to all
-        # entities instead of leaving them to wait for the next poll (up to
-        # MIN_TIME_BETWEEN_UPDATES later).
+        # The unit's answer reaches the entities now, not a poll later.
         self.async_set_updated_data(self._airco)
 
-    def _set_availability(self, available: bool) -> bool:
-        """Mark the device available, or unavailable once it has missed
-        self._availability_failure_limit polls in a row.
+    def _record_reachable(self) -> None:
+        """Start the tolerance over, after the unit has answered."""
+        self._consecutive_failures = 0
 
-        Return True only when the failure threshold is first reached or a
-        later successful poll recovers from that threshold. Keeping the
-        counter saturated while offline prevents a long outage from looking
-        like a new transition every few polls.
+    def _record_failed_poll(self, error: BaseException) -> None:
+        """Count one failed poll and keep what went wrong with it.
+
+        Once per poll: the re-registration that follows a rejected answer is
+        a second request under the same deadline. Saturated at the limit, and
+        the error is kept for the poll that crosses it.
         """
-        if available:
-            became_available = (
-                self._consecutive_failures >= self._availability_failure_limit
-            )
-            self._consecutive_failures = 0
-            self._available = True
-            return became_available
-
-        previous_failures = self._consecutive_failures
+        if self._poll_counted:
+            return
+        self._poll_counted = True
         self._consecutive_failures = min(
-            previous_failures + 1, self._availability_failure_limit
+            self._consecutive_failures + 1, self._availability_failure_limit
         )
-        if self._consecutive_failures >= self._availability_failure_limit:
-            self._available = False
-        return (
-            previous_failures < self._availability_failure_limit
-            <= self._consecutive_failures
-        )
-
-    def _record_connection_failure(self, error: BaseException) -> None:
-        """Count one failed poll, and log it at the level it deserves.
-
-        Every poll still reaches entities (_async_update_data returns the last
-        data on an expected failure), so crossing the threshold needs no
-        notification of its own - only the line that says it happened.
-        """
-        became_unavailable = self._set_availability(False)
-        if became_unavailable:
-            _LOGGER.warning(
-                "Airco [%s] is unavailable after %s failed polls",
-                self.device_name,
-                self._availability_failure_limit,
-            )
-            _LOGGER.debug("Update of [%s] failed", self.device_name, exc_info=error)
-        else:
-            _LOGGER.debug(
-                "Could not reach the airco [%s]: %s", self.device_name, error
-            )
+        self._last_poll_error = error
+        _LOGGER.debug("Could not reach the airco [%s]: %s", self.device_name, error)
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return a device description for device registry.
 
-        No "model": the only model field the protocol offers is ModelNr, a
-        capability grouping (0/1/2/3/64...), not a type name - it would put a
-        bare digit where users expect "SRK35ZS-WF". It goes into model_id
-        instead, which is what a machine-readable model identifier is for, and
-        stays available as its own diagnostic sensor.
+        No "model": ModelNr is a capability grouping (0/1/2/3/64...), not a
+        type name, so it would put a bare digit where users expect
+        "SRK35ZS-WF". It goes into model_id instead.
         """
         info: DeviceInfo = {
             "sw_version": self._firmware,
@@ -2046,10 +2015,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             "manufacturer": "Mitsubishi Heavy Industries",
             "name": self.device_name,
         }
-        # airconId is MAC-derived, and on every module seen so far it is the
-        # bare MAC. Only claim it when it has exactly that shape - a differently
-        # shaped id would otherwise register as somebody else's hardware and
-        # merge two unrelated devices in the registry.
         if re.fullmatch(r"[0-9a-fA-F]{12}", self.airco_id):
             info["connections"] = {(CONNECTION_NETWORK_MAC, format_mac(self.airco_id))}
         model_nr = getattr(self.airco, "ModelNrRaw", None)
@@ -2126,23 +2091,18 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def device_name(self) -> str:
-        """Get given Airco name"""
+        """Get given Airco name."""
         return self._name
 
     @property
     def airco_id(self) -> str:
-        """Return Airco ID"""
+        """Return Airco ID."""
         return self._airco_id
 
     @property
     def airco(self) -> Aircon:
-        """Return parsed Aircon object if set otherwise None"""
+        """Return parsed Aircon object if set otherwise None."""
         return self._airco
-
-    @property
-    def available(self) -> bool:
-        """Return True if device is available"""
-        return self._available
 
     @property
     def swing_selects_enabled_default(self) -> bool:
@@ -2167,25 +2127,20 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def _async_update_data(self) -> Aircon:
         """Update data via library.
 
-        A missed poll is not an update failure. These modules restart their
-        WiFi about once an hour on their own, so single failures are routine
-        and carry no consequence: _set_availability() rides them out, and
-        entities follow Device.available rather than the coordinator's own
-        success flag. Raising UpdateFailed for one would put an error in every
-        user's log once an hour for a condition nobody can act on - and the
-        entities would flick to unavailable a poll before our own threshold
-        says they should. So an expected failure returns the last data instead,
-        and only the availability transition is worth a line.
+        One missed poll is not an update failure yet - the modules restart
+        their WiFi about once an hour. A failure below the threshold returns
+        the last data; a run of them fails the update.
         """
+        # The poll starts here, not in update(): set_airco() calls that too,
+        # and the count has to hold for exactly one poll.
+        self._poll_counted = False
         try:
             async with asyncio.timeout(POLL_TIMEOUT.total_seconds()):
-                await self.update()
-        except asyncio.TimeoutError as error:
-            # The outer deadline can expire before the repository's individual
-            # connection attempts do. Treat that exactly like any other missed
-            # poll so transient outages stay quiet and the entity only becomes
-            # unavailable at the configured threshold.
-            self._record_connection_failure(
+                answered = await self.update()
+        except asyncio.TimeoutError:
+            # The outer deadline can expire before the repository's own
+            # attempts do. That is a missed poll like any other.
+            self._record_failed_poll(
                 WfRacConnectionError(
                     f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
                 )
@@ -2199,5 +2154,22 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     "error": str(error),
                 },
             ) from error
+        else:
+            if answered:
+                return self._airco
 
-        return self._airco
+        # Within tolerance and no failure reported yet. A reported one ends
+        # when a poll answers, not on the next routine dropout.
+        if (
+            self._consecutive_failures < self._availability_failure_limit
+            and self.last_update_success
+        ):
+            return self._airco
+        raise UpdateFailed(
+            translation_domain=DOMAIN,
+            translation_key="update_failed",
+            translation_placeholders={
+                "device": self.device_name,
+                "error": str(self._last_poll_error),
+            },
+        )

@@ -35,7 +35,7 @@
           "port": "Poort"
         },
         "data_description": {
-          "port": "De poort die de module heeft aangekondigd. Normaal gesproken 51443 — corrigeer hem hier als hij afwijkt."
+          "port": "De poort waarop de module bereikbaar is. Normaal gesproken 51443 — wijkt de aangekondigde waarde hierboven af, corrigeer hem dan hier."
         }
       },
       "reconfigure": {

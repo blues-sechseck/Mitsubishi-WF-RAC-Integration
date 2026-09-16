@@ -35,7 +35,7 @@
           "port": "Portas"
         },
         "data_description": {
-          "port": "Modulio nurodytas prievadas. Paprastai 51443 — jei kitoks, pataisykite čia."
+          "port": "Prievadas, kuriuo pasiekiamas modulis. Paprastai 51443 — jei nurodyta reikšmė aukščiau skiriasi, pataisykite čia."
         }
       },
       "reconfigure": {

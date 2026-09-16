@@ -93,7 +93,7 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
         self._attr_native_value = None
 
     def _update_state(self) -> None:
-        # WfRacEntity.available reflects device connectivity, not per-value
+        # The entity's availability reflects device connectivity, not per-value
         # readiness - a not-yet-requested Home Leave value just reads as
         # "unknown" (native_value None), same as the sensor it replaced.
         setting = self._current_setting()

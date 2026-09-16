@@ -276,13 +276,19 @@ async def test_climate_commands_and_state_branches(platform_device):
     # next, so it is held to what the unit accepts anywhere rather than to the
     # 18C floor of a mode nobody asked for (#317).
     entity._attr_hvac_mode = HVACMode.OFF
-    assert (entity.min_temp, entity.max_temp) == (16, 30)
     await entity.async_set_temperature(temperature=16)
     assert platform_device.async_queue_command.await_args.args[0][AirconCommands.PresetTemp] == 16
+    # What is advertised does not follow the running mode: climate measures a
+    # call against min_temp/max_temp before this entity sees hvac_mode, so a
+    # range that moved with the mode would reject a setpoint the same call
+    # switches into a mode that allows it. It is the union over every mode,
+    # widened to the away setpoints this unit offers.
+    assert (entity.min_temp, entity.max_temp) == (10, 31)
     entity._attr_hvac_mode = HVACMode.FAN_ONLY
-    assert entity.min_temp == 16
+    assert (entity.min_temp, entity.max_temp) == (10, 31)
     entity._attr_hvac_mode = HVACMode.HEAT
-    assert entity.min_temp == 18
+    assert (entity.min_temp, entity.max_temp) == (10, 31)
+    # The mode's own range still bites inside the call.
     with pytest.raises(ServiceValidationError) as too_low:
         await entity.async_set_temperature(temperature=16)
     assert too_low.value.translation_key == "temperature_below_minimum"
@@ -434,12 +440,12 @@ async def test_fan_speed_select_recognises_an_unreadable_fan_step(platform_devic
     AIRFLOW_UNKNOWN nibble used to take the whole select platform with it.
     """
     platform_device.airco.AirFlow = AIRFLOW_UNKNOWN
-    platform_device._set_availability(True)
+    platform_device._record_reachable()
 
     fan = select.FanSpeedSelect(platform_device)
 
     assert fan.current_option is None
-    assert platform_device.available is True
+    assert platform_device.last_update_success is True
 
 
 async def test_home_leave_air_flow_select_recognises_an_unreadable_step(
@@ -449,12 +455,12 @@ async def test_home_leave_air_flow_select_recognises_an_unreadable_step(
     platform_device.airco.HomeLeaveModeForCooling = HomeLeaveModeSetting(
         TempRule=35.0, TempSetting=33.0, AirFlow=AIRFLOW_UNKNOWN
     )
-    platform_device._set_availability(True)
+    platform_device._record_reachable()
 
     entity = select.HomeLeaveAirFlowSelect(platform_device, "cooling")
 
     assert entity.current_option is None
-    assert platform_device.available is True
+    assert platform_device.last_update_success is True
 
 
 async def test_marking_the_climate_state_unknown_clears_all_of_it(platform_device):
@@ -510,7 +516,7 @@ async def test_a_swing_select_survives_a_vane_value_it_cannot_read(
     entity = cls(platform_device)
 
     assert entity.current_option is None
-    assert platform_device.available is True
+    assert platform_device.last_update_success is True
 
 
 async def test_the_climate_entity_is_the_device_itself(platform_device):

@@ -173,24 +173,21 @@ async def device(hass):
     await dev.async_shutdown()
 
 
-async def test_update_success_marks_available_and_parses_state(device):
+async def test_update_says_it_answered_and_parses_state(device):
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     assert await device.update() is True
-    assert device.available is True
     assert device.airco.Operation is True
 
 
-async def test_update_none_response_marks_unavailable(device):
+async def test_update_none_response_is_a_failed_poll(device):
     device._api.get_aircon_stats.return_value = None
     assert await device.update() is False
-    assert device.available is False
 
 
-async def test_update_api_error_marks_unavailable_and_reregisters(device):
+async def test_update_api_error_reregisters(device):
     device._api.get_aircon_stats.side_effect = WfRacError("boom")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     assert await device.update() is False
-    assert device.available is False
     device._api.update_account_info.assert_awaited_once()
 
 
@@ -206,9 +203,8 @@ async def test_update_transient_unreachable_is_debug_only(device, caplog):
 
     device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
-    await device.update()
+    assert await device.update() is False
 
-    assert device.available is True
     device._api.update_account_info.assert_not_awaited()
     records = [r for r in caplog.records if r.name == coordinator_module.__name__]
     assert not [r for r in records if r.levelname == "WARNING"]
@@ -218,8 +214,7 @@ async def test_update_transient_unreachable_is_debug_only(device, caplog):
 
     caplog.clear()
     device._api.get_aircon_stats.side_effect = None
-    await device.update()
-    assert not [r for r in caplog.records if "is available again" in r.message]
+    assert await device.update() is True
 
 
 async def test_update_sustained_unreachable_logs_one_transition(device, caplog):
@@ -231,24 +226,17 @@ async def test_update_sustained_unreachable_logs_one_transition(device, caplog):
     device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     for _ in range(10):
-        await device.update()
+        await device.async_refresh()
 
-    assert device.available is False
     assert device._consecutive_failures == device._availability_failure_limit
     device._api.update_account_info.assert_not_awaited()
-    warnings = [
+    # The outage itself is the coordinator's line to log, once per transition;
+    # nothing here says it a second time.
+    assert not [
         r
         for r in caplog.records
         if r.name == coordinator_module.__name__ and r.levelname == "WARNING"
     ]
-    assert len(warnings) == 1
-    assert "is unavailable after 3 failed polls" in warnings[0].message
-    assert warnings[0].exc_info is None
-    assert sum(
-        r.exc_info is not None
-        for r in caplog.records
-        if r.name == coordinator_module.__name__ and r.levelname == "DEBUG"
-    ) == 1
 
 
 async def test_update_initially_unreachable_logs_threshold_once(device, caplog):
@@ -258,37 +246,32 @@ async def test_update_initially_unreachable_logs_threshold_once(device, caplog):
     device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     for _ in range(5):
-        await device.update()
+        await device.async_refresh()
 
-    warnings = [
+    assert device._consecutive_failures == device._availability_failure_limit
+    assert not [
         r
         for r in caplog.records
         if r.name == coordinator_module.__name__ and r.levelname == "WARNING"
     ]
-    assert len(warnings) == 1
-    assert "is unavailable after 3 failed polls" in warnings[0].message
 
 
-async def test_update_recovery_is_logged_once(device, caplog):
+async def test_update_recovery_starts_the_tolerance_over(device, caplog):
     caplog.set_level("INFO", logger=coordinator_module.__name__)
     device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     for _ in range(3):
-        await device.update()
+        await device.async_refresh()
 
     device._api.get_aircon_stats.side_effect = None
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    await device.update()
-    await device.update()
+    assert await device.update() is True
 
-    assert device.available is True
-    recoveries = [
+    assert device._consecutive_failures == 0
+    assert not [
         r
         for r in caplog.records
-        if r.name == coordinator_module.__name__
-        and r.levelname == "INFO"
-        and "is available again" in r.message
+        if r.name == coordinator_module.__name__ and r.levelname == "INFO"
     ]
-    assert len(recoveries) == 1
 
 
 async def test_update_refused_command_reregisters(device):
@@ -297,18 +280,16 @@ async def test_update_refused_command_reregisters(device):
     """
     device._api.get_aircon_stats.side_effect = WfRacCommandError("refused")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
-    await device.update()
-    assert device.available is False
+    assert await device.update() is False
     device._api.update_account_info.assert_awaited_once()
 
 
-async def test_update_malformed_stat_marks_unavailable(device):
+async def test_update_malformed_stat_is_a_failed_poll(device):
     device._api.get_aircon_stats.return_value = {
         "numOfAccount": 1,
         "airconStat": "not valid base64!!!",
     }
-    await device.update()
-    assert device.available is False
+    assert await device.update() is False
 
 
 async def test_set_airco_merges_params_with_current_state(device):
@@ -937,18 +918,18 @@ async def test_availability_tolerates_failures_below_limit(hass):
     )
     dev._api = AsyncMock()
     dev._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    await dev.update()
-    assert dev.available is True
+    await dev.async_refresh()
+    assert dev.last_update_success is True
 
     dev._api.get_aircon_stats.side_effect = WfRacError("boom")
     dev._api.update_account_info = AsyncMock(return_value={"result": 0})
 
-    await dev.update()
-    assert dev.available is True  # 1st failure - within tolerance
-    await dev.update()
-    assert dev.available is True  # 2nd failure - still within tolerance
-    await dev.update()
-    assert dev.available is False  # 3rd failure - limit reached
+    await dev.async_refresh()
+    assert dev.last_update_success is True  # 1st failure - within tolerance
+    await dev.async_refresh()
+    assert dev.last_update_success is True  # 2nd failure - still within it
+    await dev.async_refresh()
+    assert dev.last_update_success is False  # 3rd failure - limit reached
 
 
 async def test_availability_limit_can_be_raised_but_not_lowered(hass):
@@ -972,11 +953,12 @@ async def test_availability_limit_can_be_raised_but_not_lowered(hass):
     lowered._api = AsyncMock()
     lowered._api.update_account_info = AsyncMock(return_value={"result": 0})
     lowered._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    await lowered.update()
+    await lowered.async_refresh()
 
     lowered._api.get_aircon_stats.side_effect = WfRacError("boom")
-    await lowered.update()
-    assert lowered.available is True  # would already be unavailable at limit 1
+    await lowered.async_refresh()
+    # Would already have failed the update at a limit of 1.
+    assert lowered.last_update_success is True
 
 
 async def test_availability_recovers_and_resets_the_failure_count(hass):
@@ -990,23 +972,23 @@ async def test_availability_recovers_and_resets_the_failure_count(hass):
     dev._api = AsyncMock()
     dev._api.update_account_info = AsyncMock(return_value={"result": 0})
     dev._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
-    await dev.update()
+    await dev.async_refresh()
 
     dev._api.get_aircon_stats.side_effect = WfRacError("boom")
-    await dev.update()
-    await dev.update()
-    assert dev.available is True
+    await dev.async_refresh()
+    await dev.async_refresh()
+    assert dev.last_update_success is True
 
     dev._api.get_aircon_stats.side_effect = None
-    await dev.update()
-    assert dev.available is True
+    await dev.async_refresh()
+    assert dev.last_update_success is True
 
     dev._api.get_aircon_stats.side_effect = WfRacError("boom")
-    await dev.update()
-    await dev.update()
-    assert dev.available is True  # count restarted, not resumed at 2
-    await dev.update()
-    assert dev.available is False
+    await dev.async_refresh()
+    await dev.async_refresh()
+    assert dev.last_update_success is True  # restarted, not resumed at 2
+    await dev.async_refresh()
+    assert dev.last_update_success is False
 
 
 def _stats_response_with_firmware(payload: str, firm_type: str, wireless_ver: str) -> dict:
@@ -1834,11 +1816,10 @@ async def test_coordinator_tracks_transient_failure_without_regular_log_noise(
     device._api.get_aircon_stats.side_effect = WfRacConnectionError("no route")
     await device.async_refresh()
 
-    # An expected miss deliberately leaves the coordinator successful: it is
-    # what keeps HA's own "Error fetching ... data" out of the log, and
-    # entity availability comes from Device.available instead.
+    # A miss inside the tolerance deliberately leaves the coordinator
+    # successful, which is what keeps HA's own "Error fetching ... data" out
+    # of the log until the run is long enough to mean something.
     assert device.last_update_success is True
-    assert device.available is True
     assert not [
         record for record in caplog.records if record.levelno >= logging.INFO
     ]
@@ -1848,7 +1829,6 @@ async def test_coordinator_tracks_transient_failure_without_regular_log_noise(
     await device.async_refresh()
 
     assert device.last_update_success is True
-    assert device.available is True
     assert not [
         record for record in caplog.records if record.levelno >= logging.INFO
     ]
@@ -1868,7 +1848,7 @@ async def test_coordinator_notifies_when_device_reaches_unavailable_threshold(de
 
         await device.async_refresh()
 
-        assert device.available is False
+        assert device.last_update_success is False
         # The poll that crosses the threshold has to reach entities, or they
         # keep showing their last state while the device is marked unavailable.
         listener.assert_called_once()
@@ -1906,41 +1886,38 @@ async def test_async_update_data_counts_timeouts_as_connection_failures(
     for _ in range(5):
         await device.async_refresh()
 
-    assert device.available is False
-    # A timeout is an expected miss like any other, so the coordinator stays
-    # successful and only the availability threshold speaks up.
-    assert device.last_update_success is True
+    # A timeout is a missed poll like any other: ridden out below the
+    # threshold, and it fails the update once the run is long enough.
+    assert device.last_update_success is False
     assert device._consecutive_failures == device._availability_failure_limit
-    warnings = [
+    assert not [
         record
         for record in caplog.records
         if record.name == coordinator_module.__name__ and record.levelname == "WARNING"
     ]
-    assert len(warnings) == 1
-    assert "is unavailable after 3 failed polls" in warnings[0].message
-    assert not [record for record in caplog.records if record.levelname == "ERROR"]
+    # One debug line per missed poll, including the one that crossed the
+    # threshold - the outage itself is the coordinator's line now.
     assert sum(
         record.message.startswith("Could not reach") for record in caplog.records
-    ) == 4
+    ) == 5
 
     caplog.clear()
     device.update = original_update
     await device.async_refresh()
     await device.async_refresh()
 
-    assert device.available is True
     assert device.last_update_success is True
-    recovery_records = [
-        record
-        for record in caplog.records
-        if record.levelname == "INFO" and "available again" in record.message
-    ]
-    assert len(recovery_records) == 1
+    # The recovery is the coordinator's own line now, and it is the only one.
     assert not [
         record
         for record in caplog.records
-        if record.levelno >= logging.INFO and "data recovered" in record.message
+        if record.name == coordinator_module.__name__
+        and record.levelname == "INFO"
+        and "available again" in record.message
     ]
+    assert (
+        sum("data recovered" in record.message for record in caplog.records) == 1
+    )
 
 
 async def test_service_data_is_carried_forward_between_polls(device):

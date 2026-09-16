@@ -69,7 +69,7 @@ async def test_an_unreadable_frame_marks_the_entity_unknown_not_the_device(devic
     entity._update_state = MagicMock(side_effect=ValueError)
     entity._mark_state_unknown = MagicMock()
     entity.async_write_ha_state = lambda: None
-    device._set_availability(True)
+    device._record_reachable()
 
     # More failures in a row than it takes to declare the device unavailable:
     # one unreadable field must not do it, and neither must a run of them.
@@ -77,7 +77,7 @@ async def test_an_unreadable_frame_marks_the_entity_unknown_not_the_device(devic
         entity._handle_coordinator_update()
 
     entity._mark_state_unknown.assert_called_with()
-    assert device.available is True
+    assert device.last_update_success is True
     assert entity.available is True
 
 
