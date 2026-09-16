@@ -171,3 +171,50 @@ def _described_option_keys() -> set[str]:
         described |= set(group.get("data_description", {}))
     return described
 
+
+
+def test_every_action_is_named_in_strings():
+    """Home Assistant serves action names and descriptions from translations/,
+    and falls back to services.yaml only where a translation is missing. The
+    file has no language variants, so anything left in it reaches every user
+    in English - which is how all six actions stood untranslated. Core's own
+    test suite enforces the same thing through its check_translations fixture.
+    """
+    import yaml
+
+    services = yaml.safe_load(
+        (COMPONENT / "services.yaml").read_text(encoding="utf-8")
+    )
+    for name, body in services.items():
+        described = STRINGS["services"][name]
+        assert described["name"] and described["description"], name
+        for field in body.get("fields") or {}:
+            assert described["fields"][field]["name"], f"{name}.{field}"
+
+
+def test_every_translated_action_still_exists():
+    """A renamed or dropped action leaves its text behind, where it reads as a
+    working action in every language file that carries it.
+    """
+    import yaml
+
+    services = set(
+        yaml.safe_load((COMPONENT / "services.yaml").read_text(encoding="utf-8"))
+    )
+    for path in (COMPONENT / "translations").glob("*.json"):
+        body = json.loads(path.read_text(encoding="utf-8"))
+        assert set(body.get("services", {})) <= services, path.stem
+
+
+def test_a_translated_action_option_list_matches_the_selector():
+    """An option the selector offers but the language does not name renders as
+    its raw value - `left_left` where a label belongs.
+    """
+    english = ENGLISH["selector"]
+    for path in (COMPONENT / "translations").glob("*.json"):
+        if path.stem == "en":
+            continue
+        body = json.loads(path.read_text(encoding="utf-8"))
+        for key, group in body.get("selector", {}).items():
+            expected = set(english[key]["options"])
+            assert set(group.get("options", {})) == expected, f"{path.stem}: {key}"
