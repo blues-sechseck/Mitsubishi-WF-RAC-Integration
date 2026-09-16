@@ -32,7 +32,7 @@ class _FakeDevice:
 def sensor() -> EnergyTotalSensor:
     """An EnergyTotalSensor with no reading seen yet."""
     entity = object.__new__(EnergyTotalSensor)
-    entity._device = _FakeDevice()
+    entity.coordinator = _FakeDevice()
     entity._total = 0.0
     entity._last_raw = None
     entity._attr_native_value = 0.0
@@ -42,7 +42,7 @@ def sensor() -> EnergyTotalSensor:
 
 def _feed(entity: EnergyTotalSensor, values) -> float:
     for value in values:
-        entity._device.airco.Electric = value
+        entity.coordinator.airco.Electric = value
         entity._update_state()
     return entity._attr_native_value
 

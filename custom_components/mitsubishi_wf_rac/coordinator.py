@@ -383,7 +383,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._airco_id = airco_id
         self._poll_counted = False
         self._last_poll_error: BaseException | None = None
-        self._name = name
         self._firmware = ""
         self._connected_accounts = -1
         self._updated_by: str | None = None
@@ -2124,7 +2123,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     @property
     def device_name(self) -> str:
         """Get given Airco name."""
-        return self._name
+        return self.name
 
     @property
     def airco_id(self) -> str:

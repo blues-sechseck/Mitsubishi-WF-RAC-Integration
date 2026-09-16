@@ -32,7 +32,6 @@ class WfRacEntity(CoordinatorEntity[Device]):
     def __init__(self, device: Device, context: Any | None = None) -> None:
         """Wire the entity to the shared coordinator."""
         super().__init__(device, context=context)
-        self._device = device
         self._attr_device_info = device.device_info
         self._state_unreadable = False
 
@@ -44,7 +43,7 @@ class WfRacEntity(CoordinatorEntity[Device]):
         forces its own hvac_mode to OFF instead, and why the offset resolution
         below can still tell cooling from heating.
         """
-        return list(HVAC_TRANSLATION.keys())[self._device.airco.OperationMode]
+        return list(HVAC_TRANSLATION.keys())[self.coordinator.airco.OperationMode]
 
     def _resolve_target_offset(self, hvac_mode: HVACMode) -> float:
         """Resolve the effective target_offset for a given hvac_mode.
@@ -57,7 +56,7 @@ class WfRacEntity(CoordinatorEntity[Device]):
         climate read-back path and the target temperature sensor can never
         resolve a different offset for the same mode.
         """
-        options = self._device.options
+        options = self.coordinator.options
         base_offset = options.get(CONF_TARGET_OFFSET, 0.0)
         if hvac_mode in (HVACMode.COOL, HVACMode.DRY):
             override = options.get(CONF_TARGET_OFFSET_COOL)
