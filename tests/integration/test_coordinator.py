@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -1859,23 +1860,27 @@ async def test_service_data_survives_a_poll_that_answered_early(device, monkeypa
     device._api.send_airco_command.assert_awaited_once()
 
 
-async def test_an_unexpected_poll_error_reaches_the_coordinator_unwrapped(device):
-    """A bug in here is not a device that went quiet.
+async def test_an_unexpected_poll_error_is_reported_once_not_every_poll(device, caplog):
+    """A fault that lasts must not write a traceback a minute.
 
-    DataUpdateCoordinator logs it with its traceback and marks the update
-    failed; translating it first would hand the log a sentence about the unit
-    instead of the place it broke.
+    DataUpdateCoordinator logs an UpdateFailed only on the transition, with
+    the traceback at debug. Anything reaching its own catch-all is logged
+    with a full traceback on every refresh instead, for as long as the fault
+    lasts - one per minute, per unit.
     """
 
     async def _boom():
         raise RuntimeError("unexpected")
 
     device.update = _boom
-    with pytest.raises(RuntimeError):
+    with pytest.raises(UpdateFailed):
         await device._async_update_data()
 
     await device.async_refresh()
     assert device.last_update_success is False
+    caplog.clear()
+    await device.async_refresh()
+    assert "Unexpected error fetching" not in caplog.text
 
 
 async def test_coordinator_tracks_transient_failure_without_regular_log_noise(
