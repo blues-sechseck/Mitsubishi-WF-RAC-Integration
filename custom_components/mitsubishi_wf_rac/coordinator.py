@@ -2176,15 +2176,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     f"did not answer within {POLL_TIMEOUT.total_seconds():.0f}s"
                 )
             )
-        except Exception as error:
-            raise UpdateFailed(
-                translation_domain=DOMAIN,
-                translation_key="update_failed",
-                translation_placeholders={
-                    "device": self.device_name,
-                    "error": str(error),
-                },
-            ) from error
+        # Anything else is a bug in here rather than a device that went
+        # quiet, and DataUpdateCoordinator logs it with its traceback.
         else:
             if answered:
                 return self._airco
