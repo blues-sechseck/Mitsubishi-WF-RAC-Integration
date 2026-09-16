@@ -415,5 +415,114 @@
         "name": "Reset energy usage total"
       }
     }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Set horizontal swing mode",
+      "description": "Sets the horizontal (left/right) swing mode.",
+      "fields": {
+        "swing_mode": {
+          "name": "Horizontal swing mode",
+          "description": "Which horizontal swing mode to set."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Set vertical swing mode",
+      "description": "Sets the vertical (up/down) swing mode.",
+      "fields": {
+        "swing_mode": {
+          "name": "Vertical swing mode",
+          "description": "Which vertical swing mode to set."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Request Home Leave Mode status",
+      "description": "Asks the unit to report its current Home Leave Mode thresholds/airflow. Call once so the number/select entities have a value to show and edit - the unit omits them from a plain poll otherwise. Only supported on models with the HomeLeaveMode capability."
+    },
+    "set_home_leave_mode": {
+      "name": "Set Home Leave Mode",
+      "description": "Writes new Home Leave Mode thresholds/airflow for cooling and heating. Only supported on models with the HomeLeaveMode capability.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Cooling temp rule",
+          "description": "Outdoor/room temperature threshold above which cooling Home Leave Mode engages, in °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Cooling temp setting",
+          "description": "Target temperature while cooling Home Leave Mode is active, in °C."
+        },
+        "air_flow_cooling": {
+          "name": "Cooling airflow",
+          "description": "Fan speed while cooling Home Leave Mode is active."
+        },
+        "temp_rule_heating": {
+          "name": "Heating temp rule",
+          "description": "Outdoor/room temperature threshold below which heating Home Leave Mode engages, in °C."
+        },
+        "temp_setting_heating": {
+          "name": "Heating temp setting",
+          "description": "Target temperature while heating Home Leave Mode is active, in °C."
+        },
+        "air_flow_heating": {
+          "name": "Heating airflow",
+          "description": "Fan speed while heating Home Leave Mode is active."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Set indoor temperature",
+      "description": "Arms a room temperature for the AC to regulate on instead of the one its own indoor sensor reads. The value is not sent by this action; it rides along on the next frame that goes out anyway, so it takes effect within a minute. While an override is armed the integration asks the unit for one operation data segment per cycle, which is the frame that carries it. Omit the temperature to revert to the internal room sensor.",
+      "fields": {
+        "temperature": {
+          "name": "Temperature",
+          "description": "Room temperature in °C. Leave blank to use the unit's own sensor."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Set Energy Usage Total",
+      "description": "Overwrites the accumulated Energy Usage Total for one unit. Use 0 to reset it, or a reading from a meter you kept previously to carry that figure over. Only affects the integration's own total - the unit's counter cannot be written.",
+      "fields": {
+        "value": {
+          "name": "Value",
+          "description": "New total in kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Left/right auto",
+        "left_left": "Left-left",
+        "left_center": "Left-center",
+        "center_center": "Center-center",
+        "center_right": "Center-right",
+        "right_right": "Right-right",
+        "left_right": "Left-right",
+        "right_left": "Right-left"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Up/down auto",
+        "highest": "Highest",
+        "middle": "Middle",
+        "normal": "Normal",
+        "lowest": "Lowest",
+        "3d_auto": "3D auto"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Auto",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
+      }
+    }
   }
 }

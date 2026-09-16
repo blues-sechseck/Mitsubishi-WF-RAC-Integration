@@ -416,5 +416,114 @@
       }
     },
     "switch": {}
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Horizontale Schwingrichtung setzen",
+      "description": "Setzt die horizontale (links/rechts) Schwingrichtung.",
+      "fields": {
+        "swing_mode": {
+          "name": "Horizontale Schwingrichtung",
+          "description": "Welche horizontale Schwingrichtung gesetzt wird."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Vertikale Schwingrichtung setzen",
+      "description": "Setzt die vertikale (oben/unten) Schwingrichtung.",
+      "fields": {
+        "swing_mode": {
+          "name": "Vertikale Schwingrichtung",
+          "description": "Welche vertikale Schwingrichtung gesetzt wird."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Home-Leave-Status abfragen",
+      "description": "Fordert vom Gerät seine aktuellen Home-Leave-Schwellen und Lüfterstufen an. Einmal aufrufen, damit die Number- und Select-Entitäten einen Wert zum Anzeigen und Ändern haben — bei einem gewöhnlichen Poll lässt das Gerät sie weg. Nur bei Modellen mit der HomeLeaveMode-Fähigkeit."
+    },
+    "set_home_leave_mode": {
+      "name": "Home Leave Mode setzen",
+      "description": "Schreibt neue Home-Leave-Schwellen und Lüfterstufen für Kühlen und Heizen. Nur bei Modellen mit der HomeLeaveMode-Fähigkeit.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Schwelle Kühlen",
+          "description": "Außen-/Raumtemperatur, oberhalb derer Home Leave im Kühlbetrieb greift, in °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Sollwert Kühlen",
+          "description": "Zieltemperatur, solange Home Leave im Kühlbetrieb aktiv ist, in °C."
+        },
+        "air_flow_cooling": {
+          "name": "Lüfterstufe Kühlen",
+          "description": "Lüfterstufe, solange Home Leave im Kühlbetrieb aktiv ist."
+        },
+        "temp_rule_heating": {
+          "name": "Schwelle Heizen",
+          "description": "Außen-/Raumtemperatur, unterhalb derer Home Leave im Heizbetrieb greift, in °C."
+        },
+        "temp_setting_heating": {
+          "name": "Sollwert Heizen",
+          "description": "Zieltemperatur, solange Home Leave im Heizbetrieb aktiv ist, in °C."
+        },
+        "air_flow_heating": {
+          "name": "Lüfterstufe Heizen",
+          "description": "Lüfterstufe, solange Home Leave im Heizbetrieb aktiv ist."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Raumtemperatur vorgeben",
+      "description": "Gibt dem Gerät eine Raumtemperatur vor, auf die es regelt, statt auf die seines eigenen Fühlers. Der Wert wird nicht von dieser Aktion gesendet; er fährt auf dem nächsten ohnehin fälligen Frame mit und wirkt daher innerhalb einer Minute. Solange eine Vorgabe steht, fragt die Integration je Zyklus ein Betriebsdatensegment ab — das ist der Frame, der sie trägt. Ohne Temperatur aufgerufen, gibt die Aktion das Gerät auf seinen eigenen Fühler zurück.",
+      "fields": {
+        "temperature": {
+          "name": "Temperatur",
+          "description": "Raumtemperatur in °C. Leer lassen, damit das Gerät seinen eigenen Fühler nutzt."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Energieverbrauch gesamt setzen",
+      "description": "Überschreibt den aufgelaufenen Gesamtverbrauch eines Geräts. 0 setzt ihn zurück, ein Zählerstand von vorher überträgt den alten Wert. Betrifft nur den Zähler der Integration — der Zähler im Gerät ist nicht beschreibbar.",
+      "fields": {
+        "value": {
+          "name": "Wert",
+          "description": "Neuer Gesamtwert in kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Links/Rechts Auto",
+        "left_left": "Links-Links",
+        "left_center": "Links-Mitte",
+        "center_center": "Mitte-Mitte",
+        "center_right": "Mitte-Rechts",
+        "right_right": "Rechts-Rechts",
+        "left_right": "Links-Rechts",
+        "right_left": "Rechts-Links"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Oben/Unten Auto",
+        "highest": "Höchste",
+        "middle": "Mitte",
+        "normal": "Normal",
+        "lowest": "Niedrigste",
+        "3d_auto": "3D Auto"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Auto",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
+      }
+    }
   }
 }

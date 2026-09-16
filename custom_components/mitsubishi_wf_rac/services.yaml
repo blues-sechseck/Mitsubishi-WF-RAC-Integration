@@ -1,34 +1,20 @@
-# Service ID
+# Names and descriptions live in strings.json, not here: this file has no
+# language variants, so anything written in it reaches every user in English.
 set_horizontal_swing_mode:
-  # Service name as shown in UI
-  name: Set horizontal swing mode
-  # Description of the service
-  description: Sets the horizontal (left/right) swing mode
-  # This is an entity service registered on the climate platform, so target
-  # entities of this integration's climate domain rather than devices.
+  # An entity service registered on the climate platform, so target entities
+  # of this integration's climate domain rather than devices.
   target:
     entity:
       integration: mitsubishi_wf_rac
       domain: climate
-  # Different fields that your service accepts
   fields:
-    # Key of the field
     swing_mode:
-      # Field name as shown in UI
-      name: Horizontal swing mode
-      # Description of the field
-      description: Which horizontal swing mode to set
-      # Whether or not field is required (default = false)
       required: true
-      # Advanced fields are only shown when the advanced mode is enabled for the user (default = false)
-      advanced: false
-      # Example value that can be passed for this field
       example: "left_right_auto"
-      # The default field value
       default: "left_right_auto"
-      # Selector (https://www.home-assistant.io/docs/blueprint/selectors/) to control the input UI for this field
       selector:
         select:
+          translation_key: horizontal_swing_mode
           options:
             - "left_right_auto"
             - "left_left"
@@ -38,37 +24,19 @@ set_horizontal_swing_mode:
             - "right_right"
             - "left_right"
             - "right_left"
-# Service ID
 set_vertical_swing_mode:
-  # Service name as shown in UI
-  name: Set vertical swing mode
-  # Description of the service
-  description: Sets the vertical (up/down) swing mode
-  # This is an entity service registered on the climate platform, so target
-  # entities of this integration's climate domain rather than devices.
   target:
     entity:
       integration: mitsubishi_wf_rac
       domain: climate
-  # Different fields that your service accepts
   fields:
-    # Key of the field
     swing_mode:
-      # Field name as shown in UI
-      name: vertical swing mode
-      # Description of the field
-      description: Which vertical swing mode to set
-      # Whether or not field is required (default = false)
       required: true
-      # Advanced fields are only shown when the advanced mode is enabled for the user (default = false)
-      advanced: false
-      # Example value that can be passed for this field
       example: "up_down_auto"
-      # The default field value
       default: "up_down_auto"
-      # Selector (https://www.home-assistant.io/docs/blueprint/selectors/) to control the input UI for this field
       selector:
         select:
+          translation_key: vertical_swing_mode
           options:
             - "up_down_auto"
             - "highest"
@@ -76,32 +44,18 @@ set_vertical_swing_mode:
             - "normal"
             - "lowest"
             - "3d_auto"
-# Service ID
 request_home_leave_mode_status:
-  name: Request Home Leave Mode status
-  description: >-
-    Asks the unit to report its current Home Leave Mode thresholds/airflow.
-    Call once so the number/select entities have a value to show and edit -
-    the unit omits them from a plain poll otherwise. Only supported on models
-    with the HomeLeaveMode capability (#187).
   target:
     entity:
       integration: mitsubishi_wf_rac
       domain: climate
-# Service ID
 set_home_leave_mode:
-  name: Set Home Leave Mode
-  description: >-
-    Writes new Home Leave Mode thresholds/airflow for cooling and heating.
-    Only supported on models with the HomeLeaveMode capability (#187).
   target:
     entity:
       integration: mitsubishi_wf_rac
       domain: climate
   fields:
     temp_rule_cooling:
-      name: Cooling temp rule
-      description: Outdoor/room temperature threshold above which cooling Home Leave Mode engages, in °C.
       required: true
       example: 35
       selector:
@@ -111,8 +65,6 @@ set_home_leave_mode:
           step: 0.5
           unit_of_measurement: "°C"
     temp_setting_cooling:
-      name: Cooling temp setting
-      description: Target temperature while cooling Home Leave Mode is active, in °C.
       required: true
       example: 33
       selector:
@@ -122,27 +74,19 @@ set_home_leave_mode:
           step: 0.5
           unit_of_measurement: "°C"
     air_flow_cooling:
-      name: Cooling airflow
-      description: Fan speed while cooling Home Leave Mode is active.
       required: true
       example: 0
       default: 0
       selector:
         select:
+          translation_key: home_leave_air_flow
           options:
-            - label: "Auto"
-              value: "0"
-            - label: "1"
-              value: "1"
-            - label: "2"
-              value: "2"
-            - label: "3"
-              value: "3"
-            - label: "4"
-              value: "4"
+            - "0"
+            - "1"
+            - "2"
+            - "3"
+            - "4"
     temp_rule_heating:
-      name: Heating temp rule
-      description: Outdoor/room temperature threshold below which heating Home Leave Mode engages, in °C.
       required: true
       example: 0
       selector:
@@ -152,8 +96,6 @@ set_home_leave_mode:
           step: 0.5
           unit_of_measurement: "°C"
     temp_setting_heating:
-      name: Heating temp setting
-      description: Target temperature while heating Home Leave Mode is active, in °C.
       required: true
       example: 10
       selector:
@@ -163,42 +105,25 @@ set_home_leave_mode:
           step: 0.5
           unit_of_measurement: "°C"
     air_flow_heating:
-      name: Heating airflow
-      description: Fan speed while heating Home Leave Mode is active.
       required: true
       example: 0
       default: 0
       selector:
         select:
+          translation_key: home_leave_air_flow
           options:
-            - label: "Auto"
-              value: "0"
-            - label: "1"
-              value: "1"
-            - label: "2"
-              value: "2"
-            - label: "3"
-              value: "3"
-            - label: "4"
-              value: "4"
-# Service ID
+            - "0"
+            - "1"
+            - "2"
+            - "3"
+            - "4"
 set_external_temperature:
-  name: Set indoor temperature
-  description: >-
-    Arms a room temperature for the AC to regulate on instead of the one its
-    own indoor sensor reads. The value is not sent by this action; it rides along on
-    the next frame that goes out anyway, so it takes effect within a minute.
-    While an override is armed the integration asks the unit for one operation
-    data segment per cycle, which is the frame that carries it. Omit the
-    temperature to revert to the internal room sensor.
   target:
     entity:
       integration: mitsubishi_wf_rac
       domain: climate
   fields:
     temperature:
-      name: Temperature
-      description: Room temperature in °C. Leave blank to use the unit's own sensor.
       required: false
       selector:
         number:
@@ -206,22 +131,13 @@ set_external_temperature:
           max: 48.25
           step: 0.25
           unit_of_measurement: "°C"
-# Service ID
 set_energy_total:
-  name: Set Energy Usage Total
-  description: >-
-    Overwrites the accumulated Energy Usage Total for one unit. Use 0 to
-    reset it, or a reading from a meter you kept previously to carry that
-    figure over. Only affects the integration's own total - the unit's
-    counter cannot be written.
   target:
     entity:
       integration: mitsubishi_wf_rac
       domain: sensor
   fields:
     value:
-      name: Value
-      description: New total in kWh.
       required: true
       example: 412.5
       selector:
