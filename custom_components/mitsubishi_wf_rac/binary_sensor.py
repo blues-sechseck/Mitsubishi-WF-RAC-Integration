@@ -67,7 +67,7 @@ class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
         self._attr_extra_state_attributes = {}
 
     def _update_state(self) -> None:
-        code = self._device.airco.ErrorCode
+        code = self.coordinator.airco.ErrorCode
         self._attr_is_on = code != "00"
         attrs: dict[str, str] = {"error_code": code}
         # No key at all, rather than a guessed or empty value, for codes
@@ -99,7 +99,7 @@ class CompressorBinarySensor(WfRacEntity, BinarySensorEntity):
         self._attr_is_on = None
 
     def _update_state(self) -> None:
-        self._attr_is_on = self._device.airco.CompressorRunning
+        self._attr_is_on = self.coordinator.airco.CompressorRunning
 
 
 class ExternalControlBinarySensor(WfRacEntity, BinarySensorEntity):
@@ -126,7 +126,7 @@ class ExternalControlBinarySensor(WfRacEntity, BinarySensorEntity):
         self._attr_is_on = None
 
     def _update_state(self) -> None:
-        self._attr_is_on = self._device.foreign_activity
+        self._attr_is_on = self.coordinator.foreign_activity
 
 
 class ExternalTemperatureActiveBinarySensor(WfRacEntity, BinarySensorEntity):
@@ -150,7 +150,7 @@ class ExternalTemperatureActiveBinarySensor(WfRacEntity, BinarySensorEntity):
         self._attr_is_on = None
 
     def _update_state(self) -> None:
-        self._attr_is_on = self._device.external_temperature_applied
+        self._attr_is_on = self.coordinator.external_temperature_applied
 
 
 class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
@@ -170,4 +170,4 @@ class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
 
     def _update_state(self) -> None:
         # Vacant == True means nobody is present.
-        self._attr_is_on = not self._device.airco.Vacant
+        self._attr_is_on = not self.coordinator.airco.Vacant

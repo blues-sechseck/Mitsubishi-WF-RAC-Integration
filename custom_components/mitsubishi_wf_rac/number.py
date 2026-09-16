@@ -78,15 +78,15 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
         slug = "temp_rule" if attribute == "TempRule" else "temp_setting"
         self._attr_translation_key = f"home_leave_{mode}_{slug}"
         self._attr_unique_id = (
-            f"{DOMAIN}-{self._device.airco_id}-home-leave-{mode}-{slug}-number"
+            f"{DOMAIN}-{self.coordinator.airco_id}-home-leave-{mode}-{slug}-number"
         )
         self._apply_state()
 
     def _current_setting(self) -> HomeLeaveModeSetting | None:
         return (
-            self._device.airco.HomeLeaveModeForCooling
+            self.coordinator.airco.HomeLeaveModeForCooling
             if self._mode == "cooling"
-            else self._device.airco.HomeLeaveModeForHeating
+            else self.coordinator.airco.HomeLeaveModeForHeating
         )
 
     def _mark_state_unknown(self) -> None:
@@ -103,8 +103,8 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Change the value."""
-        cooling = self._device.airco.HomeLeaveModeForCooling
-        heating = self._device.airco.HomeLeaveModeForHeating
+        cooling = self.coordinator.airco.HomeLeaveModeForCooling
+        heating = self.coordinator.airco.HomeLeaveModeForHeating
         if cooling is None or heating is None:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -124,6 +124,6 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
                 cooling = replace(cooling, TempSetting=value)
             else:
                 heating = replace(heating, TempSetting=value)
-        await self._device.async_set_home_leave_mode(cooling, heating)
+        await self.coordinator.async_set_home_leave_mode(cooling, heating)
         self._attr_native_value = value
         self.async_write_ha_state()

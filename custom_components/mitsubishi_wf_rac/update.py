@@ -64,14 +64,14 @@ class FirmwareUpdateEntity(WfRacEntity, UpdateEntity):
         self._attr_latest_version = None
 
     def _update_state(self) -> None:
-        self._attr_installed_version = self._device.wireless_firmware_version
-        latest = self._device.latest_wireless_firmware_version
+        self._attr_installed_version = self.coordinator.wireless_firmware_version
+        latest = self.coordinator.latest_wireless_firmware_version
         # Only report a different latest_version once the cloud check has
         # actually confirmed one is newer - UpdateEntity treats any
         # installed_version != latest_version as "update available", and the
         # background check (see Device._maybe_check_firmware_update()) may
         # not have completed yet.
         self._attr_latest_version = (
-            latest if self._device.firmware_update_available and latest
+            latest if self.coordinator.firmware_update_available and latest
             else self._attr_installed_version
         )

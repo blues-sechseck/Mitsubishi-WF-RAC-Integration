@@ -51,13 +51,13 @@ class EnergyTotalResetButton(WfRacEntity, ButtonEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the button."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-reset-energy-total"
+        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-reset-energy-total"
 
     async def async_press(self) -> None:
         """Handle the button press."""
         async_dispatcher_send(
             self.hass,
-            f"{SIGNAL_SET_ENERGY_TOTAL}_{self._device.airco_id}",
+            f"{SIGNAL_SET_ENERGY_TOTAL}_{self.coordinator.airco_id}",
             0.0,
         )
 

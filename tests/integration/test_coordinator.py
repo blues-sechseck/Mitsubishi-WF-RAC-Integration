@@ -1859,15 +1859,23 @@ async def test_service_data_survives_a_poll_that_answered_early(device, monkeypa
     device._api.send_airco_command.assert_awaited_once()
 
 
-async def test_async_update_data_wraps_exception_in_update_failed(device):
-    from homeassistant.helpers.update_coordinator import UpdateFailed
+async def test_an_unexpected_poll_error_reaches_the_coordinator_unwrapped(device):
+    """A bug in here is not a device that went quiet.
+
+    DataUpdateCoordinator logs it with its traceback and marks the update
+    failed; translating it first would hand the log a sentence about the unit
+    instead of the place it broke.
+    """
 
     async def _boom():
         raise RuntimeError("unexpected")
 
     device.update = _boom
-    with pytest.raises(UpdateFailed):
+    with pytest.raises(RuntimeError):
         await device._async_update_data()
+
+    await device.async_refresh()
+    assert device.last_update_success is False
 
 
 async def test_coordinator_tracks_transient_failure_without_regular_log_noise(

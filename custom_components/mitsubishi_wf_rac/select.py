@@ -82,7 +82,7 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
         self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORT_SWING_HORIZONTAL_MODES
         self._attr_unique_id = (
-            f"{DOMAIN}-{self._device.airco_id}-horizontal-swing-direction"
+            f"{DOMAIN}-{self.coordinator.airco_id}-horizontal-swing-direction"
         )
         self._apply_state()
 
@@ -92,9 +92,9 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
     def _update_state(self) -> None:
         self._attr_current_option = (
             SWING_3D_AUTO
-            if self._device.airco.Entrust
+            if self.coordinator.airco.Entrust
             else list(SWING_HORIZONTAL_MODE_TRANSLATION.keys())[
-                self._device.airco.WindDirectionLR
+                self.coordinator.airco.WindDirectionLR
             ]
         )
 
@@ -102,13 +102,13 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
         """Change the selected option."""
         _swing_auto = option == SWING_3D_AUTO
         if _swing_auto:
-            await self._device.async_queue_command(
+            await self.coordinator.async_queue_command(
                 {
                     AirconCommands.Entrust: _swing_auto,
                 }
             )
         else:
-            await self._device.async_queue_command(
+            await self.coordinator.async_queue_command(
                 {
                     AirconCommands.WindDirectionLR: SWING_HORIZONTAL_MODE_TRANSLATION[option],
                     AirconCommands.Entrust: False,
@@ -126,7 +126,7 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
         self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORT_SWING_MODES
         self._attr_unique_id = (
-            f"{DOMAIN}-{self._device.airco_id}-vertical-swing-direction"
+            f"{DOMAIN}-{self.coordinator.airco_id}-vertical-swing-direction"
         )
         self._apply_state()
 
@@ -136,9 +136,9 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
     def _update_state(self) -> None:
         self._attr_current_option = (
             SWING_3D_AUTO
-            if self._device.airco.Entrust
+            if self.coordinator.airco.Entrust
             else list(SWING_MODE_TRANSLATION.keys())[
-                self._device.airco.WindDirectionUD
+                self.coordinator.airco.WindDirectionUD
             ]
         )
 
@@ -146,13 +146,13 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
         """Change the selected option."""
         _swing_auto = option == SWING_3D_AUTO
         if _swing_auto:
-            await self._device.async_queue_command(
+            await self.coordinator.async_queue_command(
                 {
                     AirconCommands.Entrust: _swing_auto,
                 }
             )
         else:
-            await self._device.async_queue_command(
+            await self.coordinator.async_queue_command(
                 {
                     AirconCommands.WindDirectionUD: SWING_MODE_TRANSLATION[option],
                     AirconCommands.Entrust: False,
@@ -169,7 +169,7 @@ class FanSpeedSelect(WfRacEntity, SelectEntity):
         super().__init__(device)
         self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORTED_FAN_MODES
-        self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-fan-speed"
+        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-fan-speed"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -179,14 +179,14 @@ class FanSpeedSelect(WfRacEntity, SelectEntity):
         # Same marker check as the climate entity's fan mode: the library
         # reports an unreadable fan step by name, and a sixth option here
         # would otherwise make it look like a real one.
-        if self._device.airco.AirFlow == AIRFLOW_UNKNOWN:
+        if self.coordinator.airco.AirFlow == AIRFLOW_UNKNOWN:
             raise IndexError("the unit reported a fan step pywfrac cannot read")
-        self._attr_current_option = list(FAN_MODE_TRANSLATION.keys())[self._device.airco.AirFlow]
+        self._attr_current_option = list(FAN_MODE_TRANSLATION.keys())[self.coordinator.airco.AirFlow]
 
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        await self._device.async_queue_command(
+        await self.coordinator.async_queue_command(
             {
                 AirconCommands.AirFlow: FAN_MODE_TRANSLATION[option]
             }
@@ -215,14 +215,14 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
             HOME_LEAVE_MODE_AWAY_COOL,
             HOME_LEAVE_MODE_AWAY_HEAT,
         ]
-        self._attr_unique_id = f"{DOMAIN}-{self._device.airco_id}-home-leave-mode"
+        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-home-leave-mode"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
         self._attr_current_option = None
 
     def _update_state(self) -> None:
-        airco = self._device.airco
+        airco = self.coordinator.airco
         if not airco.Vacant:
             self._attr_current_option = HOME_LEAVE_MODE_OFF
             return
@@ -242,7 +242,7 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         if option == HOME_LEAVE_MODE_AWAY_HEAT:
-            await self._device.async_queue_command(
+            await self.coordinator.async_queue_command(
                 {
                     AirconCommands.Operation: True,
                     AirconCommands.OperationMode: HVAC_TRANSLATION[HVACMode.HEAT],
@@ -250,7 +250,7 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
                 }
             )
         elif option == HOME_LEAVE_MODE_AWAY_COOL:
-            await self._device.async_queue_command(
+            await self.coordinator.async_queue_command(
                 {
                     AirconCommands.Operation: True,
                     AirconCommands.OperationMode: HVAC_TRANSLATION[HVACMode.COOL],
@@ -258,7 +258,7 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
                 }
             )
         else:
-            await self._device.async_queue_command(
+            await self.coordinator.async_queue_command(
                 {
                     AirconCommands.PresetTemp: NORMAL_TEMP,
                 }
@@ -285,15 +285,15 @@ class HomeLeaveAirFlowSelect(WfRacEntity, SelectEntity):
         self._attr_translation_key = f"home_leave_{mode}_air_flow"
         self._attr_options = HOME_LEAVE_AIRFLOW_OPTIONS
         self._attr_unique_id = (
-            f"{DOMAIN}-{self._device.airco_id}-home-leave-{mode}-air-flow-select"
+            f"{DOMAIN}-{self.coordinator.airco_id}-home-leave-{mode}-air-flow-select"
         )
         self._apply_state()
 
     def _current_setting(self) -> HomeLeaveModeSetting | None:
         return (
-            self._device.airco.HomeLeaveModeForCooling
+            self.coordinator.airco.HomeLeaveModeForCooling
             if self._mode == "cooling"
-            else self._device.airco.HomeLeaveModeForHeating
+            else self.coordinator.airco.HomeLeaveModeForHeating
         )
 
     def _mark_state_unknown(self) -> None:
@@ -313,8 +313,8 @@ class HomeLeaveAirFlowSelect(WfRacEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        cooling = self._device.airco.HomeLeaveModeForCooling
-        heating = self._device.airco.HomeLeaveModeForHeating
+        cooling = self.coordinator.airco.HomeLeaveModeForCooling
+        heating = self.coordinator.airco.HomeLeaveModeForHeating
         if cooling is None or heating is None:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -325,6 +325,6 @@ class HomeLeaveAirFlowSelect(WfRacEntity, SelectEntity):
             cooling = replace(cooling, AirFlow=air_flow)
         else:
             heating = replace(heating, AirFlow=air_flow)
-        await self._device.async_set_home_leave_mode(cooling, heating)
+        await self.coordinator.async_set_home_leave_mode(cooling, heating)
         self._attr_current_option = option
         self.async_write_ha_state()
