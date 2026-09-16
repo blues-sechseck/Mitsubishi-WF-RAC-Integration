@@ -309,7 +309,10 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     options=options_input,
                 )
             except KnownError as error:
-                _LOGGER.error("create failed")
+                # An expected outcome of user input - a wrong address, a full
+                # account table. It belongs in the form, not in the log as an
+                # error with no reason in it.
+                _LOGGER.debug("Create failed: %s", error)
                 errors, placeholders = error.get_errors_and_placeholders(
                     data_schema.schema
                 )
