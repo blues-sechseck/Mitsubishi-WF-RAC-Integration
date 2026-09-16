@@ -5,6 +5,10 @@ validates against it, and new translations are generated from it. Nothing at
 runtime reads it - the UI is served from translations/, so a key that is
 missing here still renders correctly and the gap stays invisible until someone
 adds a language.
+
+English is therefore not written twice: translations/en.json is generated from
+strings.json by scripts/build_translations.py, and the first test below is what
+holds the generated file to its source.
 """
 
 import json
@@ -12,24 +16,19 @@ import re
 from pathlib import Path
 
 import custom_components.mitsubishi_wf_rac as component
+from scripts.build_translations import build
 
 COMPONENT = Path(component.__file__).parent
 STRINGS = json.loads((COMPONENT / "strings.json").read_text(encoding="utf-8"))
 ENGLISH = json.loads((COMPONENT / "translations/en.json").read_text(encoding="utf-8"))
 
 
-def test_entity_keys_match_english_translation():
-    """Both files carry the same English text, so they must carry the same keys."""
-    for domain, entries in ENGLISH["entity"].items():
-        assert set(STRINGS["entity"].get(domain, {})) == set(entries), domain
-
-
-def test_exception_keys_match_english_translation():
-    assert set(STRINGS["exceptions"]) == set(ENGLISH["exceptions"])
-
-
-def test_issue_keys_match_english_translation():
-    assert set(STRINGS["issues"]) == set(ENGLISH["issues"])
+def test_english_translation_is_what_strings_generates():
+    """The two English files said the same thing twice until three of the
+    strings quietly stopped agreeing - an abort message, the reconfigure
+    message and the host label. Generated now, so only strings.json is edited.
+    """
+    assert ENGLISH == build()
 
 
 def test_raised_translation_keys_exist_in_strings():
@@ -47,14 +46,6 @@ def test_raised_translation_keys_exist_in_strings():
     assert used_keys <= set(STRINGS["exceptions"]) | set(STRINGS["issues"])
 
 
-def test_step_data_keys_match_english_translation():
-    for section in ("config", "options"):
-        for step, body in ENGLISH[section]["step"].items():
-            expected = set(body.get("data", {}))
-            actual = set(STRINGS[section]["step"].get(step, {}).get("data", {}))
-            assert actual == expected, f"{section}.{step}"
-
-
 def test_every_setup_field_carries_a_description():
     """A form field is a label and a description; the label alone leaves the
     user guessing at what a host, a port or a duplicate-IP override is for.
@@ -66,30 +57,6 @@ def test_every_setup_field_carries_a_description():
             fields = set(body.get("data", {}))
             described = set(body.get("data_description", {}))
             assert fields <= described, f"{section}.{step}: {fields - described}"
-
-
-def test_description_keys_match_english_translation():
-    """Same reason as the labels above - strings.json is what hassfest and the
-    translation pipeline read, translations/en.json is what the UI shows.
-    """
-    for section in ("config", "options"):
-        for step, body in ENGLISH[section]["step"].items():
-            expected = set(body.get("data_description", {}))
-            actual = set(STRINGS[section]["step"].get(step, {}).get("data_description", {}))
-            assert actual == expected, f"{section}.{step}"
-
-
-def test_step_section_keys_match_english_translation():
-    """Fields moved into sections leave step.data empty, so the check above
-    would compare two empty sets and pass while saying nothing.
-    """
-    for section in ("config", "options"):
-        for step, body in ENGLISH[section]["step"].items():
-            sections = body.get("sections", {})
-            mirror = STRINGS[section]["step"].get(step, {}).get("sections", {})
-            assert set(mirror) == set(sections), f"{section}.{step}"
-            for name, group in sections.items():
-                assert set(mirror[name].get("data", {})) == set(group.get("data", {})), name
 
 
 def test_sections_cover_every_field_the_options_form_shows():
@@ -139,9 +106,6 @@ def test_every_error_the_flow_raises_has_a_message():
 
     assert raised <= set(STRINGS["config"]["error"]), (
         raised - set(STRINGS["config"]["error"])
-    )
-    assert raised <= set(ENGLISH["config"]["error"]), (
-        raised - set(ENGLISH["config"]["error"])
     )
 
 
