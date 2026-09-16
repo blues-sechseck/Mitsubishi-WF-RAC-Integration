@@ -1,32 +1,19 @@
 {
   "config": {
-    "error": {
-      "unexpected_error": "An unexpected error occurred. Please check the log for details.",
-      "cannot_connect": "Could not connect with the Airco: {reason}",
-      "invalid_host": "Invalid hostname or IP address",
-      "host_already_configured": "Airco IP already configured as [{error_name}]",
-      "too_many_devices_registered": "There are too many devices registered for this airco. Please delete a device (in the app) or do a factory reset of the module."
-    },
-    "abort": {
-      "existing_instance_updated": "Updated existing configuration.",
-      "already_configured": "Airco is already configured",
-      "reconfigure_successful": "Re-configuration was successful",
-      "wrong_device": "This is a different air conditioner than the one this entry was set up for. Point it back at the original unit, or add the other one as its own entry."
-    },
     "step": {
       "user": {
         "data": {
-          "host": "Host (IP) address",
+          "host": "Host",
           "port": "Port",
           "force_update": "Ignore duplicate IP address"
         },
+        "description": "Please fill in the correct information to add the Airco Manually",
+        "title": "WF-RAC AC connection info",
         "data_description": {
           "host": "The local IP address of the airco's wireless module. A changed address is picked up when the module announces itself again; give the module a fixed address in your router, or correct it here if it does not.",
           "port": "The port the module's local API listens on. Leave this at 51443 unless your module announces a different one.",
           "force_update": "Add this airco even though another entry already uses this IP address. Meant for re-adding a unit whose old entry went missing: the module accepts one connection at a time, so two entries polling it will produce errors in the log."
-        },
-        "description": "Please fill in the correct information to add the Airco Manually",
-        "title": "WF-RAC AC connection info"
+        }
       },
       "discovery_confirm": {
         "description": "The airco with id: {id}, IP: {host} and port: {port} was discovered. The port is normally 51443 — correct it below if it looks different.",
@@ -40,54 +27,29 @@
       },
       "reconfigure": {
         "data": {
-          "host": "Host (IP) address",
+          "host": "Host",
           "port": "Port"
         },
+        "description": "Update the connection details for this Airco.",
+        "title": "Reconfigure WF-RAC AC connection",
         "data_description": {
           "host": "The local IP address of the airco's wireless module. A changed address is picked up when the module announces itself again; give the module a fixed address in your router, or correct it here if it does not.",
           "port": "The port the module's local API listens on. Leave this at 51443 unless your module announces a different one."
-        },
-        "description": "Update the connection details for this Airco.",
-        "title": "Reconfigure WF-RAC AC connection"
+        }
       }
-    }
-  },
-  "exceptions": {
-    "cannot_connect": {
-      "message": "Could not reach the Airco at {device}."
     },
-    "update_failed": {
-      "message": "Polling the Airco at {device} failed: {error}"
+    "error": {
+      "unexpected_error": "An unexpected error occurred. Please check the log for details.",
+      "cannot_connect": "Could not connect with the Airco: {reason}",
+      "invalid_host": "Invalid hostname or IP address",
+      "host_already_configured": "Airco IP already configured as [{error_name}]",
+      "too_many_devices_registered": "There are too many devices registered for this airco. Please delete a device (in the app) or do a factory reset of the module."
     },
-    "command_failed": {
-      "message": "Sending the command to the Airco at {device} failed: {error}"
-    },
-    "temperature_below_minimum": {
-      "message": "{temperature} °C is below the {min_temp} °C minimum for hvac_mode {hvac_mode}. Include hvac_mode in the same action call to check against the mode you are switching to instead."
-    },
-    "temperature_above_maximum": {
-      "message": "{temperature} °C is above the {max_temp} °C maximum for hvac_mode {hvac_mode}. Include hvac_mode in the same action call to check against the mode you are switching to instead."
-    },
-    "external_temperature_source_configured": {
-      "message": "The indoor temperature is controlled by the configured source entity."
-    },
-    "home_leave_mode_not_supported": {
-      "message": "This model does not report the Home Leave Mode capability."
-    },
-    "home_leave_mode_status_unknown": {
-      "message": "Home Leave Mode values are unknown yet. Call the climate entity's \"Request Home Leave Mode status\" action once first - the unit doesn't include them in a plain poll."
-    },
-    "entity_not_energy_total_sensor": {
-      "message": "{entity_id} is not an Energy Usage Total sensor."
-    },
-    "preset_away_needs_cool_or_heat": {
-      "message": "Home Leave mode is only available while cooling or heating, not in {hvac_mode}. Switch the unit to cool or heat first, or use the Home Leave Mode select to name the direction."
-    },
-    "status_request_read_failed": {
-      "message": "Could not read the state of the Airco at {device}, so the status request was not sent."
-    },
-    "status_request_not_sent": {
-      "message": "Home Assistant no longer sends status requests to the Airco at {device}, because this unit changes its own settings in response to them."
+    "abort": {
+      "existing_instance_updated": "Updated existing configuration.",
+      "already_configured": "Service is already configured",
+      "reconfigure_successful": "Reconfiguration was successful",
+      "wrong_device": "This is a different air conditioner than the one this entry was set up for. Point it back at the original unit, or add the other one as its own entry."
     }
   },
   "issues": {
@@ -168,7 +130,152 @@
       }
     }
   },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Could not reach the Airco at {device}."
+    },
+    "update_failed": {
+      "message": "Polling the Airco at {device} failed: {error}"
+    },
+    "command_failed": {
+      "message": "Sending the command to the Airco at {device} failed: {error}"
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C is below the {min_temp} °C minimum for hvac_mode {hvac_mode}. Include hvac_mode in the same action call to check against the mode you are switching to instead."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C is above the {max_temp} °C maximum for hvac_mode {hvac_mode}. Include hvac_mode in the same action call to check against the mode you are switching to instead."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "This model does not report the Home Leave Mode capability."
+    },
+    "external_temperature_source_configured": {
+      "message": "The indoor temperature is controlled by the configured source entity."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Home Leave Mode values are unknown yet. Call the climate entity's \"Request Home Leave Mode status\" action once first - the unit doesn't include them in a plain poll."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} is not an Energy Usage Total sensor."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Home Leave mode is only available while cooling or heating, not in {hvac_mode}. Switch the unit to cool or heat first, or use the Home Leave Mode select to name the direction."
+    },
+    "status_request_read_failed": {
+      "message": "Could not read the state of the Airco at {device}, so the status request was not sent."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant no longer sends status requests to the Airco at {device}, because this unit changes its own settings in response to them."
+    }
+  },
   "entity": {
+    "sensor": {
+      "indoor": {
+        "name": "Indoor"
+      },
+      "outdoor": {
+        "name": "Outdoor"
+      },
+      "target": {
+        "name": "Target"
+      },
+      "airco_id": {
+        "name": "Airco ID"
+      },
+      "operator_id": {
+        "name": "Operator ID"
+      },
+      "device_id": {
+        "name": "Device ID"
+      },
+      "host": {
+        "name": "IP address"
+      },
+      "connected_accounts": {
+        "name": "Connected accounts"
+      },
+      "error": {
+        "name": "Error"
+      },
+      "updated_by": {
+        "name": "Updated by"
+      },
+      "account_expires": {
+        "name": "Account expires"
+      },
+      "led_status": {
+        "name": "LED status"
+      },
+      "auto_heating": {
+        "name": "Auto heating"
+      },
+      "model_nr": {
+        "name": "Model number"
+      },
+      "cool_hot_judge": {
+        "name": "Cool hot judge",
+        "state": {
+          "cooling": "Cooling",
+          "heating": "Heating"
+        }
+      },
+      "energy_usage": {
+        "name": "Energy usage (current run)"
+      },
+      "energy_usage_total": {
+        "name": "Energy usage total"
+      },
+      "compressor_frequency": {
+        "name": "Compressor frequency"
+      },
+      "compressor_frequency_raw": {
+        "name": "Compressor frequency (raw)"
+      },
+      "operating_current": {
+        "name": "Operating current"
+      },
+      "operating_current_raw": {
+        "name": "Operating current (raw)"
+      },
+      "hot_gas_temp": {
+        "name": "Hot gas temperature"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Hot gas temperature (raw)"
+      },
+      "eev_pulses": {
+        "name": "EEV pulses"
+      },
+      "eev_position": {
+        "name": "EEV position"
+      },
+      "indoor_coil_temp": {
+        "name": "Indoor coil temperature"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Indoor coil outlet temperature"
+      },
+      "indoor_coil_raw": {
+        "name": "Indoor coil temperature (raw)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Indoor coil outlet temperature (raw)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Outdoor coil temperature (raw)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Discharge superheat (raw)"
+      },
+      "protection_raw": {
+        "name": "Protection number (raw)"
+      }
+    },
+    "update": {
+      "firmware_update": {
+        "name": "Firmware update"
+      }
+    },
     "climate": {
       "mitsubishi_wf_rac": {
         "state_attributes": {
@@ -286,108 +393,6 @@
         "name": "Home Leave heating target room temperature"
       }
     },
-    "sensor": {
-      "indoor": {
-        "name": "Indoor"
-      },
-      "outdoor": {
-        "name": "Outdoor"
-      },
-      "target": {
-        "name": "Target"
-      },
-      "airco_id": {
-        "name": "Airco ID"
-      },
-      "operator_id": {
-        "name": "Operator ID"
-      },
-      "device_id": {
-        "name": "Device ID"
-      },
-      "host": {
-        "name": "IP address"
-      },
-      "connected_accounts": {
-        "name": "Connected accounts"
-      },
-      "error": {
-        "name": "Error"
-      },
-      "updated_by": {
-        "name": "Updated by"
-      },
-      "account_expires": {
-        "name": "Account expires"
-      },
-      "led_status": {
-        "name": "LED status"
-      },
-      "auto_heating": {
-        "name": "Auto heating"
-      },
-      "model_nr": {
-        "name": "Model number"
-      },
-      "cool_hot_judge": {
-        "name": "Cool hot judge",
-        "state": {
-          "cooling": "Cooling",
-          "heating": "Heating"
-        }
-      },
-      "energy_usage": {
-        "name": "Energy usage (current run)"
-      },
-      "energy_usage_total": {
-        "name": "Energy usage total"
-      },
-      "compressor_frequency": {
-        "name": "Compressor frequency"
-      },
-      "compressor_frequency_raw": {
-        "name": "Compressor frequency (raw)"
-      },
-      "operating_current": {
-        "name": "Operating current"
-      },
-      "operating_current_raw": {
-        "name": "Operating current (raw)"
-      },
-      "hot_gas_temp": {
-        "name": "Hot gas temperature"
-      },
-      "hot_gas_temp_raw": {
-        "name": "Hot gas temperature (raw)"
-      },
-      "eev_pulses": {
-        "name": "EEV pulses"
-      },
-      "eev_position": {
-        "name": "EEV position"
-      },
-      "indoor_coil_temp": {
-        "name": "Indoor coil temperature"
-      },
-      "indoor_coil_outlet_temp": {
-        "name": "Indoor coil outlet temperature"
-      },
-      "indoor_coil_raw": {
-        "name": "Indoor coil temperature (raw)"
-      },
-      "indoor_coil_outlet_raw": {
-        "name": "Indoor coil outlet temperature (raw)"
-      },
-      "outdoor_coil_raw": {
-        "name": "Outdoor coil temperature (raw)"
-      },
-      "discharge_superheat_raw": {
-        "name": "Discharge superheat (raw)"
-      },
-      "protection_raw": {
-        "name": "Protection number (raw)"
-      }
-    },
     "binary_sensor": {
       "problem": {
         "name": "Problem"
@@ -403,12 +408,6 @@
       },
       "external_temperature_active": {
         "name": "Indoor temperature override"
-      }
-    },
-    "switch": {},
-    "update": {
-      "firmware_update": {
-        "name": "Firmware update"
       }
     },
     "button": {
