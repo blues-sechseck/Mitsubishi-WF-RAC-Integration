@@ -1516,6 +1516,71 @@ async def test_set_airco_waits_and_retries_once_when_the_write_lock_is_held(
     assert device.airco.Operation is True
 
 
+async def test_a_retried_write_does_not_revert_the_client_it_waited_for(
+    device, monkeypatch
+):
+    """The frame is a full state block, not a delta.
+
+    A refusal means another client holds the write lock, and by the time it
+    lapses that client has changed something. Re-sending the block encoded
+    before the refusal would send every one of those fields back as it was.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    # What the other client left behind while it held the lock, in the answer
+    # the wait reads. Deadline in the past, so the retry does not really sleep.
+    theirs = RacParser().translate_bytes(ON_COOL_PAYLOAD)
+    theirs.PresetTemp = 27.0
+    device._api.get_aircon_stats.return_value = {
+        **_stats_response(
+            await _echo_send_airco_command(
+                None, RacParser().to_base64(AirconStat.from_aircon(theirs))
+            )
+        ),
+        "expires": int(dt_util.utcnow().timestamp()) - 100,
+    }
+
+    sent: list[str] = []
+
+    async def _refuse_once_then_echo(airco_id, command, **_kwargs):
+        sent.append(command)
+        if len(sent) == 1:
+            raise WfRacWriteRefusedError("result 1")
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_refuse_once_then_echo)
+
+    await device.set_airco({AirconCommands.AirFlow: 2})
+
+    retried = RacParser().translate_bytes(
+        await _echo_send_airco_command(None, sent[1])
+    )
+    assert retried.PresetTemp == 27.0
+    assert retried.AirFlow == 2
+
+
+async def test_the_wait_for_a_foreign_lock_keeps_the_diagnostic_readings(
+    device, monkeypatch
+):
+    """The answer that wait reads is a plain status block: no HomeLeaveMode
+    and no operation data in it. Taking it as the new state wholesale would
+    blank those sensors for a cycle, which is the failure _carry_forward_*
+    exists to prevent.
+    """
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device._airco.HomeLeaveModeForCooling = 35.0
+
+    device._api.get_aircon_stats.return_value = {
+        **_stats_response(ON_COOL_PAYLOAD),
+        "expires": int(dt_util.utcnow().timestamp()) - 100,
+    }
+
+    assert await device._async_write_lock_delay() == 0.0
+    assert device.airco.HomeLeaveModeForCooling == 35.0
+
+
 async def test_service_data_request_does_not_overlap_an_active_request(device, monkeypatch):
     _activate_service_data_contexts(device, monkeypatch)
 
