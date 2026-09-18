@@ -42,8 +42,13 @@ jobs:
           # promise - see requirements-floor.txt.
           - label: current
             requirements: requirements-dev.txt
+            args: ""
           - label: floor
             requirements: requirements-floor.txt
+            # Core's own suite, carried over under tests/components, is
+            # written against core's dev and uses helpers the floor does not
+            # have - see tests/components/README.md.
+            args: "--ignore=tests/components"
     steps:
       - uses: "actions/checkout@v4"
       - uses: "actions/setup-python@v5"
@@ -55,7 +60,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r ${{ matrix.requirements }}
       - name: Run tests
-        run: pytest
+        run: pytest ${{ matrix.args }}
 
   mypy:
     name: Mypy
