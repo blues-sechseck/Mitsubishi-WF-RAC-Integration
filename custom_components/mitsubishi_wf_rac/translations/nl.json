@@ -85,12 +85,27 @@
     },
     "status_request_read_failed": {
       "message": "De staat van de airco {device} kon niet worden gelezen, daarom is de statusaanvraag niet verstuurd."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant stuurt geen statusverzoeken meer naar de airco op {device}, omdat dit apparaat daarop zijn eigen instellingen wijzigt."
     }
   },
   "issues": {
     "too_many_devices": {
       "title": "Te veel accounts geregistreerd op {device_name}",
       "description": "Deze unit heeft ruimte voor vier geregistreerde accounts en alle vier zijn bezet, dus Home Assistant kan zichzelf niet registreren. De module maakt zelf nooit een plek vrij: registraties verlopen niet, en een nieuwe wordt geweigerd in plaats van een oudere te vervangen. Verwijder deze unit in de Smart M-Air-app op een telefoon die hem niet meer nodig heeft - elk account kan alleen zichzelf verwijderen, en meerdere telefoons met hetzelfde Smart M-Air-account gebruiken samen één plek. Laad daarna deze integratie opnieuw. Kan niemand een plek vrijmaken - bijvoorbeeld doordat een allang weggegeven telefoon er een bezet houdt - dan moet de module opnieuw worden ingesteld."
+    },
+    "request_stops_unit": {
+      "title": "{device_name} wijzigt zijn eigen instellingen bij een verzoek om bedrijfsdata",
+      "description": "De diagnostische sensoren voor compressor, stroom en temperaturen worden eens per minuut met een extra verzoek uitgelezen. Dat verzoek draagt geen instellingen — het vraagt alleen — maar deze module past het toch toe, en elk veld dat het leeg laat wordt als waarde gelezen: het apparaat gaat uit, de modus springt op auto, ventilator en lamellen vallen terug naar hun eerste stand, en het instelpunt zakt naar de laagste waarde die het apparaat toestaat.\n\nHome Assistant laat dat verzoek nu de eigen instellingen van dit apparaat meedragen, vlak voor verzending uitgelezen, zodat het frame ze bevestigt in plaats van ze te wissen. Dat is de vorm die de app van de fabrikant zelf gebruikt. De instellingen die het verzoek had gewist, zijn teruggeschreven. Zolang Home Assistant denkt dat dit apparaat uit staat, gaat er helemaal geen verzoek uit, dus houden deze sensoren hun laatste waarde vast tot het weer draait.\n\nVerder hoeft u niets te doen — houd het een paar minuten in de gaten. Wijzigt het apparaat daarna nog steeds uit zichzelf zijn instellingen, dan stopt Home Assistant het verzoek helemaal en meldt dat hier."
+    },
+    "status_request_unsupported": {
+      "title": "Bedrijfsdata kunnen niet van {device_name} gelezen worden",
+      "description": "Dit apparaat wijzigt zijn eigen instellingen zodra het om bedrijfsdata gevraagd wordt, en het doet dat ook wanneer het verzoek zijn huidige instellingen aan hem teruggeeft. Er is niets meer over om in dat verzoek te zetten waar dit apparaat vanaf blijft, dus is Home Assistant gestopt het te versturen.\n\nWat dat kost: de diagnostische sensoren die eruit gevoed worden (compressorfrequentie, bedrijfsstroom, heetgastemperatuur, EEV-stand en de warmtewisselaartemperaturen) worden niet meer bijgewerkt, en een in de opties ingestelde bron voor de binnentemperatuur kan niet meer aan het apparaat doorgegeven worden — beide rijden op dat ene verzoek. Al het overige blijft ongemoeid: aan/uit, modus, temperatuur, ventilator en lamellen gaan als gewone commando's en worden hier niet door geraakt.\n\nMeld dit alstublieft, met de firmwareversie van uw module erbij. Van slechts twee apparaten is dit gedrag bekend, en een melding is de enige manier waarop eraan gewerkt kan worden."
+    },
+    "service_data_unanswered": {
+      "title": "Bedrijfsdata zijn niet beschikbaar van {device_name}",
+      "description": "De diagnostische sensoren voor compressor, stroom, temperaturen en EEV-stand worden eens per minuut met een extra verzoek uitgelezen. Dit apparaat accepteert dat verzoek en beantwoordt het, maar heeft er nog nooit ook maar één segment in teruggegeven — die sensoren zouden dus nooit een waarde tonen, hoe het verzoek er ook uitziet.\n\nHome Assistant is gestopt met vragen. De sensoren melden nu niet beschikbaar in plaats van onbekend, en dat is het eerlijke verschil: een meting is niet te laat, er is er geen. U kunt ze op dit apparaat uitschakelen; er gaat niets verloren en het haalt ze uit beeld.\n\nAl het overige blijft ongemoeid — aan/uit, modus, temperatuur, ventilator en lamellen zijn gewone commando's en gebruiken dit kanaal niet. Een in de opties ingestelde bron voor de binnentemperatuur blijft ook werken: die reist op hetzelfde verzoek mee, dat daarvoor nog steeds verstuurd wordt.\n\nDe integratie herladen laat het opnieuw proberen, voor het geval dit tijdelijk was."
     }
   },
   "options": {
@@ -398,6 +413,115 @@
     "button": {
       "reset_energy_total": {
         "name": "Energieverbruik totaal resetten"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Horizontale zwenkstand instellen",
+      "description": "Stelt de horizontale (links/rechts) zwenkstand in.",
+      "fields": {
+        "swing_mode": {
+          "name": "Horizontale zwenkstand",
+          "description": "Welke horizontale zwenkstand ingesteld wordt."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Verticale zwenkstand instellen",
+      "description": "Stelt de verticale (omhoog/omlaag) zwenkstand in.",
+      "fields": {
+        "swing_mode": {
+          "name": "Verticale zwenkstand",
+          "description": "Welke verticale zwenkstand ingesteld wordt."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Afwezigheidsstatus opvragen",
+      "description": "Vraagt het apparaat om zijn huidige afwezigheidsdrempels en ventilatorstanden. Roep dit éénmaal aan zodat de number- en select-entiteiten een waarde hebben om te tonen en te wijzigen — bij een gewone polling laat het apparaat ze weg. Alleen bij modellen met de HomeLeaveMode-mogelijkheid."
+    },
+    "set_home_leave_mode": {
+      "name": "Afwezigheidsmodus instellen",
+      "description": "Schrijft nieuwe afwezigheidsdrempels en ventilatorstanden voor koelen en verwarmen. Alleen bij modellen met de HomeLeaveMode-mogelijkheid.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Drempel koelen",
+          "description": "Buiten- of kamertemperatuur waarboven de afwezigheidsmodus bij koelen ingrijpt, in °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Doeltemperatuur koelen",
+          "description": "Doeltemperatuur zolang de afwezigheidsmodus bij koelen actief is, in °C."
+        },
+        "air_flow_cooling": {
+          "name": "Ventilatorstand koelen",
+          "description": "Ventilatorstand zolang de afwezigheidsmodus bij koelen actief is."
+        },
+        "temp_rule_heating": {
+          "name": "Drempel verwarmen",
+          "description": "Buiten- of kamertemperatuur waaronder de afwezigheidsmodus bij verwarmen ingrijpt, in °C."
+        },
+        "temp_setting_heating": {
+          "name": "Doeltemperatuur verwarmen",
+          "description": "Doeltemperatuur zolang de afwezigheidsmodus bij verwarmen actief is, in °C."
+        },
+        "air_flow_heating": {
+          "name": "Ventilatorstand verwarmen",
+          "description": "Ventilatorstand zolang de afwezigheidsmodus bij verwarmen actief is."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Binnentemperatuur opgeven",
+      "description": "Geeft het apparaat een kamertemperatuur om op te regelen in plaats van die van zijn eigen sensor. De waarde wordt niet door deze actie verstuurd; hij rijdt mee op het eerstvolgende frame dat toch al uitgaat en werkt daarom binnen een minuut. Zolang er een waarde opgegeven is, vraagt de integratie per cyclus één segment bedrijfsdata op — dat is het frame dat hem draagt. Zonder temperatuur aangeroepen geeft de actie het apparaat terug aan zijn eigen sensor.",
+      "fields": {
+        "temperature": {
+          "name": "Temperatuur",
+          "description": "Kamertemperatuur in °C. Laat leeg om de eigen sensor van het apparaat te gebruiken."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Energieverbruik totaal instellen",
+      "description": "Overschrijft het opgebouwde totaal van één apparaat. 0 zet het terug, een eerder genoteerde meterstand neemt dat cijfer over. Betreft alleen de teller van de integratie — de teller in het apparaat is niet beschrijfbaar.",
+      "fields": {
+        "value": {
+          "name": "Waarde",
+          "description": "Nieuw totaal in kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Left/Right Auto",
+        "left_left": "Left-Left",
+        "left_center": "Left-Center",
+        "center_center": "Center-Center",
+        "center_right": "Center-Right",
+        "right_right": "Right-Right",
+        "left_right": "Left-Right",
+        "right_left": "Right-Left"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Up/Down Auto",
+        "highest": "Highest",
+        "middle": "Middle",
+        "normal": "Normal",
+        "lowest": "Lowest",
+        "3d_auto": "3D Auto"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Auto",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
       }
     }
   }

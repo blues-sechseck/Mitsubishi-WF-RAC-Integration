@@ -85,12 +85,27 @@
     },
     "status_request_read_failed": {
       "message": "无法读取空调 {device} 的状态，因此未发送状态请求。"
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant 已停止向 {device} 上的空调发送状态请求，因为该机组会因此更改自身设置。"
     }
   },
   "issues": {
     "too_many_devices": {
       "title": "{device_name} 上注册的账户过多",
       "description": "此机组最多可注册四个账户，目前四个已全部占用，因此 Home Assistant 无法注册。模块不会自行释放名额：注册不会过期，新的注册会被拒绝，而不会替换旧的。请在 Smart M-Air 应用中，从不再需要该机组的手机上将其移除——每个账户只能移除自己，而共用同一个 Smart M-Air 账户的多部手机合计只占一个名额。然后重新加载此集成。如果没有人能释放名额（例如早已转手的手机仍占用一个），则需要重新配置模块。"
+    },
+    "request_stops_unit": {
+      "title": "{device_name} 在被请求运行数据时会更改自身设置",
+      "description": "压缩机、电流和各温度的诊断传感器，通过每分钟一次的额外请求读取。该请求不携带任何设置——它只是询问——但这个模块仍会照单执行，凡是它留空的字段都会被当作数值读入：机组关机，模式跳到自动，风量和导风板退回第一档，设定温度降到机组允许的最低值。\n\nHome Assistant 已改为让该请求携带机组自身的设置，并在发送前一刻读取，这样这一帧是确认设置而不是清除设置。厂家自己的应用就是这种形式。被请求清除过的设置已经写回。当 Home Assistant 认为机组处于关机状态时，根本不会发出请求，因此这些传感器会保持最后的数值，直到机组重新运行。\n\n其余无需处理——观察几分钟即可。若机组仍会自行更改设置，Home Assistant 将完全停止发送该请求，并在此处说明。"
+    },
+    "status_request_unsupported": {
+      "title": "无法从 {device_name} 读取运行数据",
+      "description": "这台机组每次被请求运行数据时都会更改自身设置，即便请求把它当前的设置原样带回也是如此。已经没有什么内容可以放进这个请求而不被它改动，因此 Home Assistant 停止了发送。\n\n代价是：由它供数的诊断传感器（压缩机频率、运行电流、排气温度、EEV 开度和换热器温度）不再更新，集成选项中配置的室内温度来源也无法再传给机组——两者都搭在这一个请求上。其余一切不受影响：开关机、模式、温度、风量和导风板都是普通命令，与此无关。\n\n请报告此情况，并附上模块的固件版本。目前只有两台机组已知有这种表现，报告是唯一能推进此事的途径。"
+    },
+    "service_data_unanswered": {
+      "title": "{device_name} 无法提供运行数据",
+      "description": "压缩机、电流、各温度和 EEV 开度的诊断传感器，通过每分钟一次的额外请求读取。这台机组接受并回应该请求，却从未在其中返回过任何一个数据段——因此无论请求是什么样子，这些传感器都不会有数值。\n\nHome Assistant 已停止询问。传感器现在显示为不可用而非未知，这是诚实的区别：读数不是迟到了，而是根本没有。您可以在此设备上停用它们；不会损失任何东西，只是从视图中移除。\n\n其余一切不受影响——开关机、模式、温度、风量和导风板都是普通命令，不走这个通道。集成选项中设置的室内温度来源也继续有效：它搭载在同一个请求上，而该请求仍会为它发出。\n\n重新加载集成会再试一次，以防这只是暂时的。"
     }
   },
   "options": {
@@ -398,6 +413,115 @@
     "button": {
       "reset_energy_total": {
         "name": "重置能耗总计"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "设置左右风向",
+      "description": "设置左右（水平）风向。",
+      "fields": {
+        "swing_mode": {
+          "name": "左右风向",
+          "description": "要设置的左右风向。"
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "设置上下风向",
+      "description": "设置上下（垂直）风向。",
+      "fields": {
+        "swing_mode": {
+          "name": "上下风向",
+          "description": "要设置的上下风向。"
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "查询离家模式状态",
+      "description": "向机组查询当前的离家模式阈值和风量。请调用一次，让 number 和 select 实体有可显示和修改的值——普通轮询时机组不会返回这些内容。仅支持具备 HomeLeaveMode 能力的机型。"
+    },
+    "set_home_leave_mode": {
+      "name": "设置离家模式",
+      "description": "写入制冷和制热的离家模式阈值与风量。仅支持具备 HomeLeaveMode 能力的机型。",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "制冷阈值",
+          "description": "离家制冷开始介入的室外或室内温度阈值，单位 °C。"
+        },
+        "temp_setting_cooling": {
+          "name": "制冷目标室温",
+          "description": "离家制冷运行期间的目标温度，单位 °C。"
+        },
+        "air_flow_cooling": {
+          "name": "制冷风量",
+          "description": "离家制冷运行期间的风量。"
+        },
+        "temp_rule_heating": {
+          "name": "制热阈值",
+          "description": "离家制热开始介入的室外或室内温度阈值，单位 °C。"
+        },
+        "temp_setting_heating": {
+          "name": "制热目标室温",
+          "description": "离家制热运行期间的目标温度，单位 °C。"
+        },
+        "air_flow_heating": {
+          "name": "制热风量",
+          "description": "离家制热运行期间的风量。"
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "指定室内温度",
+      "description": "为机组指定一个室温，让它据此调节，而不使用自身传感器的读数。该值不由本动作直接发送，而是搭载在下一个本来就要发出的帧上，因此一分钟内生效。指定有效期间，集成每个周期请求一段运行数据——承载该值的正是这个帧。调用时不填温度，机组即回到自身传感器。",
+      "fields": {
+        "temperature": {
+          "name": "温度",
+          "description": "室温，单位 °C。留空则使用机组自身的传感器。"
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "设置能耗总计",
+      "description": "覆盖单台机组的累计值。填 0 将其清零，填入此前记录的读数则可沿用旧值。仅影响集成自己的累计值——机组内部的计数器无法写入。",
+      "fields": {
+        "value": {
+          "name": "数值",
+          "description": "新的总计值，单位 kWh。"
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "左右自动",
+        "left_left": "左-左",
+        "left_center": "左-中",
+        "center_center": "中-中",
+        "center_right": "中-右",
+        "right_right": "右-右",
+        "left_right": "左-右",
+        "right_left": "右-左"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "上下自动",
+        "highest": "最高",
+        "middle": "中间",
+        "normal": "标准",
+        "lowest": "最低",
+        "3d_auto": "3D自动"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "自动",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
       }
     }
   }
