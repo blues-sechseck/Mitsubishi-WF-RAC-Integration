@@ -175,32 +175,32 @@
           "fan_mode": {
             "state": {
               "auto": "Auto",
-              "quiet": "Quiet",
-              "low": "Low",
-              "medium": "Medium",
-              "high": "High"
+              "quiet": "Leise",
+              "low": "Niedrig",
+              "medium": "Mittel",
+              "high": "Hoch"
             }
           },
           "swing_mode": {
             "state": {
-              "up_down_auto": "Up/Down Auto",
-              "highest": "Highest",
-              "middle": "Middle",
+              "up_down_auto": "Oben/Unten Auto",
+              "highest": "Höchste",
+              "middle": "Mitte",
               "normal": "Normal",
-              "lowest": "Lowest",
+              "lowest": "Niedrigste",
               "3d_auto": "3D Auto"
             }
           },
           "swing_horizontal_mode": {
             "state": {
-              "left_right_auto": "Left/Right Auto",
-              "left_left": "Left-Left",
-              "left_center": "Left-Center",
-              "center_center": "Center-Center",
-              "center_right": "Center-Right",
-              "right_right": "Right-Right",
-              "left_right": "Left-Right",
-              "right_left": "Right-Left",
+              "left_right_auto": "Links/Rechts Auto",
+              "left_left": "Links-Links",
+              "left_center": "Links-Mitte",
+              "center_center": "Mitte-Mitte",
+              "center_right": "Mitte-Rechts",
+              "right_right": "Rechts-Rechts",
+              "left_right": "Links-Rechts",
+              "right_left": "Rechts-Links",
               "3d_auto": "3D Auto"
             }
           }

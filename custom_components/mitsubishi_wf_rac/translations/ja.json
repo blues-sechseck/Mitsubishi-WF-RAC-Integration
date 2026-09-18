@@ -174,34 +174,34 @@
         "state_attributes": {
           "fan_mode": {
             "state": {
-              "auto": "Auto",
-              "quiet": "Quiet",
-              "low": "Low",
-              "medium": "Medium",
-              "high": "High"
+              "auto": "自動",
+              "quiet": "静か",
+              "low": "低",
+              "medium": "中",
+              "high": "高"
             }
           },
           "swing_mode": {
             "state": {
-              "up_down_auto": "Up/Down Auto",
-              "highest": "Highest",
-              "middle": "Middle",
-              "normal": "Normal",
-              "lowest": "Lowest",
-              "3d_auto": "3D Auto"
+              "up_down_auto": "上下自動",
+              "highest": "最高",
+              "middle": "中間",
+              "normal": "標準",
+              "lowest": "最低",
+              "3d_auto": "3D自動"
             }
           },
           "swing_horizontal_mode": {
             "state": {
-              "left_right_auto": "Left/Right Auto",
-              "left_left": "Left-Left",
-              "left_center": "Left-Center",
-              "center_center": "Center-Center",
-              "center_right": "Center-Right",
-              "right_right": "Right-Right",
-              "left_right": "Left-Right",
-              "right_left": "Right-Left",
-              "3d_auto": "3D Auto"
+              "left_right_auto": "左右自動",
+              "left_left": "左-左",
+              "left_center": "左-中央",
+              "center_center": "中央-中央",
+              "center_right": "中央-右",
+              "right_right": "右-右",
+              "left_right": "左-右",
+              "right_left": "右-左",
+              "3d_auto": "3D自動"
             }
           }
         }
@@ -495,24 +495,24 @@
   "selector": {
     "horizontal_swing_mode": {
       "options": {
-        "left_right_auto": "Left/Right Auto",
-        "left_left": "Left-Left",
-        "left_center": "Left-Center",
-        "center_center": "Center-Center",
-        "center_right": "Center-Right",
-        "right_right": "Right-Right",
-        "left_right": "Left-Right",
-        "right_left": "Right-Left"
+        "left_right_auto": "左右自動",
+        "left_left": "左-左",
+        "left_center": "左-中央",
+        "center_center": "中央-中央",
+        "center_right": "中央-右",
+        "right_right": "右-右",
+        "left_right": "左-右",
+        "right_left": "右-左"
       }
     },
     "vertical_swing_mode": {
       "options": {
-        "up_down_auto": "Up/Down Auto",
-        "highest": "Highest",
-        "middle": "Middle",
-        "normal": "Normal",
-        "lowest": "Lowest",
-        "3d_auto": "3D Auto"
+        "up_down_auto": "上下自動",
+        "highest": "最高",
+        "middle": "中間",
+        "normal": "標準",
+        "lowest": "最低",
+        "3d_auto": "3D自動"
       }
     },
     "home_leave_air_flow": {
