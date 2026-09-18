@@ -85,12 +85,27 @@
     },
     "status_request_read_failed": {
       "message": "Nepavyko nuskaityti oro kondicionieriaus {device} būsenos, todėl būsenos užklausa nebuvo išsiųsta."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant nebesiunčia būsenos užklausų oro kondicionieriui adresu {device}, nes šis įrenginys dėl jų pakeičia savo paties nuostatas."
     }
   },
   "issues": {
     "too_many_devices": {
       "title": "Per daug paskyrų užregistruota įrenginyje {device_name}",
       "description": "Šis įrenginys turi vietos keturioms paskyroms, ir visos keturios užimtos, todėl „Home Assistant“ negali užsiregistruoti. Modulis pats vietos niekada neatlaisvina: registracijos nenustoja galioti, o nauja yra atmetama, o ne pakeičia senesnę. „Smart M-Air“ programėlėje pašalinkite šį įrenginį iš telefono, kuriam jo nebereikia - kiekviena paskyra gali pašalinti tik save, o keli telefonai su ta pačia „Smart M-Air“ paskyra kartu užima vieną vietą. Tada iš naujo įkelkite šią integraciją. Jei niekas negali atlaisvinti vietos - pavyzdžiui, ją laiko seniai atiduotas telefonas - modulį reikia sukonfigūruoti iš naujo."
+    },
+    "request_stops_unit": {
+      "title": "{device_name} pakeičia savo nuostatas, kai užklausiami veikimo duomenys",
+      "description": "Kompresoriaus, srovės ir temperatūrų diagnostiniai jutikliai nuskaitomi papildoma užklausa kartą per minutę. Ta užklausa neneša jokių nuostatų — ji tik klausia — bet šis modulis vis tiek ją pritaiko, ir kiekvienas jos paliktas tuščias laukas perskaitomas kaip reikšmė: įrenginys išsijungia, režimas nukrenta į automatinį, ventiliatorius ir mentės grįžta į pirmą padėtį, o nustatyta temperatūra nusileidžia iki žemiausios, kurią įrenginys leidžia.\n\nHome Assistant perjungė tą užklausą taip, kad ji neštų paties įrenginio nuostatas, nuskaitytas prieš pat išsiuntimą, todėl kadras jas patvirtina, o ne išvalo. Tokios formos yra ir gamintojo programėlė. Nuostatos, kurias užklausa buvo išvaliusi, įrašytos atgal. Kol Home Assistant mano, kad šis įrenginys išjungtas, užklausa apskritai nesiunčiama, todėl šie jutikliai laiko paskutinę reikšmę, kol jis vėl veiks.\n\nDaugiau nieko daryti nereikia — kelias minutes pastebėkite. Jei įrenginys vis tiek pats keičia savo nuostatas, Home Assistant visiškai nustos siųsti užklausą ir čia apie tai praneš."
+    },
+    "status_request_unsupported": {
+      "title": "Veikimo duomenų iš {device_name} nuskaityti nepavyksta",
+      "description": "Šis įrenginys pakeičia savo nuostatas kaskart, kai užklausiami veikimo duomenys, ir daro tai net tada, kai užklausa grąžina jam jo paties dabartines nuostatas. Nebeliko nieko, ką būtų galima įdėti į tą užklausą ir ko šis įrenginys neliestų, todėl Home Assistant nustojo ją siųsti.\n\nKo tai kainuoja: iš jos maitinami diagnostiniai jutikliai (kompresoriaus dažnis, darbinė srovė, karštų dujų temperatūra, EEV padėtis ir šilumokaičio temperatūros) nebeatsinaujina, o integracijos parinktyse nustatytas vidaus temperatūros šaltinis nebegali būti perduotas įrenginiui — abu dalykai keliauja ta pačia užklausa. Visa kita nepaliesta: įjungimas, režimas, temperatūra, ventiliatorius ir mentės siunčiami kaip įprastos komandos ir to nejaučia.\n\nPraneškite apie tai, nurodydami savo modulio programinės įrangos versiją. Tokiu būdu elgiasi tik du žinomi įrenginiai, ir pranešimas yra vienintelis kelias tai spręsti."
+    },
+    "service_data_unanswered": {
+      "title": "Veikimo duomenys iš {device_name} neprieinami",
+      "description": "Kompresoriaus, srovės, temperatūrų ir EEV padėties diagnostiniai jutikliai nuskaitomi papildoma užklausa kartą per minutę. Šis įrenginys užklausą priima ir į ją atsako, bet niekada nėra grąžinęs nė vieno segmento — tad tie jutikliai vis tiek nebūtų nieko parodę, kad ir kaip užklausa atrodytų.\n\nHome Assistant nustojo klausti. Jutikliai dabar rodo neprieinama, o ne nežinoma, ir tai yra sąžiningas skirtumas: rodmuo ne vėluoja, jo tiesiog nėra. Šiame įrenginyje galite juos išjungti; nieko neprarasite, tik dingsta iš akių.\n\nVisa kita nepaliesta — įjungimas, režimas, temperatūra, ventiliatorius ir mentės yra įprastos komandos ir šio kanalo nenaudoja. Integracijos parinktyse nustatytas vidaus temperatūros šaltinis taip pat toliau veikia: jis keliauja ta pačia užklausa, kuri dėl jo vis dar siunčiama.\n\nIš naujo įkėlus integraciją bandoma dar kartą — tam atvejui, jei tai buvo laikina."
     }
   },
   "options": {
@@ -398,6 +413,115 @@
     "button": {
       "reset_energy_total": {
         "name": "Atstatyti bendrą energijos suvartojimą"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Nustatyti horizontalią menčių padėtį",
+      "description": "Nustato horizontalią (kairė/dešinė) menčių padėtį.",
+      "fields": {
+        "swing_mode": {
+          "name": "Horizontali menčių padėtis",
+          "description": "Kuri horizontali menčių padėtis nustatoma."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Nustatyti vertikalią menčių padėtį",
+      "description": "Nustato vertikalią (aukštyn/žemyn) menčių padėtį.",
+      "fields": {
+        "swing_mode": {
+          "name": "Vertikali menčių padėtis",
+          "description": "Kuri vertikali menčių padėtis nustatoma."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Užklausti išvykimo režimo būseną",
+      "description": "Paprašo įrenginio pranešti dabartines išvykimo režimo ribas ir oro srautą. Iškvieskite vieną kartą, kad number ir select objektai turėtų ką rodyti ir keisti — įprastos apklausos metu įrenginys jų nepateikia. Tik modeliuose su HomeLeaveMode galimybe."
+    },
+    "set_home_leave_mode": {
+      "name": "Nustatyti išvykimo režimą",
+      "description": "Įrašo naujas išvykimo režimo ribas ir oro srautą vėsinimui bei šildymui. Tik modeliuose su HomeLeaveMode galimybe.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Vėsinimo riba",
+          "description": "Lauko arba kambario temperatūra, kurią viršijus įsijungia išvykimo vėsinimas, °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Vėsinimo tikslinė temp.",
+          "description": "Tikslinė temperatūra, kol veikia išvykimo vėsinimas, °C."
+        },
+        "air_flow_cooling": {
+          "name": "Vėsinimo oro srautas",
+          "description": "Oro srautas, kol veikia išvykimo vėsinimas."
+        },
+        "temp_rule_heating": {
+          "name": "Šildymo riba",
+          "description": "Lauko arba kambario temperatūra, žemiau kurios įsijungia išvykimo šildymas, °C."
+        },
+        "temp_setting_heating": {
+          "name": "Šildymo tikslinė temp.",
+          "description": "Tikslinė temperatūra, kol veikia išvykimo šildymas, °C."
+        },
+        "air_flow_heating": {
+          "name": "Šildymo oro srautas",
+          "description": "Oro srautas, kol veikia išvykimo šildymas."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Nurodyti vidaus temperatūrą",
+      "description": "Nurodo kambario temperatūrą, pagal kurią įrenginys reguliuoja vietoj savo paties jutiklio rodmens. Ši reikšmė nesiunčiama pačiu veiksmu — ji keliauja su artimiausiu šiaip jau siunčiamu kadru, todėl įsigalioja per minutę. Kol reikšmė nurodyta, integracija kiekviename cikle užklausia vieną veikimo duomenų segmentą — būtent tas kadras ją ir neša. Iškvietus be temperatūros, įrenginys grąžinamas prie savo jutiklio.",
+      "fields": {
+        "temperature": {
+          "name": "Temperatūra",
+          "description": "Kambario temperatūra, °C. Palikite tuščią, kad būtų naudojamas paties įrenginio jutiklis."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Nustatyti bendrą energijos suvartojimą",
+      "description": "Perrašo vieno įrenginio sukauptą sumą. 0 ją atstato, anksčiau užsirašytas skaitiklio rodmuo perkelia senąją reikšmę. Keičiama tik integracijos suma — skaitiklio įrenginio viduje įrašyti negalima.",
+      "fields": {
+        "value": {
+          "name": "Reikšmė",
+          "description": "Nauja suma, kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Left/Right Auto",
+        "left_left": "Left-Left",
+        "left_center": "Left-Center",
+        "center_center": "Center-Center",
+        "center_right": "Center-Right",
+        "right_right": "Right-Right",
+        "left_right": "Left-Right",
+        "right_left": "Right-Left"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Up/Down Auto",
+        "highest": "Highest",
+        "middle": "Middle",
+        "normal": "Normal",
+        "lowest": "Lowest",
+        "3d_auto": "3D Auto"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Automatinis",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
       }
     }
   }

@@ -414,8 +414,7 @@
       "reset_energy_total": {
         "name": "Energieverbrauch gesamt zurücksetzen"
       }
-    },
-    "switch": {}
+    }
   },
   "services": {
     "set_horizontal_swing_mode": {
