@@ -174,33 +174,33 @@
         "state_attributes": {
           "fan_mode": {
             "state": {
-              "auto": "Auto",
-              "quiet": "Quiet",
-              "low": "Low",
-              "medium": "Medium",
-              "high": "High"
+              "auto": "Automatinis",
+              "quiet": "Tylus",
+              "low": "Žemas",
+              "medium": "Vidutinis",
+              "high": "Aukštas"
             }
           },
           "swing_mode": {
             "state": {
-              "up_down_auto": "Up/Down Auto",
-              "highest": "Highest",
-              "middle": "Middle",
-              "normal": "Normal",
-              "lowest": "Lowest",
+              "up_down_auto": "Aukštyn/Žemyn Auto",
+              "highest": "Aukščiausias",
+              "middle": "Vidurinis",
+              "normal": "Normalus",
+              "lowest": "Žemiausias",
               "3d_auto": "3D Auto"
             }
           },
           "swing_horizontal_mode": {
             "state": {
-              "left_right_auto": "Left/Right Auto",
-              "left_left": "Left-Left",
-              "left_center": "Left-Center",
-              "center_center": "Center-Center",
-              "center_right": "Center-Right",
-              "right_right": "Right-Right",
-              "left_right": "Left-Right",
-              "right_left": "Right-Left",
+              "left_right_auto": "Kairė/Dešinė Auto",
+              "left_left": "Kairė-Kairė",
+              "left_center": "Kairė-Centras",
+              "center_center": "Centras-Centras",
+              "center_right": "Centras-Dešinė",
+              "right_right": "Dešinė-Dešinė",
+              "left_right": "Kairė-Dešinė",
+              "right_left": "Dešinė-Kairė",
               "3d_auto": "3D Auto"
             }
           }
@@ -495,23 +495,23 @@
   "selector": {
     "horizontal_swing_mode": {
       "options": {
-        "left_right_auto": "Left/Right Auto",
-        "left_left": "Left-Left",
-        "left_center": "Left-Center",
-        "center_center": "Center-Center",
-        "center_right": "Center-Right",
-        "right_right": "Right-Right",
-        "left_right": "Left-Right",
-        "right_left": "Right-Left"
+        "left_right_auto": "Kairė/Dešinė Auto",
+        "left_left": "Kairė-Kairė",
+        "left_center": "Kairė-Centras",
+        "center_center": "Centras-Centras",
+        "center_right": "Centras-Dešinė",
+        "right_right": "Dešinė-Dešinė",
+        "left_right": "Kairė-Dešinė",
+        "right_left": "Dešinė-Kairė"
       }
     },
     "vertical_swing_mode": {
       "options": {
-        "up_down_auto": "Up/Down Auto",
-        "highest": "Highest",
-        "middle": "Middle",
-        "normal": "Normal",
-        "lowest": "Lowest",
+        "up_down_auto": "Aukštyn/Žemyn Auto",
+        "highest": "Aukščiausias",
+        "middle": "Vidurinis",
+        "normal": "Normalus",
+        "lowest": "Žemiausias",
         "3d_auto": "3D Auto"
       }
     },
