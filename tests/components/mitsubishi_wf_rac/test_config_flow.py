@@ -106,7 +106,7 @@ async def test_user_flow_connection_errors(
 async def test_user_flow_empty_airco_id(
     hass: HomeAssistant, mock_repository: AsyncMock
 ) -> None:
-    """A module that answers without an airconId is not usable."""
+    """A module that answers without an airconId is not usable, until it names one."""
     mock_repository.get_airco_id.return_value = ""
 
     result = await hass.config_entries.flow.async_init(
@@ -119,12 +119,22 @@ async def test_user_flow_empty_airco_id(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
 
+    mock_repository.get_airco_id.return_value = AIRCO_ID
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
 
 @pytest.mark.usefixtures("mock_setup_entry")
 async def test_user_flow_account_table_full(
     hass: HomeAssistant, mock_repository: AsyncMock
 ) -> None:
-    """result:2 from updateAccountInfo means no slot is free."""
+    """result:2 from updateAccountInfo means no slot is free.
+
+    Freeing one in the manufacturer's app is the way out, and the flow has to
+    take it without being started over.
+    """
     mock_repository.update_account_info.return_value = {"result": 2}
 
     result = await hass.config_entries.flow.async_init(
@@ -136,6 +146,12 @@ async def test_user_flow_account_table_full(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "too_many_devices_registered"
+
+    mock_repository.update_account_info.return_value = {"result": 0}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 @pytest.mark.usefixtures("mock_setup_entry")
@@ -158,6 +174,12 @@ async def test_user_flow_registration_answer_without_a_result_code(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
+
+    mock_repository.update_account_info.return_value = {"result": 0}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 @pytest.mark.usefixtures("mock_setup_entry")
@@ -190,6 +212,14 @@ async def test_a_registration_the_module_declined_stays_in_the_form(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
 
+    # None of the three is permanent: the next attempt is what the form is
+    # asking for.
+    mock_repository.update_account_info.return_value = {"result": 0}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
 
 @pytest.mark.usefixtures("mock_setup_entry")
 async def test_a_registration_code_the_library_does_not_know_is_logged(
@@ -217,6 +247,7 @@ async def test_a_registration_code_the_library_does_not_know_is_logged(
     assert "answered the registration with result 7" in caplog.text
 
 
+@pytest.mark.usefixtures("mock_setup_entry")
 async def test_user_flow_registration_refused(
     hass: HomeAssistant, mock_repository: AsyncMock
 ) -> None:
@@ -232,6 +263,12 @@ async def test_user_flow_registration_refused(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
+
+    mock_repository.update_account_info.return_value = {"result": 0}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 @pytest.mark.usefixtures("mock_repository", "mock_setup_entry")
@@ -250,10 +287,17 @@ async def test_user_flow_input_validation(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     assert result["errors"][CONF_HOST] == "invalid_host"
 
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
-@pytest.mark.usefixtures("mock_repository", "mock_setup_entry")
+
+@pytest.mark.usefixtures("mock_setup_entry")
 async def test_user_flow_duplicate_host(
-    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+    hass: HomeAssistant,
+    mock_repository: AsyncMock,
+    mock_config_entry: MockConfigEntry,
 ) -> None:
     """A second entry on the same address is refused unless forced."""
     mock_config_entry.add_to_hass(hass)
@@ -267,6 +311,14 @@ async def test_user_flow_duplicate_host(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"][CONF_HOST] == "host_already_configured"
+
+    # The address belonged to the unit already set up; the second one answers
+    # at its own, with its own id.
+    mock_repository.get_airco_id.return_value = "bbccddee1122"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {**USER_INPUT, CONF_HOST: "192.168.1.9"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 @pytest.mark.usefixtures("mock_repository", "mock_setup_entry")
@@ -333,6 +385,17 @@ async def test_a_port_corrected_in_the_form_is_not_second_guessed(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
     assert mock_repository.get_airco_id.await_count == 1
+
+    mock_repository.get_airco_id.side_effect = None
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PORT: 8080}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Still the port they typed: recovering does not hand the announcement
+    # back the decision.
+    assert result["data"][CONF_PORT] == 8080
 
 
 @pytest.mark.usefixtures("mock_setup_entry")
@@ -487,6 +550,17 @@ async def test_zeroconf_flow_port_fallback_also_fails(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
 
+    # A unit that is back answers on the fixed port, and the announced one is
+    # still walked first.
+    mock_repository.get_airco_id.side_effect = [WfRacConnectionError("x"), AIRCO_ID]
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PORT: 5353}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PORT] == DEFAULT_PORT
+
 
 @pytest.mark.parametrize(
     ("source", "discovery", "user_input"),
@@ -520,6 +594,14 @@ async def test_unexpected_error_is_shown_not_raised(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "unexpected_error"
+
+    mock_repository.get_airco_id.side_effect = None
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 @pytest.mark.usefixtures("mock_repository", "mock_setup_entry")
@@ -717,3 +799,9 @@ async def test_a_registration_that_cannot_be_reached_says_so(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"]["base"] == "cannot_connect"
+
+    mock_repository.update_account_info.side_effect = None
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
