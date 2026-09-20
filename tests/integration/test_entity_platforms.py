@@ -1,40 +1,45 @@
 """Current entity-platform behaviour pinned to parsed live device state."""
 
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockEntityPlatform
+from pywfrac import AIRFLOW_UNKNOWN, AirconCommands, HomeLeaveModeSetting
 
-from homeassistant.components.climate.const import HVACAction, HVACMode
-from homeassistant.const import EntityCategory
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry, MockEntityPlatform
-
-from custom_components.mitsubishi_wf_rac import binary_sensor, button, climate, number, select, sensor, switch, update
+from custom_components.mitsubishi_wf_rac import (
+    binary_sensor,
+    button,
+    climate,
+    number,
+    select,
+    sensor,
+    switch,
+    update,
+)
 from custom_components.mitsubishi_wf_rac.const import (
-    ATTR_COMPRESSOR_FREQUENCY,
     ATTR_COMPRESSOR_FREQUENCY_RAW,
-    ATTR_OPERATING_CURRENT_RAW,
-    ATTR_HOT_GAS_TEMP_RAW,
-    ATTR_INDOOR_COIL_RAW,
-    ATTR_INDOOR_COIL_OUTLET_RAW,
-    ATTR_OUTDOOR_COIL_RAW,
     ATTR_DISCHARGE_SUPERHEAT_RAW,
+    ATTR_HOT_GAS_TEMP_RAW,
+    ATTR_INDOOR_COIL_OUTLET_RAW,
+    ATTR_INDOOR_COIL_RAW,
+    ATTR_OPERATING_CURRENT_RAW,
+    ATTR_OUTDOOR_COIL_RAW,
     ATTR_PROTECTION_RAW,
     DOMAIN,
-    HVAC_TRANSLATION,
     FAN_MODE_TRANSLATION,
+    HVAC_TRANSLATION,
     SWING_3D_AUTO,
     SWING_HORIZONTAL_MODE_TRANSLATION,
     SWING_MODE_TRANSLATION,
 )
-from custom_components.mitsubishi_wf_rac.coordinator import Device
-from pywfrac import AIRFLOW_UNKNOWN, AirconCommands, HomeLeaveModeSetting
-
-from ..unit.live_captures import LIVE_CAPTURES
+from homeassistant.components.climate.const import HVACAction, HVACMode
+from homeassistant.const import EntityCategory
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
+from tests.unit.live_captures import LIVE_CAPTURES
 
 
 def _entry(device, options=None):
@@ -203,7 +208,7 @@ async def test_external_temperature_active_sensor_shows_when_it_took_effect(plat
     assert entity.is_on is False
 
 
-@pytest.mark.parametrize("capture, mode, action", [
+@pytest.mark.parametrize(("capture", "mode", "action"), [
     ("off", HVACMode.OFF, HVACAction.OFF),
     ("on_cool", HVACMode.COOL, HVACAction.IDLE),
     ("on_heat", HVACMode.HEAT, HVACAction.IDLE),
@@ -423,7 +428,7 @@ async def test_home_leave_controls_require_known_settings_and_preserve_other_sid
     assert (getattr(cooling, attribute), getattr(heating, attribute)) == expected
 
 
-@pytest.mark.parametrize("available, latest", [(True, "2.0"), (False, "1.0"), (False, None)])
+@pytest.mark.parametrize(("available", "latest"), [(True, "2.0"), (False, "1.0"), (False, None)])
 async def test_update_version_states(platform_device, available, latest):
     platform_device._wireless_firmware_ver = "1.0"
     platform_device._latest_wireless_firmware_ver = latest

@@ -7,27 +7,55 @@ than tests/unit/.
 
 import asyncio
 import base64
+from datetime import timedelta
 import logging
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pywfrac import Aircon, AirconCommands, AirconStat
+from pywfrac.parser import (
+    SERVICE_DATA_CODE_BY_FIELD,
+    SERVICE_DATA_CODES,
+    SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
+    SERVICE_DATA_EEV_PULSES,
+    SERVICE_DATA_HOT_GAS_TEMP,
+    SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
+    SERVICE_DATA_INDOOR_COIL_RAW,
+    SERVICE_DATA_OPERATING_CURRENT,
+    SERVICE_DATA_OUTDOOR_COIL_RAW,
+    SERVICE_DATA_PROTECTION_RAW,
+    RacParser,
+)
+from pywfrac.repository import (
+    WfRacCommandError,
+    WfRacConnectionError,
+    WfRacError,
+    WfRacRegistrationError,
+    WfRacWriteRefusedError,
+)
 
+from custom_components.mitsubishi_wf_rac import coordinator as coordinator_module
 from custom_components.mitsubishi_wf_rac.const import (
-    CONF_STATUS_REQUEST_MODE,
-    STATUS_REQUEST_ECHO,
-    STATUS_REQUEST_SILENT,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
+    CONF_STATUS_REQUEST_MODE,
     DOMAIN,
+    STATUS_REQUEST_ECHO,
+    STATUS_REQUEST_SILENT,
 )
+from custom_components.mitsubishi_wf_rac.coordinator import (
+    AVAILABILITY_FAILURE_LIMIT_MIN,
+    SERVICE_DATA_MAX_AGE,
+    Device,
+)
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
+from tests.unit.live_captures import LIVE_CAPTURES
 
 
 def _set_options(device, options: dict) -> None:
@@ -40,42 +68,7 @@ def _set_options(device, options: dict) -> None:
     device.hass.config_entries.async_update_entry(
         entry, options={**entry.options, **options}
     )
-from custom_components.mitsubishi_wf_rac import coordinator as coordinator_module
-from custom_components.mitsubishi_wf_rac.coordinator import (
-    AVAILABILITY_FAILURE_LIMIT_MIN,
-    SERVICE_DATA_MAX_AGE,
-    Device,
-)
-from pywfrac import (
-    Aircon,
-    AirconCommands,
-    AirconStat,
-)
-from pywfrac.parser import (
-    RacParser,
-    SERVICE_DATA_CODE_BY_FIELD,
-    SERVICE_DATA_CODES,
-    SERVICE_DATA_COMPRESSOR_FREQ,
-    SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
-    SERVICE_DATA_EEV_PULSES,
-    SERVICE_DATA_PROTECTION_RAW,
-    SERVICE_DATA_HOT_GAS_TEMP,
-    SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
-    SERVICE_DATA_INDOOR_COIL_RAW,
-    SERVICE_DATA_OPERATING_CURRENT,
-    SERVICE_DATA_OUTDOOR_COIL_RAW,
-    SERVICE_DATA_PROTECTION_RAW,
-)
-from pywfrac.repository import (
-    WfRacError,
-    WfRacCommandError,
-    WfRacConnectionError,
-    WfRacRegistrationError,
-    WfRacWriteRefusedError,
-)
 
-from ..unit.live_captures import LIVE_CAPTURES
-from homeassistant.util import dt as dt_util
 
 OFF_PAYLOAD, _ = LIVE_CAPTURES["off"]
 ON_COOL_PAYLOAD, _ = LIVE_CAPTURES["on_cool"]
@@ -116,7 +109,7 @@ def _build_stat_response_with_segments(
     body = [0] * 21 + list(content) + [0]
     for segment in segments:
         body += list(segment)
-    raw = bytes((b & 0xFF) for b in (body + [0, 0]))
+    raw = bytes((b & 0xFF) for b in [*body, 0, 0])
     return base64.b64encode(raw).decode()
 
 
@@ -343,11 +336,11 @@ async def test_set_airco_includes_stored_external_temperature_override(device):
 
     raw = base64.b64decode(captured["command"])
 
-    assert raw[5] == int(round(18.7 * 4)) + 61
+    assert raw[5] == round(18.7 * 4) + 61
 
 
 @pytest.mark.parametrize(
-    "operation_mode,overshoot_key,expected",
+    ("operation_mode", "overshoot_key", "expected"),
     [
         # Cooling stops below the setting, so the unit is told the room is
         # that much colder than it is - it then reaches its stop point where
@@ -379,7 +372,7 @@ async def test_set_airco_bends_the_override_by_the_configured_overshoot(
     )
 
     raw = base64.b64decode(captured["command"])
-    assert raw[5] == int(round(expected * 4)) + 61
+    assert raw[5] == round(expected * 4) + 61
 
 
 async def test_set_airco_bends_the_override_the_other_way_when_negative(device):
@@ -403,7 +396,7 @@ async def test_set_airco_bends_the_override_the_other_way_when_negative(device):
     )
 
     raw = base64.b64decode(captured["command"])
-    assert raw[5] == int(round((18.7 + 0.75) * 4)) + 61
+    assert raw[5] == round((18.7 + 0.75) * 4) + 61
 
 
 async def test_set_airco_leaves_the_override_alone_in_auto(device):
@@ -437,7 +430,7 @@ async def test_set_airco_leaves_the_override_alone_in_auto(device):
     )
 
     raw = base64.b64decode(captured["command"])
-    assert raw[5] == int(round(18.7 * 4)) + 61
+    assert raw[5] == round(18.7 * 4) + 61
 
 
 async def test_set_airco_explicitly_clears_external_temperature_override(device):
@@ -1142,7 +1135,7 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
 
 @pytest.mark.parametrize(
     ("field", "code"),
-    (
+    [
         ("CompressorFrequencyRaw", SERVICE_DATA_COMPRESSOR_FREQ),
         ("OperatingCurrentRaw", SERVICE_DATA_OPERATING_CURRENT),
         ("HotGasTempRaw", SERVICE_DATA_HOT_GAS_TEMP),
@@ -1151,7 +1144,7 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
         ("OutdoorCoilRaw", SERVICE_DATA_OUTDOOR_COIL_RAW),
         ("DischargeSuperheatRaw", SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW),
         ("ProtectionRaw", SERVICE_DATA_PROTECTION_RAW),
-    ),
+    ],
 )
 async def test_raw_service_data_sensor_requests_its_segment_code(device, monkeypatch, field, code):
     _shorten_service_data_timing(monkeypatch)

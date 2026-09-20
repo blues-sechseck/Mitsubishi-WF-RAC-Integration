@@ -2,75 +2,75 @@
 # pylint: disable = too-few-public-methods
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from decimal import Decimal
 import logging
 from typing import Any, Self
 
+from pywfrac.parser import SERVICE_DATA_CODE_BY_FIELD
 
-from . import MitsubishiWfRacConfigEntry
+from homeassistant.components.climate.const import HVACMode
 from homeassistant.components.sensor import (
     RestoreSensor,
     SensorEntity,
     SensorExtraStoredData,
 )
 from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import (
+    CONF_ERROR,
+    CONF_HOST,
     PERCENTAGE,
+    EntityCategory,
     UnitOfElectricCurrent,
     UnitOfEnergy,
     UnitOfFrequency,
     UnitOfTemperature,
-    EntityCategory,
-    CONF_HOST,
-    CONF_ERROR,
 )
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .entity import WfRacEntity
-from .coordinator import Device
-from pywfrac.parser import SERVICE_DATA_CODE_BY_FIELD
-from homeassistant.components.climate.const import HVACMode
-
+from . import MitsubishiWfRacConfigEntry
 from .const import (
-    HVAC_TRANSLATION,
-    ATTR_TARGET_TEMPERATURE,
+    ATTR_ACCOUNT_EXPIRES,
+    ATTR_AUTO_HEATING,
     ATTR_COMPRESSOR_FREQUENCY,
     ATTR_COMPRESSOR_FREQUENCY_RAW,
-    ATTR_OPERATING_CURRENT,
-    ATTR_OPERATING_CURRENT_RAW,
+    ATTR_CONNECTED_ACCOUNTS,
+    ATTR_COOL_HOT_JUDGE,
+    ATTR_DEVICE_ID,
+    ATTR_DISCHARGE_SUPERHEAT_RAW,
+    ATTR_EEV_POSITION,
+    ATTR_EEV_PULSES,
     ATTR_HOT_GAS_TEMP,
     ATTR_HOT_GAS_TEMP_RAW,
-    ATTR_EEV_PULSES,
-    ATTR_EEV_POSITION,
-    ATTR_INDOOR_COIL_TEMP,
+    ATTR_INDOOR_COIL_OUTLET_RAW,
     ATTR_INDOOR_COIL_OUTLET_TEMP,
     ATTR_INDOOR_COIL_RAW,
-    ATTR_INDOOR_COIL_OUTLET_RAW,
-    ATTR_OUTDOOR_COIL_RAW,
-    ATTR_DISCHARGE_SUPERHEAT_RAW,
-    ATTR_PROTECTION_RAW,
-    DOMAIN,
+    ATTR_INDOOR_COIL_TEMP,
     ATTR_INSIDE_TEMPERATURE,
-    ATTR_OUTSIDE_TEMPERATURE,
-    CONF_OPERATOR_ID,
-    CONF_AIRCO_ID,
-    ATTR_DEVICE_ID,
-    ATTR_CONNECTED_ACCOUNTS,
-    ATTR_UPDATED_BY,
-    ATTR_ACCOUNT_EXPIRES,
     ATTR_LED_STATUS,
-    ATTR_AUTO_HEATING,
     ATTR_MODEL_NR,
-    ATTR_COOL_HOT_JUDGE,
+    ATTR_OPERATING_CURRENT,
+    ATTR_OPERATING_CURRENT_RAW,
+    ATTR_OUTDOOR_COIL_RAW,
+    ATTR_OUTSIDE_TEMPERATURE,
+    ATTR_PROTECTION_RAW,
+    ATTR_TARGET_TEMPERATURE,
+    ATTR_UPDATED_BY,
+    CONF_AIRCO_ID,
     CONF_INDOOR_OFFSET,
+    CONF_OPERATOR_ID,
     CONF_OUTDOOR_OFFSET,
+    DOMAIN,
+    HVAC_TRANSLATION,
     SIGNAL_SET_ENERGY_TOTAL,
 )
+from .coordinator import Device
+from .entity import WfRacEntity
 
 _LOGGER = logging.getLogger(__name__)
 # Read-only as far as the device is concerned: the coordinator does the
@@ -83,7 +83,7 @@ async def async_setup_entry(
     entry: MitsubishiWfRacConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup sensor entries"""
+    """Set up sensor entries."""
 
     device: Device = entry.runtime_data.device
 
@@ -144,8 +144,9 @@ async def async_setup_entry(
 
 
 async def async_set_energy_total(entity: SensorEntity, call: ServiceCall) -> None:
-    """Entity-service handler for SERVICE_SET_ENERGY_TOTAL, registered in
-    services.py.
+    """Entity-service handler for SERVICE_SET_ENERGY_TOTAL.
+
+    Registered in services.py.
 
     Registered as a callable rather than a method name so targeting any other
     sensor of this integration fails with a readable message instead of an
@@ -162,8 +163,7 @@ async def async_set_energy_total(entity: SensorEntity, call: ServiceCall) -> Non
 
 # HACS only: removes entities only earlier HACS releases ever created.
 def _async_remove_home_leave_mode_sensors(hass: HomeAssistant, device: Device) -> None:
-    """Drop the former Home Leave Mode diagnostic sensors from the entity
-    registry.
+    """Drop the former Home Leave Mode diagnostic sensors from the registry.
 
     Replaced by writable entities on the Controls section of the device page:
     HomeLeaveModeNumber (TempRule/TempSetting) in number.py, the AirFlow
@@ -322,10 +322,12 @@ class EnergyTotalExtraStoredData(SensorExtraStoredData):
     last_raw: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
+        """Return the stored data as a dict."""
         return {**super().as_dict(), "last_raw": self.last_raw}
 
     @classmethod
     def from_dict(cls, restored: dict[str, Any]) -> Self | None:
+        """Restore the stored data from a dict."""
         if (base := SensorExtraStoredData.from_dict(restored)) is None:
             return None
         return cls(
@@ -370,6 +372,7 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
 
     @property
     def extra_restore_state_data(self) -> EnergyTotalExtraStoredData:
+        """Return the state data to restore after a restart."""
         # The running total, not native_value: an unreadable frame leaves the
         # displayed value None, and a restart in that window would restore a
         # lifetime meter of zero.
@@ -378,6 +381,7 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
         )
 
     async def async_added_to_hass(self) -> None:
+        """Restore the accumulated total when the entity is added."""
         await super().async_added_to_hass()
 
         if (stored := await self.async_get_last_extra_data()) is not None:
@@ -419,9 +423,12 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
         self._attr_native_value = round(self._total, 2)
 
     async def async_set_total(self, value: float) -> None:
-        """Set the accumulated total - reset to 0, or carry over a reading
-        from a meter the user kept before. Re-anchors last_raw so the next
-        poll does not re-add the delta that led up to the change."""
+        """Set the accumulated total, resetting it or carrying one over.
+
+        Carrying over means a reading from a meter the user kept before.
+        Re-anchors last_raw so the next poll does not re-add the delta that
+        led up to the change.
+        """
         self._total = float(value)
         self._last_raw = self.coordinator.airco.Electric
         self._attr_native_value = round(self._total, 2)
@@ -430,6 +437,7 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
 
 class ServiceDataSensor(WfRacEntity, SensorEntity):
     """Operation-data sensors, including converted values and raw bytes.
+
     Active sensors register their segment code with Device, which requests
     only those segments.
     """

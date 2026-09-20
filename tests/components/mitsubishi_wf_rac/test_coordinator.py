@@ -10,6 +10,10 @@ from unittest.mock import AsyncMock, patch
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pywfrac import (
     Aircon,
     AirconStat,
@@ -20,22 +24,20 @@ from pywfrac import (
     WfRacWriteRefusedError,
 )
 
-from homeassistant.components.climate import (
-    ATTR_FAN_MODE,
-    DOMAIN as CLIMATE_DOMAIN,
-    SERVICE_SET_FAN_MODE,
-)
 from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from custom_components.mitsubishi_wf_rac.coordinator import (
     WRITE_LOCK_RETRY_DELAY,
     registration_full_issue_id,
 )
+from homeassistant.components.climate import (
+    ATTR_FAN_MODE,
+    DOMAIN as CLIMATE_DOMAIN,
+    SERVICE_SET_FAN_MODE,
+)
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 DOMAIN_LOGGER = "custom_components.mitsubishi_wf_rac"
 ENTITY_ID = "climate.living_room"

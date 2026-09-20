@@ -1,9 +1,6 @@
 """Tests for the Mitsubishi WF-RAC integration."""
 
-from custom_components.mitsubishi_wf_rac.const import (
-    CONF_AIRCO_ID,
-    CONF_OPERATOR_ID,
-)
+from custom_components.mitsubishi_wf_rac.const import CONF_AIRCO_ID, CONF_OPERATOR_ID
 from homeassistant.const import CONF_DEVICE_ID, CONF_HOST, CONF_PORT
 
 AIRCO_ID = "0011223344aa"

@@ -4,6 +4,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pywfrac import WfRacConnectionError, WfRacError
 
 from custom_components.mitsubishi_wf_rac.const import (
@@ -17,8 +18,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from . import AIRCO_ID, ENTRY_DATA, ENTRY_OPTIONS, HOST, PORT
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 async def test_setup_and_unload(

@@ -12,8 +12,8 @@ holds the generated file to its source.
 """
 
 import json
-import re
 from pathlib import Path
+import re
 
 import custom_components.mitsubishi_wf_rac as component
 from scripts.build_translations import build
@@ -28,7 +28,7 @@ def test_english_translation_is_what_strings_generates():
     strings quietly stopped agreeing - an abort message, the reconfigure
     message and the host label. Generated now, so only strings.json is edited.
     """
-    assert ENGLISH == build()
+    assert build() == ENGLISH
 
 
 def test_raised_translation_keys_exist_in_strings():

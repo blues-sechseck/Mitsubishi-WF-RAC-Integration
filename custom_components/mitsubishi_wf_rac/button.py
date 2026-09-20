@@ -10,9 +10,9 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
-from .entity import WfRacEntity
-from .coordinator import Device
 from .const import DOMAIN, SIGNAL_SET_ENERGY_TOTAL
+from .coordinator import Device
+from .entity import WfRacEntity
 
 # Read-only as far as the device is concerned: the coordinator does the
 # polling, and nothing on this platform sends a request of its own.
@@ -24,7 +24,7 @@ async def async_setup_entry(
     entry: MitsubishiWfRacConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup button entries"""
+    """Set up button entries."""
 
     device: Device = entry.runtime_data.device
 

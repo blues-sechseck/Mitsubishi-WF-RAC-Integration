@@ -1,44 +1,48 @@
 """for Climate integration."""
 
 from __future__ import annotations
-import logging
+
 from dataclasses import dataclass
+import logging
 from typing import Any
 
-from . import MitsubishiWfRacConfigEntry
+from pywfrac import AIRFLOW_UNKNOWN, Aircon, AirconCommands, HomeLeaveModeSetting
+from pywfrac.parser import EXTERNAL_TEMPERATURE_MAX, EXTERNAL_TEMPERATURE_MIN
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
     ATTR_HVAC_MODE,
-    ClimateEntityFeature,
-    HVACMode,
-    HVACAction,
     FAN_AUTO,
     PRESET_AWAY,
     PRESET_NONE,
+    ClimateEntityFeature,
+    HVACAction,
+    HVACMode,
 )
 from homeassistant.const import (
     ATTR_TEMPERATURE,
     ATTR_UNIT_OF_MEASUREMENT,
-    STATE_UNKNOWN,
     STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
     UnitOfTemperature,
 )
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoreEntity
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .entity import WfRacEntity
-from .coordinator import Device
-from pywfrac import AIRFLOW_UNKNOWN, Aircon, AirconCommands, HomeLeaveModeSetting
-from pywfrac.parser import (
-    EXTERNAL_TEMPERATURE_MAX,
-    EXTERNAL_TEMPERATURE_MIN,
-)
+from . import MitsubishiWfRacConfigEntry
 from .const import (
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
+    CONF_INDOOR_OFFSET,
     DOMAIN,
     FAN_MODE_TRANSLATION,
     HOME_LEAVE_TEMP_COOL,
@@ -46,18 +50,18 @@ from .const import (
     HVAC_TRANSLATION,
     NORMAL_TEMP,
     SUPPORT_FLAGS,
-    SWING_HORIZONTAL_AUTO,
-    SWING_VERTICAL_AUTO,
+    SUPPORT_SWING_HORIZONTAL_MODES,
     SUPPORT_SWING_MODES,
     SUPPORTED_FAN_MODES,
     SUPPORTED_HVAC_MODES,
     SWING_3D_AUTO,
-    SWING_MODE_TRANSLATION,
+    SWING_HORIZONTAL_AUTO,
     SWING_HORIZONTAL_MODE_TRANSLATION,
-    SUPPORT_SWING_HORIZONTAL_MODES,
-    CONF_INDOOR_OFFSET,
-    CONF_EXTERNAL_TEMPERATURE_SOURCE,
+    SWING_MODE_TRANSLATION,
+    SWING_VERTICAL_AUTO,
 )
+from .coordinator import Device
+from .entity import WfRacEntity
 
 _LOGGER = logging.getLogger(__name__)
 # Zero although this platform writes: the coordinator already serialises and
@@ -341,9 +345,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose the armed override, so it is visible without calling the
-        action to find out. Display only - the value that survives a restart is
-        the one in extra_restore_state_data above.
+        """Expose the armed override, visible without calling the action.
+
+        Display only - the value that survives a restart is the one in
+        extra_restore_state_data above.
         """
         attrs = dict(super().extra_state_attributes or {})
         if self._external_temperature_override is not None:
@@ -616,8 +621,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             )
 
     async def async_set_external_temperature(self, temperature: float | None = None) -> None:
-        """Arm an external room temperature override, or revert to the unit's
-        internal sensor. The valid range is enforced by the service schema.
+        """Arm an external room temperature override, or revert to the sensor.
+
+        Reverting means the unit's own internal sensor; the valid range of an
+        armed value is enforced by the service schema.
 
         Arming only: nothing is sent from here. The value rides along on the
         next frame that goes out anyway - the operation-data request once a
@@ -709,8 +716,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             )
 
     async def async_request_home_leave_mode_status(self) -> None:
-        """See Device.async_request_home_leave_mode_status - verified live
-        against the official app's own display."""
+        """See Device.async_request_home_leave_mode_status.
+
+        Verified live against the official app's own display.
+        """
         self._require_home_leave_mode_capability()
         await self.coordinator.async_request_home_leave_mode_status()
 

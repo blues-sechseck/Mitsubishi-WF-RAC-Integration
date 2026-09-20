@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pywfrac import WfRacConnectionError
 
 from custom_components.mitsubishi_wf_rac.config_flow import WfRacConfigFlow
@@ -21,8 +22,6 @@ from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from homeassistant.setup import async_setup_component
 
 from . import AIRCO_ID, HOST, PORT
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 USER_INPUT = {CONF_HOST: HOST, CONF_PORT: PORT}
 

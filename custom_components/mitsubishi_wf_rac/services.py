@@ -8,17 +8,14 @@ never does. Calls still resolve only to this integration's entities.
 
 from __future__ import annotations
 
+from pywfrac.parser import EXTERNAL_TEMPERATURE_MAX, EXTERNAL_TEMPERATURE_MIN
 import voluptuous as vol
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.service import async_register_platform_entity_service
 
-from pywfrac.parser import EXTERNAL_TEMPERATURE_MAX, EXTERNAL_TEMPERATURE_MIN
-
 from .const import (
-    SUPPORT_SWING_HORIZONTAL_MODES,
-    SUPPORT_SWING_MODES,
     DOMAIN,
     SERVICE_REQUEST_HOME_LEAVE_MODE_STATUS,
     SERVICE_SET_ENERGY_TOTAL,
@@ -26,6 +23,8 @@ from .const import (
     SERVICE_SET_HOME_LEAVE_MODE,
     SERVICE_SET_HORIZONTAL_SWING_MODE,
     SERVICE_SET_VERTICAL_SWING_MODE,
+    SUPPORT_SWING_HORIZONTAL_MODES,
+    SUPPORT_SWING_MODES,
 )
 
 # Home Leave thresholds go out as int(value * 2) in a single byte, masked
@@ -40,7 +39,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
     # Imported here, not at module level: sensor.py imports the config entry
     # type from __init__.py, which imports this module - at import time that
     # is a cycle, by the time async_setup runs it is not.
-    from .sensor import async_set_energy_total  # noqa: PLC0415  pylint: disable=import-outside-toplevel
+    from .sensor import async_set_energy_total  # noqa: PLC0415
 
     # HACS only: climate.set_swing_mode and climate.set_swing_horizontal_mode
     # already do this, and binding func= directly skips the base class's own

@@ -1,32 +1,34 @@
 """for select component used for horizontal swing."""
 # pylint: disable = too-few-public-methods
 
-import logging
 from dataclasses import replace
+import logging
 
-from . import MitsubishiWfRacConfigEntry
+from pywfrac import AIRFLOW_UNKNOWN, AirconCommands, HomeLeaveModeSetting
+
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .entity import WfRacEntity
-from pywfrac import AIRFLOW_UNKNOWN, AirconCommands, HomeLeaveModeSetting
-from .coordinator import Device
+from . import MitsubishiWfRacConfigEntry
 from .const import (
     DOMAIN,
+    FAN_MODE_TRANSLATION,
     HOME_LEAVE_TEMP_COOL,
     HOME_LEAVE_TEMP_HEAT,
+    HVAC_TRANSLATION,
     NORMAL_TEMP,
-    SWING_HORIZONTAL_MODE_TRANSLATION,
     SUPPORT_SWING_HORIZONTAL_MODES,
     SUPPORT_SWING_MODES,
-    SWING_MODE_TRANSLATION, SWING_3D_AUTO,
-    FAN_MODE_TRANSLATION,
     SUPPORTED_FAN_MODES,
-    HVAC_TRANSLATION,
+    SWING_3D_AUTO,
+    SWING_HORIZONTAL_MODE_TRANSLATION,
+    SWING_MODE_TRANSLATION,
 )
+from .coordinator import Device
+from .entity import WfRacEntity
 
 _LOGGER = logging.getLogger(__name__)
 # Zero although this platform writes: the coordinator already serialises and
@@ -49,7 +51,7 @@ async def async_setup_entry(
     entry: MitsubishiWfRacConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup select entries"""
+    """Set up select entries."""
 
     device: Device = entry.runtime_data.device
     _LOGGER.debug("Setup selects for: %s, %s", device.device_name, device.airco_id)
@@ -73,11 +75,12 @@ async def async_setup_entry(
 # swing and fan speed. These three are a second, flatter control surface for
 # dashboards; core takes the climate entity alone.
 class HorizontalSwingSelect(WfRacEntity, SelectEntity):
-    """Select component to set the horizontal swing direction of the airco"""
+    """Select component to set the horizontal swing direction of the airco."""
 
     _attr_translation_key = "horizontal_swing"
 
     def __init__(self, device: Device) -> None:
+        """Initialize the horizontal swing select."""
         super().__init__(device)
         self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORT_SWING_HORIZONTAL_MODES
@@ -117,11 +120,12 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
         self._attr_current_option = option
 
 class VerticalSwingSelect(WfRacEntity, SelectEntity):
-    """Select component to set the vertical swing direction of the airco"""
+    """Select component to set the vertical swing direction of the airco."""
 
     _attr_translation_key = "vertical_swing"
 
     def __init__(self, device: Device) -> None:
+        """Initialize the vertical swing select."""
         super().__init__(device)
         self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORT_SWING_MODES
@@ -161,11 +165,12 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
         self._attr_current_option = option
 
 class FanSpeedSelect(WfRacEntity, SelectEntity):
-    """Select component to set the fan speed of the airco"""
+    """Select component to set the fan speed of the airco."""
 
     _attr_translation_key = "fan_speed"
 
     def __init__(self, device: Device) -> None:
+        """Initialize the fan speed select."""
         super().__init__(device)
         self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
         self._attr_options = SUPPORTED_FAN_MODES
@@ -195,8 +200,7 @@ class FanSpeedSelect(WfRacEntity, SelectEntity):
 
 
 class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
-    """Select to enter/leave the unit's own Home Leave (vacant property) mode,
-    in either direction.
+    """Select to enter or leave the unit's own Home Leave (vacant property) mode.
 
     The official app's away mode has two independent target points (Heat and
     Cool, each with its own Tag-248 threshold/setting - see the home_leave_*
@@ -209,6 +213,7 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
     _attr_translation_key = "home_leave_mode"
 
     def __init__(self, device: Device) -> None:
+        """Initialize the Home Leave mode select."""
         super().__init__(device)
         self._attr_options = [
             HOME_LEAVE_MODE_OFF,
@@ -280,6 +285,7 @@ class HomeLeaveAirFlowSelect(WfRacEntity, SelectEntity):
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, device: Device, mode: str) -> None:
+        """Initialize the Home Leave air flow select for one mode."""
         super().__init__(device)
         self._mode = mode
         self._attr_translation_key = f"home_leave_{mode}_air_flow"

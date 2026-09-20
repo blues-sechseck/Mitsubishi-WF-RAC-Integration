@@ -4,28 +4,28 @@ from dataclasses import dataclass
 import logging
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    CONF_DEVICE_ID,
+    CONF_HOST,
+    CONF_PORT,
+    EVENT_HOMEASSISTANT_STOP,
+    Platform,
+)
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
-
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_PORT,
-    CONF_DEVICE_ID,
-    EVENT_HOMEASSISTANT_STOP,
-    Platform,
-)
 
 from .const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CARRY_POWER_STATE,
-    CONF_STATUS_REQUEST_MODE,
     CONF_CONNECTION_METHOD,
+    CONF_CREATE_SWING_MODE_SELECT,
     CONF_FIRMWARE_UPDATE_CHECK,
-    CONF_OPERATOR_ID, CONF_CREATE_SWING_MODE_SELECT,
+    CONF_OPERATOR_ID,
+    CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     STATUS_REQUEST_ECHO,
     STATUS_REQUEST_STRICT,
@@ -242,13 +242,12 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
         if entry.data.get(CONF_CARRY_POWER_STATE, False)
         else STATUS_REQUEST_STRICT,
     )
-    _device = Device(hass, entry, name, device, port, device_id, operator_id, airco_id,
-                     swing_selects_enabled_default,
-                     availability_failure_limit=availability_failure_limit,
-                     firmware_update_check_enabled=firmware_update_check_enabled,
-                     connection_method=connection_method,
-                     status_request_mode=status_request_mode)
-    return _device
+    return Device(hass, entry, name, device, port, device_id, operator_id, airco_id,
+                  swing_selects_enabled_default,
+                  availability_failure_limit=availability_failure_limit,
+                  firmware_update_check_enabled=firmware_update_check_enabled,
+                  connection_method=connection_method,
+                  status_request_mode=status_request_mode)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry) -> bool:
