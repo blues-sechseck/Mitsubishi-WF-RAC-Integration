@@ -36,7 +36,10 @@ from pywfrac.repository import (
     WfRacWriteRefusedError,
 )
 
-from custom_components.mitsubishi_wf_rac import coordinator as coordinator_module
+from custom_components.mitsubishi_wf_rac import (
+    coordinator as coordinator_module,
+    service_data as service_data_module,
+)
 from custom_components.mitsubishi_wf_rac.const import (
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
@@ -48,9 +51,9 @@ from custom_components.mitsubishi_wf_rac.const import (
 )
 from custom_components.mitsubishi_wf_rac.coordinator import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
-    SERVICE_DATA_MAX_AGE,
     Device,
 )
+from custom_components.mitsubishi_wf_rac.service_data import SERVICE_DATA_MAX_AGE
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -138,10 +141,10 @@ def _shorten_service_data_timing(monkeypatch, offset_ms: int = 5) -> None:
     # The ceiling doubles as the starting value, so shrinking it is what makes
     # the request fire inside a test.
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=offset_ms)
+        service_data_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=offset_ms)
     )
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_OFFSET_MIN", timedelta(milliseconds=1)
+        service_data_module, "SERVICE_DATA_OFFSET_MIN", timedelta(milliseconds=1)
     )
 
 
@@ -1236,7 +1239,7 @@ async def test_operation_data_backdates_its_timestamp_to_shorten_the_lock(
         coordinator_module.SERVICE_DATA_STAMP_BACKDATE.total_seconds()
     )
 
-    device._last_service_data_request = dt_util.utcnow() - one_poll
+    device.service_data._last_request = dt_util.utcnow() - one_poll
     await device.update()
     await asyncio.sleep(0.05)
 
@@ -1246,7 +1249,7 @@ async def test_operation_data_backdates_its_timestamp_to_shorten_the_lock(
         == expected_offset
     )
 
-    device._last_service_data_request = dt_util.utcnow() - one_poll
+    device.service_data._last_request = dt_util.utcnow() - one_poll
     await device.update()
     await asyncio.sleep(0.05)
 
@@ -1379,7 +1382,7 @@ async def test_no_service_data_request_while_another_client_is_active(device, mo
     await asyncio.sleep(0.05)
 
     set_airco.assert_not_awaited()
-    assert device._last_service_data_request is None
+    assert device.service_data._last_request is None
 
 
 async def test_operation_data_survives_the_pause_instead_of_expiring(device):
@@ -1390,23 +1393,23 @@ async def test_operation_data_survives_the_pause_instead_of_expiring(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
     device._airco.CompressorFrequency = 42
-    device._last_service_data_response = dt_util.utcnow()
+    device.service_data._last_response = dt_util.utcnow()
 
     # Well past MAX_AGE, but the whole time was spent standing down - the
     # state _detect_foreign_activity() leaves behind when it trips.
     device._foreign_activity_since = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
     device._foreign_activity_until = dt_util.utcnow() + timedelta(minutes=3)
-    device._last_service_data_response = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
+    device.service_data._last_response = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
     await device.update()
     assert device.airco.CompressorFrequency == 42
-    assert device._service_data_expired is False
+    assert device.service_data._expired is False
 
     # ...and once it lapses, the age restarts from the resume rather than
     # expiring the readings on the very next poll.
     device._foreign_activity_until = dt_util.utcnow() - timedelta(seconds=1)
     await device.update()
     assert device.airco.CompressorFrequency == 42
-    assert device._service_data_expired is False
+    assert device.service_data._expired is False
 
 
 async def test_operation_data_still_expires_when_the_unit_goes_quiet(device):
@@ -1414,12 +1417,12 @@ async def test_operation_data_still_expires_when_the_unit_goes_quiet(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
     device._airco.CompressorFrequency = 42
-    device._last_service_data_response = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
+    device.service_data._last_response = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
 
     await device.update()
 
     assert device.airco.CompressorFrequency is None
-    assert device._service_data_expired is True
+    assert device.service_data._expired is True
 
 
 async def test_service_data_resumes_once_the_backoff_lapses(device, monkeypatch):
@@ -1470,7 +1473,7 @@ async def test_a_refused_service_data_request_is_not_retried_inside_set_airco(
 
     device.maybe_request_service_data()
     await asyncio.sleep(0)
-    task = device._service_data_task
+    task = device.service_data._task
     assert task is not None
     # The wait matters as much as the second send: it happens inside
     # _send_lock, so a request that sits it out holds every user command up
@@ -1584,11 +1587,11 @@ async def test_service_data_request_does_not_overlap_an_active_request(device, m
     # A real task rather than a stand-in: the fixture's teardown shuts the
     # coordinator down, and async_shutdown() now cancels and awaits this
     # attribute, which a MagicMock cannot answer.
-    device._service_data_task = asyncio.create_task(_still_asleep())
+    device.service_data._task = asyncio.create_task(_still_asleep())
 
     device.maybe_request_service_data()
 
-    assert device._last_service_data_request is None
+    assert device.service_data._last_request is None
 
 
 async def test_shutdown_cancels_a_request_still_waiting_out_its_offset(
@@ -1602,20 +1605,20 @@ async def test_shutdown_cancels_a_request_still_waiting_out_its_offset(
     """
     _activate_service_data_contexts(device, monkeypatch)
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(seconds=30)
+        service_data_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(seconds=30)
     )
     device.set_airco = set_airco = AsyncMock()
 
     device.maybe_request_service_data()
     await asyncio.sleep(0)
-    task = device._service_data_task
+    task = device.service_data._task
     assert task is not None and not task.done()
 
     await device.async_shutdown()
 
     assert task.cancelled()
     set_airco.assert_not_awaited()
-    assert device._service_data_task is None
+    assert device.service_data._task is None
 
 
 async def test_shutdown_does_not_fail_on_a_task_that_had_already_raised(device):
@@ -1628,11 +1631,11 @@ async def test_shutdown_does_not_fail_on_a_task_that_had_already_raised(device):
 
     task = asyncio.create_task(_boom())
     await asyncio.sleep(0)
-    device._service_data_task = task
+    device.service_data._task = task
 
     await device.async_shutdown()
 
-    assert device._service_data_task is None
+    assert device.service_data._task is None
 
 
 async def test_add_account_returns_none_on_api_error(device):
@@ -1843,8 +1846,8 @@ async def test_service_data_survives_a_poll_that_answered_early(device, monkeypa
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
-    device._last_service_data_request = dt_util.utcnow() - (
-        coordinator_module.SERVICE_DATA_REQUEST_INTERVAL - timedelta(milliseconds=100)
+    device.service_data._last_request = dt_util.utcnow() - (
+        service_data_module.SERVICE_DATA_REQUEST_INTERVAL - timedelta(milliseconds=100)
     )
 
     await device.update()
@@ -1993,10 +1996,10 @@ async def test_async_update_data_counts_timeouts_as_connection_failures(
 
 async def test_service_data_is_carried_forward_between_polls(device):
     device._airco.CompressorFrequency = 40.0
-    device._last_service_data_response = dt_util.utcnow()
+    device.service_data._last_response = dt_util.utcnow()
     new_airco = Aircon()
 
-    device._carry_forward_service_data(new_airco)
+    device.service_data.carry_forward(new_airco)
 
     assert new_airco.CompressorFrequency == 40.0
 
@@ -2005,10 +2008,10 @@ async def test_raw_service_data_is_carried_forward_between_polls(device):
     device._airco.CompressorFrequencyRaw = 0x10C8
     device._airco.OperatingCurrentRaw = 0x04
     device._airco.HotGasTempRaw = 0x15
-    device._last_service_data_response = dt_util.utcnow()
+    device.service_data._last_response = dt_util.utcnow()
     new_airco = Aircon()
 
-    device._carry_forward_service_data(new_airco)
+    device.service_data.carry_forward(new_airco)
 
     assert new_airco.CompressorFrequencyRaw == 0x10C8
     assert new_airco.OperatingCurrentRaw == 0x04
@@ -2024,11 +2027,11 @@ async def test_unconvertible_coil_reading_is_not_carried_forward(device):
     """
     device._airco.IndoorCoilTemp = 37.5
     device._airco.IndoorCoilRaw = 119
-    device._last_service_data_response = dt_util.utcnow()
+    device.service_data._last_response = dt_util.utcnow()
     new_airco = Aircon()
     new_airco.IndoorCoilRaw = 252  # arrived, but off the end of the table
 
-    device._carry_forward_service_data(new_airco)
+    device.service_data.carry_forward(new_airco)
 
     assert new_airco.IndoorCoilRaw == 252
     assert new_airco.IndoorCoilTemp is None
@@ -2040,11 +2043,11 @@ async def test_missing_coil_segment_is_still_carried_forward(device):
     """
     device._airco.IndoorCoilTemp = 21.5
     device._airco.IndoorCoilRaw = 88
-    device._last_service_data_response = dt_util.utcnow()
+    device.service_data._last_response = dt_util.utcnow()
     new_airco = Aircon()
     new_airco.CompressorFrequency = 40.0  # some other segment did arrive
 
-    device._carry_forward_service_data(new_airco)
+    device.service_data.carry_forward(new_airco)
 
     assert new_airco.IndoorCoilTemp == 21.5
     assert new_airco.IndoorCoilRaw == 88
@@ -2055,12 +2058,12 @@ async def test_service_data_expires_when_nothing_fresh_arrives(device):
     reporting a frozen value that looks live.
     """
     device._airco.CompressorFrequency = 40.0
-    device._last_service_data_response = dt_util.utcnow() - (
-        coordinator_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    device.service_data._last_response = dt_util.utcnow() - (
+        service_data_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
     )
     new_airco = Aircon()
 
-    device._carry_forward_service_data(new_airco)
+    device.service_data.carry_forward(new_airco)
 
     assert new_airco.CompressorFrequency is None
 
@@ -2068,13 +2071,13 @@ async def test_service_data_expires_when_nothing_fresh_arrives(device):
 async def test_fresh_service_data_restarts_the_clock(device):
     device._airco.CompressorFrequency = 40.0
     device._airco.HotGasTemp = 50.0
-    device._last_service_data_response = dt_util.utcnow() - (
-        coordinator_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    device.service_data._last_response = dt_util.utcnow() - (
+        service_data_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
     )
     new_airco = Aircon()
     new_airco.CompressorFrequency = 45.0  # this poll carried the segments
 
-    device._carry_forward_service_data(new_airco)
+    device.service_data.carry_forward(new_airco)
 
     assert new_airco.CompressorFrequency == 45.0
     # The rest of the block comes with it, so they are carried again.
@@ -2087,12 +2090,12 @@ async def test_expiring_service_data_warns_once_and_reports_the_recovery(
     """The refusals themselves are routine; running out of values is not."""
     caplog.set_level("DEBUG", logger=coordinator_module.__name__)
     device._airco.CompressorFrequency = 40.0
-    device._last_service_data_response = dt_util.utcnow() - (
-        coordinator_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    device.service_data._last_response = dt_util.utcnow() - (
+        service_data_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
     )
 
     for _ in range(3):
-        device._carry_forward_service_data(Aircon())
+        device.service_data.carry_forward(Aircon())
 
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert len(warnings) == 1
@@ -2101,7 +2104,7 @@ async def test_expiring_service_data_warns_once_and_reports_the_recovery(
     caplog.clear()
     recovered = Aircon()
     recovered.CompressorFrequency = 45.0
-    device._carry_forward_service_data(recovered)
+    device.service_data.carry_forward(recovered)
 
     assert [r.levelname for r in caplog.records if r.levelno >= logging.INFO] == [
         "INFO"
@@ -2114,9 +2117,9 @@ async def test_service_data_that_never_arrived_stays_quiet_until_it_is_due(
 ):
     """A unit asked for the first time has nothing to lose yet."""
     caplog.set_level("DEBUG", logger=coordinator_module.__name__)
-    device._last_service_data_request = dt_util.utcnow()
+    device.service_data._last_request = dt_util.utcnow()
 
-    device._carry_forward_service_data(Aircon())
+    device.service_data.carry_forward(Aircon())
 
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
@@ -2126,12 +2129,12 @@ async def _run_service_data_request(device, monkeypatch, ceiling_ms: int = 1):
     # enough for the request to fire inside a test - and, where the
     # adaptation itself is under test, large enough to leave room above.
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=ceiling_ms)
+        service_data_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=ceiling_ms)
     )
     # Cycles run back to back here; the real spacing would swallow every
     # request after the first.
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_MIN_SPACING", timedelta(0)
+        service_data_module, "SERVICE_DATA_MIN_SPACING", timedelta(0)
     )
     monkeypatch.setattr(
         device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES}
@@ -2321,7 +2324,7 @@ async def test_a_reading_of_zero_counts_as_an_answer(device, monkeypatch):
         [(SERVICE_DATA_PROTECTION_RAW, 0xFF, 0, 0)],
     )
     device._api.send_airco_command = AsyncMock(return_value=answered_with_zero)
-    for _ in range(coordinator_module.SERVICE_DATA_UNANSWERED_LIMIT * 2):
+    for _ in range(service_data_module.SERVICE_DATA_UNANSWERED_LIMIT * 2):
         await _run_service_data_request(device, monkeypatch)
 
     assert device.airco.ProtectionRaw == 0
@@ -2343,7 +2346,7 @@ async def test_a_unit_that_answers_nothing_at_all_is_given_up_on(
         _content_of(ON_COOL_PAYLOAD), []
     )
     device._api.send_airco_command = AsyncMock(return_value=empty_answer)
-    for _ in range(coordinator_module.SERVICE_DATA_UNANSWERED_LIMIT):
+    for _ in range(service_data_module.SERVICE_DATA_UNANSWERED_LIMIT):
         await _run_service_data_request(device, monkeypatch)
 
     assert device.service_data_supported is False
@@ -2368,7 +2371,7 @@ async def test_giving_up_on_the_channel_is_not_written_down(device, monkeypatch)
         _content_of(ON_COOL_PAYLOAD), []
     )
     device._api.send_airco_command = AsyncMock(return_value=empty_answer)
-    for _ in range(coordinator_module.SERVICE_DATA_UNANSWERED_LIMIT):
+    for _ in range(service_data_module.SERVICE_DATA_UNANSWERED_LIMIT):
         await _run_service_data_request(device, monkeypatch)
 
     assert device.service_data_supported is False
@@ -2504,11 +2507,11 @@ async def test_a_carrying_request_echoes_what_it_just_read(device, monkeypatch):
     device.set_airco = AsyncMock()
 
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=30)
+        service_data_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=30)
     )
-    monkeypatch.setattr(coordinator_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
+    monkeypatch.setattr(service_data_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
     monkeypatch.setattr(device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES})
-    device._service_data_offset = timedelta(milliseconds=30)
+    device.service_data._offset = timedelta(milliseconds=30)
     device.maybe_request_service_data()
 
     # Somebody reaches for the remote while the request waits out its offset.
@@ -2528,11 +2531,11 @@ async def test_a_request_that_does_not_carry_state_reads_nothing_extra(
     device.set_airco = AsyncMock()
 
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=30)
+        service_data_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=30)
     )
-    monkeypatch.setattr(coordinator_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
+    monkeypatch.setattr(service_data_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
     monkeypatch.setattr(device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES})
-    device._service_data_offset = timedelta(milliseconds=30)
+    device.service_data._offset = timedelta(milliseconds=30)
     device._api.get_aircon_stats.reset_mock()
     device.maybe_request_service_data()
     await asyncio.sleep(0.1)
@@ -2553,11 +2556,11 @@ async def test_a_unit_switched_off_inside_the_offset_gets_no_request(
     device.set_airco = set_airco = AsyncMock()
 
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=30)
+        service_data_module, "SERVICE_DATA_REQUEST_OFFSET", timedelta(milliseconds=30)
     )
-    monkeypatch.setattr(coordinator_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
+    monkeypatch.setattr(service_data_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
     monkeypatch.setattr(device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES})
-    device._service_data_offset = timedelta(milliseconds=30)
+    device.service_data._offset = timedelta(milliseconds=30)
     device.maybe_request_service_data()
 
     # ... and the unit goes off while the request is still waiting out its
@@ -2654,17 +2657,17 @@ async def test_the_request_moves_back_towards_the_poll_while_it_keeps_landing(
     await device.update()
     device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_OFFSET_STEP", timedelta(milliseconds=1)
+        service_data_module, "SERVICE_DATA_OFFSET_STEP", timedelta(milliseconds=1)
     )
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_OFFSET_MIN", timedelta(milliseconds=1)
+        service_data_module, "SERVICE_DATA_OFFSET_MIN", timedelta(milliseconds=1)
     )
-    device._service_data_offset = timedelta(milliseconds=5)
+    device.service_data._offset = timedelta(milliseconds=5)
 
-    for _ in range(coordinator_module.SERVICE_DATA_OFFSET_GOOD_CYCLES):
+    for _ in range(service_data_module.SERVICE_DATA_OFFSET_GOOD_CYCLES):
         await _run_service_data_request(device, monkeypatch, ceiling_ms=20)
 
-    assert device.service_data_offset == timedelta(milliseconds=4)
+    assert device.service_data.offset == timedelta(milliseconds=4)
 
 
 async def test_a_refused_request_pushes_it_away_from_the_poll_again(
@@ -2675,12 +2678,12 @@ async def test_a_refused_request_pushes_it_away_from_the_poll_again(
     """
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
-    device._service_data_offset = timedelta(milliseconds=1)
+    device.service_data._offset = timedelta(milliseconds=1)
     device._api.send_airco_command = AsyncMock(side_effect=WfRacCommandError("501"))
 
     await _run_service_data_request(device, monkeypatch, ceiling_ms=20)
 
-    assert device.service_data_offset == timedelta(milliseconds=2)
+    assert device.service_data.offset == timedelta(milliseconds=2)
 
 
 async def test_the_offset_never_goes_below_the_floor_or_above_the_ceiling(
@@ -2691,20 +2694,20 @@ async def test_the_offset_never_goes_below_the_floor_or_above_the_ceiling(
 
     device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_OFFSET_MIN", timedelta(milliseconds=2)
+        service_data_module, "SERVICE_DATA_OFFSET_MIN", timedelta(milliseconds=2)
     )
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_OFFSET_STEP", timedelta(milliseconds=1)
+        service_data_module, "SERVICE_DATA_OFFSET_STEP", timedelta(milliseconds=1)
     )
-    device._service_data_offset = timedelta(milliseconds=2)
-    for _ in range(coordinator_module.SERVICE_DATA_OFFSET_GOOD_CYCLES * 2):
+    device.service_data._offset = timedelta(milliseconds=2)
+    for _ in range(service_data_module.SERVICE_DATA_OFFSET_GOOD_CYCLES * 2):
         await _run_service_data_request(device, monkeypatch, ceiling_ms=20)
-    assert device.service_data_offset == timedelta(milliseconds=2)
+    assert device.service_data.offset == timedelta(milliseconds=2)
 
-    device._service_data_offset = timedelta(milliseconds=20)
+    device.service_data._offset = timedelta(milliseconds=20)
     device._api.send_airco_command = AsyncMock(side_effect=WfRacCommandError("501"))
     await _run_service_data_request(device, monkeypatch, ceiling_ms=20)
-    assert device.service_data_offset == timedelta(milliseconds=20)
+    assert device.service_data.offset == timedelta(milliseconds=20)
 
 
 async def test_a_setting_that_changed_with_no_write_is_read_as_the_unit_itself(

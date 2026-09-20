@@ -47,6 +47,7 @@ from .const import (
 )
 from .external_temperature import ExternalTemperatureFeed
 from .firmware_check import fetch_latest_firmware
+from .service_data import ServiceDataChannel
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,27 +65,6 @@ UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 # interval instead.
 FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
-# Operation data is requested for active operation-data entities and costs a
-# second request per poll. It stays on the local network, and on most modules
-# its block carries no set-bits (see RacParser.status_request_to_byte) - but it
-# is a setAirconStat, so it takes the module's 60-second write lock all the
-# same, and while we hold that lock no one else can control the unit at all.
-# On a module that needs its state carried (#329) the block is a full command
-# and the request really does write.
-#
-# The lock's deadline is `now + 60`, where `now` is the `timestamp` field of
-# the request that took it - the module has no RTC and reads its clock from
-# whatever the asking client stamps (see _async_write_lock_delay). Stamping the
-# request SERVICE_DATA_STAMP_BACKDATE in the past therefore makes it take a lock
-# that expires SERVICE_DATA_STAMP_BACKDATE sooner: at 55s back the lock runs 5
-# of its 60 seconds, leaving the other 55 of every poll free for the app or the
-# IR remote to get a write in. That is what keeps an enabled operation-data
-# entity from locking the Smart M-Air app out for good (#294) while still asking
-# on every poll. Confirmed against a real module. Detecting the other client
-# cannot substitute for the free window:
-# a refused write changes nothing the module reports back, so a client we never
-# let through is a client we never see (see _detect_foreign_activity).
-SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
 # How far into the past the operation-data request is stamped, and so how much
 # of the 60s lock it gives up. Nearly all of it, because the freed window is
@@ -103,45 +83,12 @@ SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 # slipped past it would leave the command 5 seconds of protection, not 30.
 SERVICE_DATA_STAMP_BACKDATE = timedelta(seconds=55)
 
-# A guard against a second request landing in the same poll, not a skip of
-# alternate polls (the backdate above is what frees the window now). Kept below
-# one poll interval so every poll still asks, but far enough under it that a
-# poll answering a few milliseconds faster than the one before it - polls are
-# stamped when they finish, not when they were due - does not read as too soon
-# and drop the cycle.
-SERVICE_DATA_MIN_SPACING = SERVICE_DATA_REQUEST_INTERVAL * 0.75
 # The segment an armed external temperature override subscribes to on its own
 # behalf (see _sync_external_temperature_carrier). Any code would do - what
 # matters is that a request goes out at all, since that is the frame the
 # override rides on - so this is the one that answers under every condition:
 # it is per indoor unit and reads a temperature whatever the system is doing,
 # which is why it is also the sensor the README recommends enabling first.
-
-# ...but it does matter *where* in the cycle it lands. Issued straight off the
-# back of a poll it reached the module about a second after the getAirconStat
-# (consolidation delay plus the minimum spacing between requests), and modules
-# answer a second request that soon with HTTP 501 "Not supported this command"
-# often enough to lose whole cycles of operation data - roughly one poll in
-# seven on an affected unit, sometimes several minutes in a row. Offsetting it
-# into the quiet middle of the cycle keeps the cadence but stops it from
-# crowding the poll. Measured against the poll interval, not the request
-# interval: what has to stay clear is the poll, and the polls in between are
-# just as much in the way as the one the request was scheduled from.
-SERVICE_DATA_REQUEST_OFFSET = MIN_TIME_BETWEEN_UPDATES / 2
-
-# ...but half a cycle is a guess, and an expensive one. What we hold when the
-# request goes out is that old, and everything that happened in between is
-# invisible: a command from the remote in that gap is neither seen nor
-# attributable afterwards, because our own write moves both `expires` and
-# `updatedBy` past it. How much distance a module actually needs differs
-# between installations, so measure it per device instead of assuming the
-# worst everywhere: start at the safe end, walk down while requests keep
-# succeeding, and jump back up the moment one is refused for being too close.
-SERVICE_DATA_OFFSET_MIN = timedelta(seconds=5)
-SERVICE_DATA_OFFSET_STEP = timedelta(seconds=5)
-# Down slowly, up sharply: a lost cycle costs every operation-data sensor a
-# reading, while sitting one step wider than necessary costs only freshness.
-SERVICE_DATA_OFFSET_GOOD_CYCLES = 5
 
 # A refused request costs a full cycle of every operation-data sensor, and
 # these refusals are transient, so one retry is worth the extra request.
@@ -187,62 +134,11 @@ EMPTY_BLOCK_SETTINGS: Final = {
 # believing that is undoing the change they just made.
 EMPTY_BLOCK_MATCH_MIN: Final = 3
 
-# How many requests may come back answered but empty before we accept that this
-# unit does not have the operation-data channel at all. Ten, and only counting
-# requests the module accepted: on the unit this was written for (#329) not one
-# reading has ever arrived, in any beta, with either shape of frame - so every
-# minute spent asking is a write that takes the unit's lock for nothing.
-#
-# Not persisted, unlike the frame shape. Relearning that costs the user a unit
-# that clears its settings; relearning this costs ten requests, and leaving it
-# in memory means a module that starts answering is picked up again on the next
-# reload instead of being written off for good.
-SERVICE_DATA_UNANSWERED_LIMIT: Final = 10
-
 # The lock runs 60 seconds, so a longer wait than that means the deadline was
 # stamped by a client whose clock is off rather than that the lock is really
 # still running - cap it instead of leaving a service call hanging on someone
 # else's clock. See _async_write_lock_delay().
 WRITE_LOCK_MAX_WAIT = timedelta(seconds=61)
-
-# The unit answers these segments only when asked, so they are carried across
-# the polls in between (see Device._carry_forward_service_data()) - but not
-# indefinitely. A unit that keeps refusing the request would otherwise leave
-# entities reporting a frozen number indistinguishable from a live one, which
-# is worse for automations built on them than an honest gap.
-SERVICE_DATA_MAX_AGE = 3 * SERVICE_DATA_REQUEST_INTERVAL
-
-# Fields fed exclusively by those segments.
-SERVICE_DATA_FIELDS = (
-    "CompressorFrequency",
-    "CompressorFrequencyRaw",
-    "OperatingCurrent",
-    "OperatingCurrentRaw",
-    "HotGasTemp",
-    "HotGasTempRaw",
-    "EevPulses",
-    "EevPosition",
-    "IndoorCoilTemp",
-    "IndoorCoilOutletTemp",
-    "IndoorCoilRaw",
-    "IndoorCoilOutletRaw",
-    "OutdoorCoilRaw",
-    "DischargeSuperheatRaw",
-    "ProtectionRaw",
-)
-
-# Converted fields, and the raw field each is derived from. A conversion can
-# fail while its segment arrives perfectly well - the coil temperatures are
-# only calibrated over part of the byte range (see RacParser._coil_temp) - and
-# carrying the last convertible value forward would then freeze a stale
-# temperature on screen for as long as the unit stays out of range. Which is a
-# whole heating season, and it is exactly what a frozen reading must never look
-# like. So when the raw field arrived, its temperature is not carried: no value
-# is the honest answer.
-SERVICE_DATA_DERIVED_FROM = {
-    "IndoorCoilTemp": "IndoorCoilRaw",
-    "IndoorCoilOutletTemp": "IndoorCoilOutletRaw",
-}
 
 # Room for both legs of protocol discovery plus the minimum spacing between
 # requests, so a poll that has to fall back to the other protocol is not
@@ -272,11 +168,6 @@ AVAILABILITY_FAILURE_LIMIT_MIN = 3
 def request_stops_unit_issue_id(entry_id: str) -> str:
     """Repair-issue id for a unit that applies the request meant only to ask."""
     return f"request_stops_unit_{entry_id}"
-
-
-def service_data_unanswered_issue_id(entry_id: str) -> str:
-    """Repair-issue id for a unit that answers operation-data requests empty."""
-    return f"service_data_unanswered_{entry_id}"
 
 
 def status_request_unsupported_issue_id(entry_id: str) -> str:
@@ -381,8 +272,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # The settings a status request was built from, kept until something
         # has been able to answer for them - see _check_request_was_applied().
         self._request_baseline: dict[str, Any] | None = None
-        self._service_data_unanswered = 0
-        self._service_data_unsupported = False
         self._account_expires: int | None = None
         self._led_status: int | None = None
         self._auto_heating: int | None = None
@@ -392,9 +281,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firmware_update_available: bool | None = None
         self._last_firmware_check: datetime | None = None
         self._firmware_update_check_enabled = firmware_update_check_enabled
-        self._last_service_data_request: datetime | None = None
-        self._last_service_data_response: datetime | None = None
-        self._service_data_expired = False
         # Foreign-write detection, see _detect_foreign_activity(). The flag is
         # set by our own successful writes and consumed by the next poll, so a
         # rise in `expires` can be attributed to us or to someone else.
@@ -405,10 +291,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # a single set-bit, and reading that as "a write happened" is what
         # would leave every change made at the unit unattributable.
         self._wrote_settings_since_last_poll = False
-        # None until the adaptation has moved it, so the ceiling stays a
-        # single source of truth.
-        self._service_data_offset: timedelta | None = None
-        self._service_data_good_cycles = 0
         self._expected_settings: dict[str, Any] | None = None
         # When we last sent a real (set-bit) command, so an operation-data
         # request within one lock's span of it stamps honestly instead of
@@ -417,7 +299,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._foreign_activity_until: datetime | None = None
         self._foreign_activity_reported = False
         self._foreign_activity_since: datetime | None = None
-        self._service_data_task: asyncio.Task[None] | None = None
+        self.service_data = ServiceDataChannel(self)
         self.external_temperature = ExternalTemperatureFeed(self)
         self._consecutive_failures = 0
         self._availability_failure_limit = max(
@@ -554,7 +436,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # send finishes afterwards and publishes to entities that are gone,
         # over the one connection the reload needs.
         self._consolidation_task = None
-        for task in (*self._running_flushes, self._service_data_task):
+        for task in (*self._running_flushes, self.service_data.task):
             if task is None:
                 continue
             task.cancel()
@@ -569,7 +451,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     exc_info=True,
                 )
         self._consolidation_task = None
-        self._service_data_task = None
+        self.service_data.forget_task()
         await super().async_shutdown()
 
     @property
@@ -628,7 +510,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._connected_accounts = int(response.get("numOfAccount", -1))
             new_airco = self._parser.translate_bytes(response["airconStat"])
             self._carry_forward_home_leave_mode(new_airco)
-            self._carry_forward_service_data(new_airco)
+            self.service_data.carry_forward(new_airco)
             self._airco = new_airco
             # Not part of the airconStat blob, present alongside it in the same
             # response. Tolerate absence (.get()) since it's undocumented and
@@ -879,7 +761,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # dropping those here would blank the diagnostic sensors for a
             # cycle exactly as an unprompted poll once did.
             self._carry_forward_home_leave_mode(fresh)
-            self._carry_forward_service_data(fresh)
+            self.service_data.carry_forward(fresh)
             self._airco = fresh
             expires = response["expires"]
         except (WfRacError, KeyError, TypeError, ValueError):
@@ -916,7 +798,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self.device_name,
             )
 
-    def _settle_service_data_pause(self) -> None:
+    def settle_service_data_pause(self) -> None:
         """Move the operation-data age anchor forward past a stand-down.
 
         Forward by however long the stand-down lasted.
@@ -932,11 +814,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         if self._foreign_activity_since is None or self.foreign_activity:
             return
-        if (
-            self._last_service_data_response is not None
-            and self._foreign_activity_until is not None
-        ):
-            self._last_service_data_response += (
+        if self._foreign_activity_until is not None:
+            self.service_data.shift_anchor(
                 self._foreign_activity_until - self._foreign_activity_since
             )
         self._foreign_activity_since = None
@@ -954,14 +833,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def service_data_supported(self) -> bool:
-        """Whether this unit has ever answered an operation-data request.
-
-        False only after SERVICE_DATA_UNANSWERED_LIMIT requests it accepted and
-        answered without a single segment. The sensors fed by that channel say
-        unavailable rather than unknown then: unknown means "no reading right
-        now", and this is "there will not be one".
-        """
-        return not self._service_data_unsupported
+        """Whether this unit answers operation-data requests at all."""
+        return self.service_data.supported
 
     def _status_request_is_allowed(self) -> bool:
         """Whether an operation-data request may go out right now.
@@ -987,10 +860,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         service_data_codes = self._subscribed_service_data_codes()
         if not service_data_codes:
             return
-        if (
-            self._service_data_unsupported
-            and self.external_temperature.override is None
-        ):
+        if not self.service_data.supported and self.external_temperature.override is None:
             # Nothing to read here. The frame still goes out for an armed
             # temperature override, which rides on it without needing an
             # answer.
@@ -1002,26 +872,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # the write lock for another 60s and is worth far less than
             # leaving the unit controllable from whatever is using it.
             return
-        if self._service_data_task is not None and not self._service_data_task.done():
-            # A retry from the previous cycle is still in flight; piling a
-            # second request on top is exactly the crowding this avoids.
+        if not self.service_data.due():
             return
-        now = dt_util.utcnow()
-        if (
-            self._last_service_data_request is not None
-            and now - self._last_service_data_request < SERVICE_DATA_MIN_SPACING
-        ):
-            return
-        # Stamped now, not when the request actually goes out, so the offset
-        # below shifts the request within the cycle instead of stretching the
-        # interval between requests.
-        self._last_service_data_request = now
         # Background task, not a plain one: it spends most of its life asleep
         # waiting out the offset, and HA cancels background tasks at shutdown
         # instead of waiting for them.
-        self._service_data_task = self.hass.async_create_background_task(
-            self._async_request_service_data(service_data_codes),
-            name=f"{DOMAIN} service data request {self._airco_id}",
+        self.service_data.adopt_task(
+            self.hass.async_create_background_task(
+                self._async_request_service_data(service_data_codes),
+                name=f"{DOMAIN} service data request {self._airco_id}",
+            )
         )
 
     def _service_data_stamp_backdate(self) -> timedelta:
@@ -1066,7 +926,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             )
             return False
         self._carry_forward_home_leave_mode(new_airco)
-        self._carry_forward_service_data(new_airco)
+        self.service_data.carry_forward(new_airco)
         self._airco = new_airco
         return True
 
@@ -1078,7 +938,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         async_queue_command() so the refusal is visible here: a queued command
         is flushed by a detached task that deliberately swallows its errors.
         """
-        await asyncio.sleep(self.service_data_offset.total_seconds())
+        await asyncio.sleep(self.service_data.offset.total_seconds())
         # What the frame carries depends on the module: no set-bits at all
         # without the #329 quirk, a full command with it (see
         # RacParser.status_request_to_byte). Byte 5 goes out either way,
@@ -1119,7 +979,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # so comparing it across the request says whether this one was answered
         # - which the state itself cannot, the previous reading being carried
         # forward into it.
-        answered_before = self._last_service_data_response
+        answered_before = self.service_data.last_response
         for attempt in (1, 2):
             try:
                 await self.set_airco(
@@ -1132,8 +992,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
                 self._check_request_was_applied(before)
-                self._note_whether_anything_answered(answered_before)
-                self._note_service_data_offset_survived()
+                self.service_data.note_whether_anything_answered(answered_before)
+                self.service_data.note_offset_survived()
                 # Notify, but deliberately not through async_set_updated_data():
                 # that resets the refresh timer, and this runs half a cycle
                 # after the poll - every cycle - so it would push the next poll
@@ -1166,7 +1026,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     # close to something else, which is exactly what the offset
                     # is for - so widen it, whether or not the retry gets
                     # through.
-                    self._widen_service_data_offset()
+                    self.service_data.widen_offset()
                     _LOGGER.debug("Service data request refused (%s); retrying", ex)
                     await asyncio.sleep(SERVICE_DATA_RETRY_DELAY.total_seconds())
                     continue
@@ -1187,86 +1047,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 return
         # Entities keep their previous operation-data values on a skipped cycle
         # (see _carry_forward_service_data), so there is nothing to push here.
-
-    def _carry_forward_service_data(self, new_airco: Aircon) -> None:
-        """Carry the extension segments forward, as home/leave mode is.
-
-        Same rationale as _carry_forward_home_leave_mode() above: the unit
-        reports these extension segments exactly once, so without this the
-        sensors would flash the real value for one update cycle and then
-        revert to unknown.
-
-        Unlike home/leave mode this expires: see SERVICE_DATA_MAX_AGE. Time
-        spent standing down for another client is not counted against that
-        age, though - see foreign_activity. SERVICE_DATA_MAX_AGE guards
-        against a value frozen by a unit that stopped answering, which is
-        indistinguishable from a live one; a pause we chose ourselves is
-        neither indistinguishable nor a fault, and External Control says so
-        while it lasts. Dropping perfectly good readings for it would be a
-        worse answer than carrying them a few minutes longer.
-        """
-        if self._airco is None:
-            return
-        self._settle_service_data_pause()
-        now = dt_util.utcnow()
-        if any(getattr(new_airco, name) is not None for name in SERVICE_DATA_FIELDS):
-            self._last_service_data_response = now
-            if self._service_data_expired:
-                self._service_data_expired = False
-                _LOGGER.info(
-                    "Operation data from [%s] is being reported again",
-                    self.device_name,
-                )
-        elif self.foreign_activity:
-            pass  # Not stale, just paused - carry the values below.
-        elif (
-            self._last_service_data_response is None
-            or now - self._last_service_data_response > SERVICE_DATA_MAX_AGE
-        ):
-            # Nothing fresh for too long - leave the fields unset so entities
-            # report unknown rather than a value that stopped being true.
-            self._note_service_data_expired(now)
-            return
-        for name in SERVICE_DATA_FIELDS:
-            if getattr(new_airco, name) is not None:
-                continue
-            source = SERVICE_DATA_DERIVED_FROM.get(name)
-            if source is not None and getattr(new_airco, source) is not None:
-                # Segment arrived, value unusable - see SERVICE_DATA_DERIVED_FROM.
-                continue
-            setattr(new_airco, name, getattr(self._airco, name))
-
-    def _note_service_data_expired(self, now: datetime) -> None:
-        """Warn once, when the operation-data sensors actually go unknown.
-
-        A refused request costs a cycle and nothing else, so it stays on debug:
-        at roughly one an hour per unit it would otherwise be a permanent
-        warning about a module behaviour no one can act on. Running out of
-        values is the part a user can see, and it is worth exactly one line -
-        with a matching one when they come back.
-
-        Every occurrence measured so far coincided with network maintenance
-        (a controller update, an access point restarting), not with anything
-        the unit did, so the message points there rather than at the air
-        conditioner.
-        """
-        if self._service_data_expired:
-            return
-        # Before the first response there is nothing to lose yet; anchor on the
-        # first request instead so a module that never answers is still
-        # reported, once, rather than silently leaving the sensors unknown.
-        anchor = self._last_service_data_response or self._last_service_data_request
-        if anchor is None or now - anchor <= SERVICE_DATA_MAX_AGE:
-            return
-        self._service_data_expired = True
-        _LOGGER.warning(
-            "No operation data from [%s] for over %.0fs; its compressor, "
-            "current, temperature and EEV sensors now report unknown. A "
-            "network interruption is the usual cause - check whether other "
-            "devices dropped out at the same time",
-            self.device_name,
-            SERVICE_DATA_MAX_AGE.total_seconds(),
-        )
 
     async def delete_account(self) -> dict[str, Any] | None:
         """Delete account (operator id) from the airco.
@@ -1305,59 +1085,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._clear_registration_full_issue()
         return result
 
-    @property
-    def service_data_offset(self) -> timedelta:
-        """How long after a poll the operation-data request goes out."""
-        if self._service_data_offset is None:
-            return SERVICE_DATA_REQUEST_OFFSET
-        return self._service_data_offset
-
-    def _widen_service_data_offset(self) -> None:
-        """Put more distance between the poll and the request after a refusal.
-
-        Doubling rather than stepping: a refused request costs every
-        operation-data sensor a reading, and several in a row is what an
-        offset that is much too short looks like, so overshooting once is
-        cheaper than creeping up on it.
-        """
-        if self.service_data_offset >= SERVICE_DATA_REQUEST_OFFSET:
-            return
-        self._service_data_good_cycles = 0
-        self._service_data_offset = min(
-            self.service_data_offset * 2, SERVICE_DATA_REQUEST_OFFSET
-        )
-        _LOGGER.debug(
-            "Moving the operation-data request for [%s] to %.0fs after the "
-            "poll: the module refused it where it was",
-            self.device_name,
-            self.service_data_offset.total_seconds(),
-        )
-
-    def _note_service_data_offset_survived(self) -> None:
-        """Move the request back towards the poll while requests keep landing.
-
-        Closer is better for everything except crowding: what the request
-        carries, and what any judgement about who changed the unit rests on,
-        is as old as the last poll.
-        """
-        if self.service_data_offset <= SERVICE_DATA_OFFSET_MIN:
-            return
-        self._service_data_good_cycles += 1
-        if self._service_data_good_cycles < SERVICE_DATA_OFFSET_GOOD_CYCLES:
-            return
-        self._service_data_good_cycles = 0
-        self._service_data_offset = max(
-            self.service_data_offset - SERVICE_DATA_OFFSET_STEP,
-            SERVICE_DATA_OFFSET_MIN,
-        )
-        _LOGGER.debug(
-            "Moving the operation-data request for [%s] to %.0fs after the "
-            "poll: %s cycles without a refusal",
-            self.device_name,
-            self.service_data_offset.total_seconds(),
-            SERVICE_DATA_OFFSET_GOOD_CYCLES,
-        )
-
     def _empty_block_matches(self, before: Mapping[str, Any]) -> list[str]:
         """The settings that moved to exactly what an all-zero block encodes.
 
@@ -1389,43 +1116,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 return []
             matched.append("PresetTemp")
         return matched
-
-    def _note_whether_anything_answered(self, answered_before: datetime | None) -> None:
-        """Give up on a unit that takes the request and answers nothing.
-
-        Answering with no segment at all is not a refusal - the module accepted
-        the frame and replied - so nothing else in the request path notices it.
-        On the unit this was written for that is every request ever sent, which
-        leaves five sensors permanently unknown and a write going out every
-        minute to keep them that way.
-        """
-        if self._service_data_unsupported:
-            return
-        if self._last_service_data_response != answered_before:
-            self._service_data_unanswered = 0
-            return
-        self._service_data_unanswered += 1
-        if self._service_data_unanswered < SERVICE_DATA_UNANSWERED_LIMIT:
-            return
-        self._service_data_unsupported = True
-        _LOGGER.warning(
-            "[%s] has answered %s operation-data requests without reporting a "
-            "single value. This unit does not have that channel, so it will "
-            "not be asked again and its compressor, current, temperature and "
-            "EEV sensors are now unavailable. Nothing else is affected",
-            self.device_name,
-            SERVICE_DATA_UNANSWERED_LIMIT,
-        )
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            service_data_unanswered_issue_id(self.entry_id),
-            is_fixable=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="service_data_unanswered",
-            translation_placeholders={"device_name": self.device_name},
-        )
-        self.async_update_listeners()
 
     def _check_request_was_applied(self, before: Mapping[str, Any] | None) -> None:
         """Notice a unit that applies the request we only meant to ask with.
@@ -1699,7 +1389,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self._wrote_settings_since_last_poll = True
                 new_airco = self._parser.translate_bytes(response)
                 self._carry_forward_home_leave_mode(new_airco)
-                self._carry_forward_service_data(new_airco)
+                self.service_data.carry_forward(new_airco)
                 self._airco = new_airco
                 # Our own write is not a foreign one: move the expectation to
                 # what the unit reports back, or the next poll would read this
