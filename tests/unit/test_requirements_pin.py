@@ -7,8 +7,8 @@ suite is green against a library nobody gets - which is what happened between
 """
 
 import json
-import re
 from pathlib import Path
+import re
 
 import custom_components.mitsubishi_wf_rac as component
 
