@@ -174,7 +174,9 @@ def _async_remove_home_leave_mode_sensors(hass: HomeAssistant, device: Device) -
     for mode in ("cooling", "heating"):
         for slug in ("temp_rule", "temp_setting", "air_flow"):
             entity_id = registry.async_get_entity_id(
-                "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-home-leave-{mode}-{slug}-sensor"
+                "sensor",
+                DOMAIN,
+                f"{DOMAIN}-{device.airco_id}-home-leave-{mode}-{slug}-sensor",
             )
             if entity_id:
                 _LOGGER.debug("Removing obsolete home leave mode sensor %s", entity_id)
@@ -187,9 +189,7 @@ class DiagnosticsSensor(WfRacEntity, SensorEntity):
 
     _attr_entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC
 
-    def __init__(
-        self, device: Device, custom_type: str, enable: bool = False
-    ) -> None:
+    def __init__(self, device: Device, custom_type: str, enable: bool = False) -> None:
         """Initialize the sensor."""
         super().__init__(device)
         self._attr_entity_registry_enabled_default = enable
@@ -252,9 +252,7 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
         "target_temperature": "target",
     }
 
-    def __init__(
-        self, device: Device, custom_type: str, enable: bool = True
-    ) -> None:
+    def __init__(self, device: Device, custom_type: str, enable: bool = True) -> None:
         """Initialize the sensor."""
         super().__init__(device)
         self._custom_type = custom_type
@@ -280,7 +278,9 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
             )
         elif self._custom_type == ATTR_OUTSIDE_TEMPERATURE:
             outdoor_offset = self.coordinator.options.get(CONF_OUTDOOR_OFFSET, 0.0)
-            self._attr_native_value = self.coordinator.airco.OutdoorTemp + outdoor_offset
+            self._attr_native_value = (
+                self.coordinator.airco.OutdoorTemp + outdoor_offset
+            )
         elif self._custom_type == ATTR_TARGET_TEMPERATURE:
             # Kept symmetric with climate.py's target_temperature by going
             # through the same resolver, per-mode overrides included - see
@@ -363,7 +363,9 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
     def __init__(self, device: Device) -> None:
         """Initialize the sensor."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-energy-total-sensor"
+        self._attr_unique_id = (
+            f"{DOMAIN}-{self.coordinator.airco_id}-energy-total-sensor"
+        )
         self._total = 0.0
         # Anchored to the current reading so a brand-new sensor starts at 0
         # instead of claiming whatever the running cycle already accumulated.
@@ -470,7 +472,9 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         super().__init__(
             device, context=SERVICE_DATA_CODE_BY_FIELD[self._FIELD_BY_TYPE[custom_type]]
         )
-        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-{custom_type}-sensor"
+        self._attr_unique_id = (
+            f"{DOMAIN}-{self.coordinator.airco_id}-{custom_type}-sensor"
+        )
         self._attr_translation_key = custom_type
         if custom_type == ATTR_COMPRESSOR_FREQUENCY:
             self._attr_device_class = SensorDeviceClass.FREQUENCY
@@ -503,4 +507,6 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         self._attr_native_value = None
 
     def _update_state(self) -> None:
-        self._attr_native_value = getattr(self.coordinator.airco, self._FIELD_BY_TYPE[self._custom_type])
+        self._attr_native_value = getattr(
+            self.coordinator.airco, self._FIELD_BY_TYPE[self._custom_type]
+        )

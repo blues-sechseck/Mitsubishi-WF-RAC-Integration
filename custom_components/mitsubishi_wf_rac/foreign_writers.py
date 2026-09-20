@@ -217,9 +217,7 @@ class ForeignWriterWatch:
 
         known = self._device.account_expires
         expires_moved = (
-            isinstance(expires, int)
-            and isinstance(known, int)
-            and expires > known
+            isinstance(expires, int) and isinstance(known, int) and expires > known
         )
         if expires_moved and not wrote:
             self._note_foreign_write(f"expires moved {known} -> {expires}")
@@ -300,8 +298,7 @@ class ForeignWriterWatch:
             )
             return
         _LOGGER.debug(
-            "[%s] was changed at the unit itself - nothing took the write "
-            "lock: %s",
+            "[%s] was changed at the unit itself - nothing took the write lock: %s",
             self._device.device_name,
             changed,
         )
@@ -429,7 +426,9 @@ class ForeignWriterWatch:
             # The advice in the first issue - watch it for a few minutes - has
             # been overtaken by what just happened.
             ir.async_delete_issue(
-                self._device.hass, DOMAIN, request_stops_unit_issue_id(self._device.entry_id)
+                self._device.hass,
+                DOMAIN,
+                request_stops_unit_issue_id(self._device.entry_id),
             )
         ir.async_create_issue(
             self._device.hass,

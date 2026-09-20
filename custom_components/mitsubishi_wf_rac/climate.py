@@ -200,7 +200,9 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         else:
             # A source's current state is more authoritative than restore data:
             # the latter can be stale precisely when the source stopped reporting.
-            self._set_external_temperature_from_source_state(self.hass.states.get(source))
+            self._set_external_temperature_from_source_state(
+                self.hass.states.get(source)
+            )
             if (
                 self._external_temperature_override is None
                 and _stored_external_temperature_is_set(stored)
@@ -226,14 +228,18 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         source = self.coordinator.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
         return source if isinstance(source, str) and source else None
 
-    def _external_temperature_from_source_state(self, state: State | None) -> float | None:
+    def _external_temperature_from_source_state(
+        self, state: State | None
+    ) -> float | None:
         """Convert a usable source state to the quarter-degree protocol grid."""
         if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return None
         try:
             value = TemperatureConverter.convert(
                 float(state.state),
-                state.attributes.get(ATTR_UNIT_OF_MEASUREMENT, UnitOfTemperature.CELSIUS),
+                state.attributes.get(
+                    ATTR_UNIT_OF_MEASUREMENT, UnitOfTemperature.CELSIUS
+                ),
                 UnitOfTemperature.CELSIUS,
             )
         except (TypeError, ValueError):
@@ -284,7 +290,9 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         """Keep the override tied to the source's availability and value."""
         self._set_external_temperature_from_source_state(event.data["new_state"])
 
-    def _restore_external_temperature_override(self, stored: ExtraStoredData | None) -> None:
+    def _restore_external_temperature_override(
+        self, stored: ExtraStoredData | None
+    ) -> None:
         """Re-arm the override recorded before the last restart or reload.
 
         Restoring only arms it integration-side - the unit is not told anything
@@ -495,9 +503,13 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             self._valid_mode_or_raise("hvac", requested_hvac_mode, self.hvac_modes)
 
         target_hvac_mode = (
-            requested_hvac_mode if requested_hvac_mode is not None else self._attr_hvac_mode
+            requested_hvac_mode
+            if requested_hvac_mode is not None
+            else self._attr_hvac_mode
         )
-        target_hvac_mode = HVACMode.OFF if target_hvac_mode is None else target_hvac_mode
+        target_hvac_mode = (
+            HVACMode.OFF if target_hvac_mode is None else target_hvac_mode
+        )
         min_temp, max_temp = self._displayed_setpoint_range(target_hvac_mode)
 
         # Naming the mode is the whole message: the range depends on it, and
@@ -568,7 +580,9 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new target fan mode."""
-        await self.coordinator.async_queue_command({AirconCommands.AirFlow: FAN_MODE_TRANSLATION[fan_mode]})
+        await self.coordinator.async_queue_command(
+            {AirconCommands.AirFlow: FAN_MODE_TRANSLATION[fan_mode]}
+        )
 
     async def async_turn_on(self) -> None:
         """Turn the entity on."""
@@ -615,12 +629,16 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         else:
             await self.coordinator.async_queue_command(
                 {
-                    AirconCommands.WindDirectionLR: SWING_HORIZONTAL_MODE_TRANSLATION[swing_mode],
+                    AirconCommands.WindDirectionLR: SWING_HORIZONTAL_MODE_TRANSLATION[
+                        swing_mode
+                    ],
                     AirconCommands.Entrust: False,
                 }
             )
 
-    async def async_set_external_temperature(self, temperature: float | None = None) -> None:
+    async def async_set_external_temperature(
+        self, temperature: float | None = None
+    ) -> None:
         """Arm an external room temperature override, or revert to the sensor.
 
         Reverting means the unit's own internal sensor; the valid range of an
@@ -809,9 +827,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         self._attr_swing_horizontal_mode = (
             SWING_3D_AUTO
             if airco.Entrust
-            else list(
-                SWING_HORIZONTAL_MODE_TRANSLATION.keys()
-            )[airco.WindDirectionLR]
+            else list(SWING_HORIZONTAL_MODE_TRANSLATION.keys())[airco.WindDirectionLR]
         )
         self._attr_hvac_mode = mode_from_operation
 

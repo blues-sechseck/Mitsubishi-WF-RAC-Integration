@@ -28,7 +28,9 @@ async def test_a_good_answer_gives_both_versions(hass: HomeAssistant, aioclient_
     }
 
 
-async def test_the_declared_content_type_is_ignored(hass: HomeAssistant, aioclient_mock):
+async def test_the_declared_content_type_is_ignored(
+    hass: HomeAssistant, aioclient_mock
+):
     """Deployments of this endpoint mislabel it, the local API does too."""
     aioclient_mock.post(
         _FIRMWARE_API_URL,
@@ -46,7 +48,9 @@ async def test_the_declared_content_type_is_ignored(hass: HomeAssistant, aioclie
         pytest.param({"json": []}, id="not_an_object"),
         pytest.param({"json": {"result": 1}}, id="result_says_no"),
         pytest.param({"json": {"result": 0}}, id="no_contents"),
-        pytest.param({"json": {"result": 0, "contents": "none"}}, id="contents_not_an_object"),
+        pytest.param(
+            {"json": {"result": 0, "contents": "none"}}, id="contents_not_an_object"
+        ),
     ],
 )
 async def test_an_answer_we_cannot_use_reports_nothing(

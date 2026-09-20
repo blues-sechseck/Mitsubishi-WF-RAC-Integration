@@ -19,7 +19,7 @@ DOMAIN = "mitsubishi_wf_rac"
 # discovery announcement carries something else.
 DEFAULT_PORT = 51443
 
-MIN_TIME_BETWEEN_UPDATES=timedelta(seconds=60)
+MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=60)
 
 CONF_OPERATOR_ID = "operator_id"
 CONF_AIRCO_ID = "airco_id"
@@ -107,7 +107,6 @@ CONF_OVERSHOOT_COOL = "overshoot_cool"
 CONF_OVERSHOOT_HEAT = "overshoot_heat"
 CONF_OVERSHOOT_DRY = "overshoot_dry"
 OVERSHOOT_MAX = 3.0
-
 
 
 # Heating uses the unit's own Heating TempSetting (10.0°C), which matches
@@ -232,8 +231,6 @@ SUPPORTED_FAN_MODES = [
     FAN_MEDIUM,
     FAN_HIGH,
 ]
-
-
 
 
 #   openssl s_client -connect <AC_IP_ADDRESS>:51443 -showcerts </dev/null 2>/dev/null \

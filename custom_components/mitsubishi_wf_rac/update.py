@@ -73,6 +73,7 @@ class FirmwareUpdateEntity(WfRacEntity, UpdateEntity):
         # background check (see Device._maybe_check_firmware_update()) may
         # not have completed yet.
         self._attr_latest_version = (
-            latest if self.coordinator.firmware_update_available and latest
+            latest
+            if self.coordinator.firmware_update_available and latest
             else self._attr_installed_version
         )

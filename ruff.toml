@@ -182,3 +182,9 @@ property-decorators = ["propcache.api.cached_property"]
 
 # scripts/ is a tool run from a shell; printing is what it is for.
 "scripts/*" = ["T20"]
+
+[format]
+# The formatter reaches into fenced Python blocks in Markdown as well, and the
+# protocol reference's snippets are column-aligned on purpose - they are read
+# as tables by people implementing the protocol, not run.
+exclude = ["*.md"]

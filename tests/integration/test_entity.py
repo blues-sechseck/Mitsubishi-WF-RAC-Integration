@@ -24,8 +24,14 @@ from custom_components.mitsubishi_wf_rac.entity import WfRacEntity
 @pytest.fixture
 async def device(hass):
     dev = Device(
-        hass, MockConfigEntry(domain=DOMAIN), "Test AC", "127.0.0.1", 51443,
-        "device-id", "operator-id", "airco-id",
+        hass,
+        MockConfigEntry(domain=DOMAIN),
+        "Test AC",
+        "127.0.0.1",
+        51443,
+        "device-id",
+        "operator-id",
+        "airco-id",
         swing_selects_enabled_default=True,
     )
     dev._api = AsyncMock()

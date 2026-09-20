@@ -55,7 +55,11 @@ async def async_setup_entry(
 
     device: Device = entry.runtime_data.device
     _LOGGER.debug("Setup selects for: %s, %s", device.device_name, device.airco_id)
-    entities = [HorizontalSwingSelect(device), VerticalSwingSelect(device), FanSpeedSelect(device)]
+    entities = [
+        HorizontalSwingSelect(device),
+        VerticalSwingSelect(device),
+        FanSpeedSelect(device),
+    ]
 
     # Same VacantProperty capability gate as OccupancyBinarySensor in
     # binary_sensor.py.
@@ -82,7 +86,9 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the horizontal swing select."""
         super().__init__(device)
-        self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
+        self._attr_entity_registry_enabled_default = (
+            device.swing_selects_enabled_default
+        )
         self._attr_options = SUPPORT_SWING_HORIZONTAL_MODES
         self._attr_unique_id = (
             f"{DOMAIN}-{self.coordinator.airco_id}-horizontal-swing-direction"
@@ -113,11 +119,14 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
         else:
             await self.coordinator.async_queue_command(
                 {
-                    AirconCommands.WindDirectionLR: SWING_HORIZONTAL_MODE_TRANSLATION[option],
+                    AirconCommands.WindDirectionLR: SWING_HORIZONTAL_MODE_TRANSLATION[
+                        option
+                    ],
                     AirconCommands.Entrust: False,
                 }
             )
         self._attr_current_option = option
+
 
 class VerticalSwingSelect(WfRacEntity, SelectEntity):
     """Select component to set the vertical swing direction of the airco."""
@@ -127,7 +136,9 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the vertical swing select."""
         super().__init__(device)
-        self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
+        self._attr_entity_registry_enabled_default = (
+            device.swing_selects_enabled_default
+        )
         self._attr_options = SUPPORT_SWING_MODES
         self._attr_unique_id = (
             f"{DOMAIN}-{self.coordinator.airco_id}-vertical-swing-direction"
@@ -164,6 +175,7 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
             )
         self._attr_current_option = option
 
+
 class FanSpeedSelect(WfRacEntity, SelectEntity):
     """Select component to set the fan speed of the airco."""
 
@@ -172,7 +184,9 @@ class FanSpeedSelect(WfRacEntity, SelectEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the fan speed select."""
         super().__init__(device)
-        self._attr_entity_registry_enabled_default = device.swing_selects_enabled_default
+        self._attr_entity_registry_enabled_default = (
+            device.swing_selects_enabled_default
+        )
         self._attr_options = SUPPORTED_FAN_MODES
         self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-fan-speed"
         self._apply_state()
@@ -186,15 +200,14 @@ class FanSpeedSelect(WfRacEntity, SelectEntity):
         # would otherwise make it look like a real one.
         if self.coordinator.airco.AirFlow == AIRFLOW_UNKNOWN:
             raise IndexError("the unit reported a fan step pywfrac cannot read")
-        self._attr_current_option = list(FAN_MODE_TRANSLATION.keys())[self.coordinator.airco.AirFlow]
-
+        self._attr_current_option = list(FAN_MODE_TRANSLATION.keys())[
+            self.coordinator.airco.AirFlow
+        ]
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         await self.coordinator.async_queue_command(
-            {
-                AirconCommands.AirFlow: FAN_MODE_TRANSLATION[option]
-            }
+            {AirconCommands.AirFlow: FAN_MODE_TRANSLATION[option]}
         )
         self._attr_current_option = option
 
@@ -242,7 +255,6 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
             # safer fallback than silently claiming a direction that isn't
             # actually active.
             self._attr_current_option = HOME_LEAVE_MODE_OFF
-
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""

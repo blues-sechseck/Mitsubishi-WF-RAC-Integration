@@ -91,12 +91,12 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return None
 
     async def _async_register_airco(
-            self,
-            hass: HomeAssistant,
-            data: dict[str, Any],
-            exclude_entry_id: str | None = None,
-            allow_port_fallback: bool = False,
-            expected_airco_id: str | None = None,
+        self,
+        hass: HomeAssistant,
+        data: dict[str, Any],
+        exclude_entry_id: str | None = None,
+        allow_port_fallback: bool = False,
+        expected_airco_id: str | None = None,
     ) -> dict[str, Any]:
         """Validate the user input allows us to connect, and register with the airco device.
 
@@ -264,12 +264,12 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self._generated_device_id
 
     async def _async_create_common(
-            self,
-            step_id: str,
-            build_schema: Callable[[], vol.Schema],
-            user_input: dict[str, Any] | None = None,
-            description_placeholders: dict[str, str] | None = None,
-            allow_port_fallback: bool = False,
+        self,
+        step_id: str,
+        build_schema: Callable[[], vol.Schema],
+        user_input: dict[str, Any] | None = None,
+        description_placeholders: dict[str, str] | None = None,
+        allow_port_fallback: bool = False,
     ) -> ConfigFlowResult:
         """Create a new entry.
 
@@ -395,7 +395,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-            config_entry: config_entries.ConfigEntry,
+        config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Create the options flow."""
         return WfRacOptionsFlowHandler()
@@ -420,7 +420,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reconfigure(
-            self, user_input: dict[str, Any] | None = None
+        self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle changing an existing entry's connection details (host/port)."""
         reconfigure_entry = self._get_reconfigure_entry()
@@ -488,7 +488,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_zeroconf(
-            self, discovery_info: ZeroconfServiceInfo
+        self, discovery_info: ZeroconfServiceInfo
     ) -> ConfigFlowResult:
         """Handle zeroconf discovery."""
 
@@ -528,6 +528,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._discovery_info = info
 
         return await self.async_step_discovery_confirm()
+
 
 class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
     """Base class for options handling.
@@ -578,7 +579,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         return keys
 
     async def async_step_init(
-            self, user_input: dict[str, Any] | None = None
+        self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
@@ -746,9 +747,12 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                     vol.Required(
                         CONF_AVAILABILITY_RETRY_LIMIT,
                         default=options.get(
-                            CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN
+                            CONF_AVAILABILITY_RETRY_LIMIT,
+                            AVAILABILITY_FAILURE_LIMIT_MIN,
                         ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=AVAILABILITY_FAILURE_LIMIT_MIN)),
+                    ): vol.All(
+                        vol.Coerce(int), vol.Range(min=AVAILABILITY_FAILURE_LIMIT_MIN)
+                    ),
                     vol.Required(
                         CONF_FIRMWARE_UPDATE_CHECK,
                         default=options.get(CONF_FIRMWARE_UPDATE_CHECK, False),

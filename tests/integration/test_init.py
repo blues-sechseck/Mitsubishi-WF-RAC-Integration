@@ -40,7 +40,9 @@ _DATA = {
 _CURRENT_VERSION = 7
 
 
-def _entry(hass: HomeAssistant, version: int, data: dict, options: dict) -> MockConfigEntry:
+def _entry(
+    hass: HomeAssistant, version: int, data: dict, options: dict
+) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, version=version, data=data, options=options)
     entry.add_to_hass(hass)
     return entry
@@ -102,7 +104,11 @@ async def test_migrate_keeps_unrelated_options(hass: HomeAssistant):
         hass,
         4,
         _DATA,
-        {CONF_HOST: "192.168.1.50", "indoor_offset": -1.5, CONF_AVAILABILITY_CHECK: True},
+        {
+            CONF_HOST: "192.168.1.50",
+            "indoor_offset": -1.5,
+            CONF_AVAILABILITY_CHECK: True,
+        },
     )
 
     assert await async_migrate_entry(hass, entry)
@@ -112,7 +118,9 @@ async def test_migrate_keeps_unrelated_options(hass: HomeAssistant):
 
 async def test_migrate_is_idempotent_at_current_version(hass: HomeAssistant):
     options = {"indoor_offset": -1.5}
-    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, options)
+    entry = _entry(
+        hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, options
+    )
 
     assert await async_migrate_entry(hass, entry)
 
@@ -132,7 +140,9 @@ async def test_device_is_built_without_availability_options(hass: HomeAssistant)
     assert device._consecutive_failures == 0  # pylint: disable=protected-access
 
 
-async def test_remove_entry_clears_the_registration_full_repair_issue(hass: HomeAssistant):
+async def test_remove_entry_clears_the_registration_full_repair_issue(
+    hass: HomeAssistant,
+):
     """A repair issue is entry-scoped (see wfrac/device.py's add_account) - it
     must not survive the entry it was raised against, or it stays in the
     Repairs list forever pointing at nothing.
@@ -155,7 +165,9 @@ async def test_remove_entry_clears_the_registration_full_repair_issue(hass: Home
         await async_remove_entry(hass, entry)
 
     assert (
-        ir.async_get(hass).async_get_issue(DOMAIN, registration_full_issue_id(entry.entry_id))
+        ir.async_get(hass).async_get_issue(
+            DOMAIN, registration_full_issue_id(entry.entry_id)
+        )
         is None
     )
 

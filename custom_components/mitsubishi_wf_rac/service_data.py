@@ -248,7 +248,9 @@ class ServiceDataChannel:
         if self._good_cycles < SERVICE_DATA_OFFSET_GOOD_CYCLES:
             return
         self._good_cycles = 0
-        self._offset = max(self.offset - SERVICE_DATA_OFFSET_STEP, SERVICE_DATA_OFFSET_MIN)
+        self._offset = max(
+            self.offset - SERVICE_DATA_OFFSET_STEP, SERVICE_DATA_OFFSET_MIN
+        )
         _LOGGER.debug(
             "Moving the operation-data request for [%s] to %.0fs after the "
             "poll: %s cycles without a refusal",

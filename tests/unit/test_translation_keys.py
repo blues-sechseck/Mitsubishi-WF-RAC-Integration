@@ -104,8 +104,8 @@ def test_every_error_the_flow_raises_has_a_message():
         and cls is not config_flow.KnownError
     }
 
-    assert raised <= set(STRINGS["config"]["error"]), (
-        raised - set(STRINGS["config"]["error"])
+    assert raised <= set(STRINGS["config"]["error"]), raised - set(
+        STRINGS["config"]["error"]
     )
 
 
@@ -133,7 +133,9 @@ def test_a_translated_section_labels_every_field_in_it():
         if path.stem == "en":
             continue
         body = json.loads(path.read_text(encoding="utf-8"))
-        sections = body.get("options", {}).get("step", {}).get("init", {}).get("sections", {})
+        sections = (
+            body.get("options", {}).get("step", {}).get("init", {}).get("sections", {})
+        )
         for name, group in sections.items():
             expected = set(english[name].get("data", {}))
             assert set(group.get("data", {})) == expected, f"{path.stem}: {name}"
@@ -172,7 +174,6 @@ def _described_option_keys() -> set[str]:
     return described
 
 
-
 def test_every_action_is_named_in_strings():
     """Home Assistant serves action names and descriptions from translations/,
     and falls back to services.yaml only where a translation is missing. The
@@ -182,9 +183,7 @@ def test_every_action_is_named_in_strings():
     """
     import yaml
 
-    services = yaml.safe_load(
-        (COMPONENT / "services.yaml").read_text(encoding="utf-8")
-    )
+    services = yaml.safe_load((COMPONENT / "services.yaml").read_text(encoding="utf-8"))
     for name, body in services.items():
         described = STRINGS["services"][name]
         assert described["name"] and described["description"], name

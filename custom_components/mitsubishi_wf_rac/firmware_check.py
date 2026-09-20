@@ -29,7 +29,9 @@ _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=15)
 _USER_AGENT = "smartmair_app[1.4.009]"
 
 
-async def fetch_latest_firmware(hass: HomeAssistant, firm_type: str) -> dict[str, Any] | None:
+async def fetch_latest_firmware(
+    hass: HomeAssistant, firm_type: str
+) -> dict[str, Any] | None:
     """Return {"wireless": <mFirmVer>, "mcu": <cFirmVer>} for firm_type.
 
     None if the request failed or the branch is unknown to the server.

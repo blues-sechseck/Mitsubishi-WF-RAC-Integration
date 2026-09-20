@@ -539,8 +539,7 @@ async def test_a_poll_does_not_queue_behind_a_command(
     # The consolidation window is a sleep, and this test's clock is frozen, so
     # the command would never leave the window it waits in.
     with patch(
-        "custom_components.mitsubishi_wf_rac.coordinator."
-        "UPDATE_CONSOLIDATION_PERIOD",
+        "custom_components.mitsubishi_wf_rac.coordinator.UPDATE_CONSOLIDATION_PERIOD",
         timedelta(0),
     ):
         caller = asyncio.create_task(

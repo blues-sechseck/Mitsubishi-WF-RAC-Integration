@@ -54,7 +54,12 @@ async def test_actions_exist_without_a_working_device(hass: HomeAssistant):
 
 @pytest.mark.parametrize(
     "field",
-    ["temp_rule_cooling", "temp_setting_cooling", "temp_rule_heating", "temp_setting_heating"],
+    [
+        "temp_rule_cooling",
+        "temp_setting_cooling",
+        "temp_rule_heating",
+        "temp_setting_heating",
+    ],
 )
 async def test_set_home_leave_mode_rejects_a_temperature_the_unit_cannot_hold(
     hass: HomeAssistant, field: str

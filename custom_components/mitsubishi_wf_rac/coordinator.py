@@ -178,20 +178,20 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     config_entry: ConfigEntry
 
     def __init__(  # pylint: disable=too-many-arguments
-            self,
-            hass: HomeAssistant,
-            config_entry: ConfigEntry,
-            name: str,
-            hostname: str,
-            port: int,
-            device_id: str,
-            operator_id: str,
-            airco_id: str,
-            swing_selects_enabled_default: bool,
-            availability_failure_limit: int = AVAILABILITY_FAILURE_LIMIT_MIN,
-            firmware_update_check_enabled: bool = False,
-            connection_method: str | None = None,
-            status_request_mode: str = STATUS_REQUEST_STRICT,
+        self,
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        name: str,
+        hostname: str,
+        port: int,
+        device_id: str,
+        operator_id: str,
+        airco_id: str,
+        swing_selects_enabled_default: bool,
+        availability_failure_limit: int = AVAILABILITY_FAILURE_LIMIT_MIN,
+        firmware_update_check_enabled: bool = False,
+        connection_method: str | None = None,
+        status_request_mode: str = STATUS_REQUEST_STRICT,
     ) -> None:
         """Set up the coordinator for one airco."""
         self._api = Repository(
@@ -413,7 +413,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         One per enabled diagnostic sensor, plus the carrier an armed external
         temperature override holds (see _sync_external_temperature_carrier).
         """
-        return tuple(sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES)))
+        return tuple(
+            sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES))
+        )
 
     async def update(self) -> bool:
         """Fetch one status block, and say whether the unit answered.
@@ -631,7 +633,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         service_data_codes = self._subscribed_service_data_codes()
         if not service_data_codes:
             return
-        if not self.service_data.supported and self.external_temperature.override is None:
+        if (
+            not self.service_data.supported
+            and self.external_temperature.override is None
+        ):
             # Nothing to read here. The frame still goes out for an armed
             # temperature override, which rides on it without needing an
             # answer.
@@ -701,7 +706,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._airco = new_airco
         return True
 
-    async def _async_request_service_data(self, service_data_codes: tuple[int, ...]) -> None:
+    async def _async_request_service_data(
+        self, service_data_codes: tuple[int, ...]
+    ) -> None:
         """Ask the unit for operation-data segments.
 
         Offset from the poll and retried once if the unit refuses it (see
@@ -785,8 +792,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # is off for this call (retry_when_locked=False), or the
                 # refusal would arrive here already contested.
                 _LOGGER.debug(
-                    "Service data request declined for [%s], skipping this "
-                    "cycle: %s",
+                    "Service data request declined for [%s], skipping this cycle: %s",
                     self.device_name,
                     ex,
                 )

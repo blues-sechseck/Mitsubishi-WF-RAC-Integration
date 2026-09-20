@@ -48,7 +48,9 @@ def _mock_repository(airco_id="airco-1", update_result=0):
 
 
 def _patch_repository(repo):
-    return patch("custom_components.mitsubishi_wf_rac.config_flow.Repository", return_value=repo)
+    return patch(
+        "custom_components.mitsubishi_wf_rac.config_flow.Repository", return_value=repo
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -57,7 +59,9 @@ def bypass_entry_setup():
     connection - CREATE_ENTRY normally triggers a real async_setup_entry(),
     which would open a real network connection via Device.update().
     """
-    with patch("custom_components.mitsubishi_wf_rac.async_setup_entry", return_value=True):
+    with patch(
+        "custom_components.mitsubishi_wf_rac.async_setup_entry", return_value=True
+    ):
         yield
 
 
@@ -134,7 +138,9 @@ async def test_user_flow_host_already_configured_shows_error(hass: HomeAssistant
     assert result["errors"] == {"host": "host_already_configured"}
 
 
-async def test_user_flow_force_update_bypasses_duplicate_host_check(hass: HomeAssistant):
+async def test_user_flow_force_update_bypasses_duplicate_host_check(
+    hass: HomeAssistant,
+):
     MockConfigEntry(
         domain=DOMAIN,
         data={"name": "Existing AC", "host": "192.168.1.50"},
@@ -183,7 +189,9 @@ async def test_user_flow_empty_airco_id_is_cannot_connect(hass: HomeAssistant):
     assert result["errors"] == {"base": "cannot_connect"}
 
 
-async def test_user_flow_update_account_info_falsy_is_cannot_connect(hass: HomeAssistant):
+async def test_user_flow_update_account_info_falsy_is_cannot_connect(
+    hass: HomeAssistant,
+):
     repo = _mock_repository()
     repo.update_account_info.return_value = None
     with _patch_repository(repo):
@@ -292,7 +300,9 @@ async def test_user_flow_unexpected_exception_shows_generic_error(hass: HomeAssi
     assert result["errors"] == {"base": "unexpected_error"}
 
 
-async def test_user_flow_reuses_operator_and_device_id_from_existing_entry(hass: HomeAssistant):
+async def test_user_flow_reuses_operator_and_device_id_from_existing_entry(
+    hass: HomeAssistant,
+):
     MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -342,14 +352,17 @@ def _existing_entry(
 
 
 async def test_reconfigure_flow_shows_form_with_current_values(hass: HomeAssistant):
-    entry = _existing_entry(hass, name="Living Room AC", host="192.168.1.50", port=51443)
+    entry = _existing_entry(
+        hass, name="Living Room AC", host="192.168.1.50", port=51443
+    )
 
     result = await entry.start_reconfigure_flow(hass)
 
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reconfigure"
     suggested = {
-        key.schema: key.description["suggested_value"] for key in result["data_schema"].schema
+        key.schema: key.description["suggested_value"]
+        for key in result["data_schema"].schema
     }
     assert suggested == {"host": "192.168.1.50", "port": 51443}
 
@@ -479,7 +492,9 @@ async def test_zeroconf_discovery_shows_confirm_form(hass: HomeAssistant):
     assert result["step_id"] == "discovery_confirm"
 
 
-async def test_zeroconf_discovery_aborts_if_host_already_configured(hass: HomeAssistant):
+async def test_zeroconf_discovery_aborts_if_host_already_configured(
+    hass: HomeAssistant,
+):
     MockConfigEntry(
         domain=DOMAIN,
         data={"name": "Existing AC", "host": "192.168.1.50"},
@@ -646,7 +661,10 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_TARGET_OFFSET] == 0.5
-    assert result["data"][CONF_EXTERNAL_TEMPERATURE_SOURCE] == "sensor.living_room_temperature"
+    assert (
+        result["data"][CONF_EXTERNAL_TEMPERATURE_SOURCE]
+        == "sensor.living_room_temperature"
+    )
     # The host is connection data now, so it is not in the options at all and
     # an options save cannot touch it.
     assert "host" not in result["data"]
@@ -702,7 +720,9 @@ async def test_options_flow_accepts_a_foreign_temperature_sensor(hass: HomeAssis
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_EXTERNAL_TEMPERATURE_SOURCE] == "sensor.hallway_temperature"
+    assert (
+        result["data"][CONF_EXTERNAL_TEMPERATURE_SOURCE] == "sensor.hallway_temperature"
+    )
 
 
 @pytest.mark.parametrize(
@@ -754,9 +774,12 @@ async def test_options_flow_rejects_a_retry_limit_below_the_floor(hass: HomeAssi
     with pytest.raises(vol.MultipleInvalid):
         schema(_form_input({CONF_AVAILABILITY_RETRY_LIMIT: 1}))
 
-    assert schema(_form_input({CONF_AVAILABILITY_RETRY_LIMIT: 5}))[
-        CONF_AVAILABILITY_RETRY_LIMIT
-    ] == 5
+    assert (
+        schema(_form_input({CONF_AVAILABILITY_RETRY_LIMIT: 5}))[
+            CONF_AVAILABILITY_RETRY_LIMIT
+        ]
+        == 5
+    )
 
 
 async def test_options_flow_defaults_firmware_update_check_to_off(hass: HomeAssistant):
@@ -847,7 +870,9 @@ async def test_options_flow_accepts_a_signed_overshoot(hass: HomeAssistant, valu
     assert result["data"][CONF_OVERSHOOT_COOL] == value
 
 
-async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: HomeAssistant):
+async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(
+    hass: HomeAssistant,
+):
     # CONF_TARGET_OFFSET_COOL/_HEAT must persist as genuinely absent (None
     # via .get()) when left blank, not coerced to 0.0 - that's what makes
     # the climate.py resolver's fallback to CONF_TARGET_OFFSET work. A
@@ -873,7 +898,9 @@ async def test_options_flow_leaves_per_mode_offsets_unset_when_omitted(hass: Hom
     assert result["data"].get(CONF_TARGET_OFFSET_HEAT) is None
 
 
-async def test_options_flow_only_offers_the_overshoots_with_a_source(hass: HomeAssistant):
+async def test_options_flow_only_offers_the_overshoots_with_a_source(
+    hass: HomeAssistant,
+):
     """They bend the room temperature handed to the unit, so without a source
     there is nothing for them to act on and they would sit there doing
     nothing.
@@ -1093,7 +1120,9 @@ def test_is_matching_without_unique_id_never_matches():
     assert flow_a.is_matching(flow_b) is False
 
 
-async def test_a_rediscovery_refreshes_the_address_but_not_the_port(hass: HomeAssistant):
+async def test_a_rediscovery_refreshes_the_address_but_not_the_port(
+    hass: HomeAssistant,
+):
     """A configured entry's port is not the announcement's to change.
 
     Modules have been seen announcing 5353 - the mDNS port itself - in the

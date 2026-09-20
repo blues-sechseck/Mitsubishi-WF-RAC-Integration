@@ -59,6 +59,7 @@ PLATFORMS = [
 @dataclass
 class MitsubishiWfRacData:
     """Class for storing runtime data."""
+
     device: Device
 
 
@@ -125,7 +126,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         new_options.pop(CONF_AVAILABILITY_CHECK, None)
         new_options[CONF_AVAILABILITY_RETRY_LIMIT] = max(
             AVAILABILITY_FAILURE_LIMIT_MIN,
-            new_options.get(CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN),
+            new_options.get(
+                CONF_AVAILABILITY_RETRY_LIMIT, AVAILABILITY_FAILURE_LIMIT_MIN
+            ),
         )
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=5)
@@ -161,7 +164,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry) -> bool:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry
+) -> bool:
     """Establish connection with mitsubishi-wf-rac."""
     device: str = entry.data[CONF_HOST]
     _device = await create_device_from_entry(entry, hass)
@@ -223,11 +228,15 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
     operator_id: str = entry.data[CONF_OPERATOR_ID]
     port: int = entry.data[CONF_PORT]
     airco_id: str = entry.data[CONF_AIRCO_ID]
-    swing_selects_enabled_default: bool = entry.data.get(CONF_CREATE_SWING_MODE_SELECT, True)
+    swing_selects_enabled_default: bool = entry.data.get(
+        CONF_CREATE_SWING_MODE_SELECT, True
+    )
     # Off unless the user explicitly opted in via the options flow - this is
     # the only outbound internet call in the integration (see
     # coordinator.py's _maybe_check_firmware_update()).
-    firmware_update_check_enabled: bool = entry.options.get(CONF_FIRMWARE_UPDATE_CHECK, False)
+    firmware_update_check_enabled: bool = entry.options.get(
+        CONF_FIRMWARE_UPDATE_CHECK, False
+    )
     # Floored in Device itself, so an entry that predates the v4 -> v5
     # migration can't run with less tolerance than the module needs.
     availability_failure_limit: int = entry.options.get(
@@ -244,15 +253,26 @@ async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> D
         if entry.data.get(CONF_CARRY_POWER_STATE, False)
         else STATUS_REQUEST_STRICT,
     )
-    return Device(hass, entry, name, device, port, device_id, operator_id, airco_id,
-                  swing_selects_enabled_default,
-                  availability_failure_limit=availability_failure_limit,
-                  firmware_update_check_enabled=firmware_update_check_enabled,
-                  connection_method=connection_method,
-                  status_request_mode=status_request_mode)
+    return Device(
+        hass,
+        entry,
+        name,
+        device,
+        port,
+        device_id,
+        operator_id,
+        airco_id,
+        swing_selects_enabled_default,
+        availability_failure_limit=availability_failure_limit,
+        firmware_update_check_enabled=firmware_update_check_enabled,
+        connection_method=connection_method,
+        status_request_mode=status_request_mode,
+    )
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry
+) -> bool:
     """Handle unload of entry."""
 
     # Unload entities for this entry/device.
@@ -276,7 +296,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
     return unload_ok
 
 
-async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry) -> None:
+async def async_remove_entry(
+    hass: HomeAssistant, entry: MitsubishiWfRacConfigEntry
+) -> None:
     """Handle removal of an entry."""
 
     temp_device = await create_device_from_entry(entry, hass)
@@ -284,9 +306,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: MitsubishiWfRacConfigEn
     # release, which is what decides between the two lines.
     result = await temp_device.delete_account()
     if result is not None:
-        _LOGGER.info(
-            "Released the controller slot on airco [%s]", temp_device.airco_id
-        )
+        _LOGGER.info("Released the controller slot on airco [%s]", temp_device.airco_id)
     else:
         _LOGGER.warning(
             "Could not release the controller slot on airco [%s]. Free it in "

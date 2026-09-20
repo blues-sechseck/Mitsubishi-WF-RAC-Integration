@@ -132,7 +132,9 @@ async def test_target_offset_zero_is_identity(device):
         (HVACMode.HEAT, CONF_TARGET_OFFSET_HEAT),
     ],
 )
-async def test_resolve_target_offset_uses_override_when_set(device, hvac_mode, override_key):
+async def test_resolve_target_offset_uses_override_when_set(
+    device, hvac_mode, override_key
+):
     _set_options(device, {CONF_TARGET_OFFSET: 1.0, override_key: 2.5})
     entity = AircoClimate(device)
 
@@ -154,7 +156,9 @@ async def test_resolve_target_offset_falls_back_when_override_unset(device, hvac
     "hvac_mode",
     [HVACMode.AUTO, HVACMode.FAN_ONLY, HVACMode.OFF],
 )
-async def test_resolve_target_offset_ignores_overrides_for_other_modes(device, hvac_mode):
+async def test_resolve_target_offset_ignores_overrides_for_other_modes(
+    device, hvac_mode
+):
     # AUTO/FAN_ONLY/OFF never had per-mode behaviour asked for them - they
     # must always use the global value even when both overrides are set.
     _set_options(
@@ -243,7 +247,9 @@ async def test_round_trip_symmetry_survives_unit_being_off(device):
         (HVACMode.AUTO, None, 0.5),
     ],
 )
-async def test_target_sensor_matches_climate_entity(device, hvac_mode, override_key, offset):
+async def test_target_sensor_matches_climate_entity(
+    device, hvac_mode, override_key, offset
+):
     _set_options(device, {CONF_TARGET_OFFSET: 1.0})
     if override_key is not None:
         _set_options(device, {override_key: offset})
@@ -490,6 +496,8 @@ async def test_current_temperature_does_not_move_with_the_overshoot(device, over
     entity._update_state()
 
     assert entity._attr_current_temperature == 22.0
+
+
 def _with_external_temperature_source(device: Device) -> str:
     source = "sensor.living_room_temperature"
     _set_options(device, {CONF_EXTERNAL_TEMPERATURE_SOURCE: source})
@@ -514,7 +522,9 @@ async def test_external_temperature_source_arms_from_its_current_state(device):
 
 
 @pytest.mark.parametrize("missing_state", [STATE_UNAVAILABLE, STATE_UNKNOWN])
-async def test_external_temperature_source_fails_safe_for_unusable_states(device, missing_state):
+async def test_external_temperature_source_fails_safe_for_unusable_states(
+    device, missing_state
+):
     source = _with_external_temperature_source(device)
     device.hass.states.async_set(source, "20.12", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
     entity = _service_entity(device)
@@ -579,7 +589,9 @@ async def test_external_temperature_source_ignores_a_repeated_protocol_value(dev
         "120",
     ],
 )
-async def test_external_temperature_source_clears_on_an_unusable_value(device, bad_state):
+async def test_external_temperature_source_clears_on_an_unusable_value(
+    device, bad_state
+):
     # Deliberately the same outcome as unavailable: a source producing garbage
     # is not measuring the room either, and holding the last good value would
     # leave the unit regulating on a reading nothing stands behind.
@@ -619,7 +631,9 @@ async def test_set_external_temperature_allows_clearing_with_configured_source(d
 
 def _restoring_entity(device, restored: dict[str, float | str | None]) -> AircoClimate:
     entity = _service_entity(device)
-    entity.async_get_last_extra_data = AsyncMock(return_value=RestoredExtraData(restored))
+    entity.async_get_last_extra_data = AsyncMock(
+        return_value=RestoredExtraData(restored)
+    )
     return entity
 
 
@@ -702,9 +716,7 @@ async def test_preset_mode_absent_without_the_vacant_capability(device):
 
 
 async def test_preset_mode_follows_the_vacant_bit(device):
-    device.airco.Capabilities = replace(
-        device.airco.Capabilities, vacant_property=True
-    )
+    device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
     entity = AircoClimate(device)
     assert entity.supported_features & ClimateEntityFeature.PRESET_MODE
     assert entity.preset_modes == [PRESET_NONE, PRESET_AWAY]
@@ -725,9 +737,7 @@ async def test_preset_mode_follows_the_vacant_bit(device):
 async def test_set_preset_away_sends_the_away_target_of_the_running_direction(
     device, hvac_mode, expected_temp
 ):
-    device.airco.Capabilities = replace(
-        device.airco.Capabilities, vacant_property=True
-    )
+    device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
     device.async_queue_command = AsyncMock()
@@ -745,9 +755,7 @@ async def test_set_preset_away_sends_the_away_target_of_the_running_direction(
 async def test_set_preset_away_refuses_a_direction_it_cannot_name(device, hvac_mode):
     """Auto, dry and fan-only have no away target to send - the direction has
     to come from HomeLeaveModeSelect instead of being guessed at."""
-    device.airco.Capabilities = replace(
-        device.airco.Capabilities, vacant_property=True
-    )
+    device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
     device.async_queue_command = AsyncMock()
@@ -761,9 +769,7 @@ async def test_set_preset_away_refuses_a_direction_it_cannot_name(device, hvac_m
 
 
 async def test_set_preset_none_restores_a_normal_setpoint(device):
-    device.airco.Capabilities = replace(
-        device.airco.Capabilities, vacant_property=True
-    )
+    device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
     device.async_queue_command = AsyncMock()
     entity = AircoClimate(device)
 

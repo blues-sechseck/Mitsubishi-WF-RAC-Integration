@@ -124,7 +124,12 @@ async def test_the_total_survives_a_restart(hass: HomeAssistant, platform_device
     entity_id = "sensor.living_room_energy_usage_total"
     mock_restore_cache_with_extra_data(
         hass,
-        ((State(entity_id, "123.5"), EnergyTotalExtraStoredData(123.5, "kWh", 0.75).as_dict()),),
+        (
+            (
+                State(entity_id, "123.5"),
+                EnergyTotalExtraStoredData(123.5, "kWh", 0.75).as_dict(),
+            ),
+        ),
     )
     platform_device.airco.Electric = 1.0
     sensor = EnergyTotalSensor(platform_device)
