@@ -1376,7 +1376,7 @@ async def test_no_service_data_request_while_another_client_is_active(device, mo
     _shorten_service_data_timing(monkeypatch)
     _activate_service_data_contexts(device, monkeypatch)
     device.set_airco = set_airco = AsyncMock()
-    device._foreign_activity_until = dt_util.utcnow() + timedelta(minutes=3)
+    device.foreign_writers._until = dt_util.utcnow() + timedelta(minutes=3)
 
     device.maybe_request_service_data()
     await asyncio.sleep(0.05)
@@ -1396,9 +1396,9 @@ async def test_operation_data_survives_the_pause_instead_of_expiring(device):
     device.service_data._last_response = dt_util.utcnow()
 
     # Well past MAX_AGE, but the whole time was spent standing down - the
-    # state _detect_foreign_activity() leaves behind when it trips.
-    device._foreign_activity_since = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
-    device._foreign_activity_until = dt_util.utcnow() + timedelta(minutes=3)
+    # state ForeignWriterWatch.detect() leaves behind when it trips.
+    device.foreign_writers._since = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
+    device.foreign_writers._until = dt_util.utcnow() + timedelta(minutes=3)
     device.service_data._last_response = dt_util.utcnow() - 2 * SERVICE_DATA_MAX_AGE
     await device.update()
     assert device.airco.CompressorFrequency == 42
@@ -1406,7 +1406,7 @@ async def test_operation_data_survives_the_pause_instead_of_expiring(device):
 
     # ...and once it lapses, the age restarts from the resume rather than
     # expiring the readings on the very next poll.
-    device._foreign_activity_until = dt_util.utcnow() - timedelta(seconds=1)
+    device.foreign_writers._until = dt_util.utcnow() - timedelta(seconds=1)
     await device.update()
     assert device.airco.CompressorFrequency == 42
     assert device.service_data._expired is False
@@ -1429,7 +1429,7 @@ async def test_service_data_resumes_once_the_backoff_lapses(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
     _activate_service_data_contexts(device, monkeypatch)
     device.set_airco = set_airco = AsyncMock()
-    device._foreign_activity_until = dt_util.utcnow() - timedelta(seconds=1)
+    device.foreign_writers._until = dt_util.utcnow() - timedelta(seconds=1)
 
     device.maybe_request_service_data()
     await asyncio.sleep(0.05)
@@ -2216,7 +2216,7 @@ async def test_the_settings_the_request_cleared_are_written_back(
     device.config_entry.add_to_hass(device.hass)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
-    before = device._settings_snapshot()
+    before = device.foreign_writers.snapshot()
 
     sent: list[dict] = []
     real_set_airco = device.set_airco

@@ -176,11 +176,11 @@ async def test_external_control_sensor_follows_the_backoff(platform_device):
     entity = binary_sensor.ExternalControlBinarySensor(platform_device)
     assert entity.is_on is False
 
-    platform_device._foreign_activity_until = dt_util.utcnow() + timedelta(minutes=3)
+    platform_device.foreign_writers._until = dt_util.utcnow() + timedelta(minutes=3)
     entity._update_state()
     assert entity.is_on is True
 
-    platform_device._foreign_activity_until = dt_util.utcnow() - timedelta(seconds=1)
+    platform_device.foreign_writers._until = dt_util.utcnow() - timedelta(seconds=1)
     entity._update_state()
     assert entity.is_on is False
 
