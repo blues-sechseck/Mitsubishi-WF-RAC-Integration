@@ -35,9 +35,9 @@ from .coordinator import (
     Device,
     registration_full_issue_id,
     request_stops_unit_issue_id,
-    service_data_unanswered_issue_id,
     status_request_unsupported_issue_id,
 )
+from .service_data import service_data_unanswered_issue_id
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
