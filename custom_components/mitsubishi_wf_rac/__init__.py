@@ -25,8 +25,12 @@ from .const import (
     CONF_CREATE_SWING_MODE_SELECT,
     CONF_FIRMWARE_UPDATE_CHECK,
     CONF_OPERATOR_ID,
+    CONF_OVERSHOOT_COOL,
+    CONF_OVERSHOOT_DRY,
+    CONF_OVERSHOOT_HEAT,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
+    OVERSHOOT_MAX,
     STATUS_REQUEST_ECHO,
     STATUS_REQUEST_STRICT,
 )
@@ -160,6 +164,35 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.config_entries.async_update_entry(
             entry, unique_id=entry.data[CONF_AIRCO_ID].lower(), version=7
         )
+    if entry.version == 7:
+        # The room temperature handed to the unit used to be encoded with the
+        # SPI-bus projects' constant, which lands every value half a kelvin
+        # warmer at the unit than the manufacturer's own table says - the
+        # table the unit echoes the byte back through and the app displays
+        # it with (#218). pywfrac now encodes through that table, so the same
+        # figure in these fields would move the unit by half a kelvin on
+        # upgrade. Shifting a stored figure by that constant keeps the byte
+        # the unit receives identical: cooling and dry are subtracted from the
+        # reading, heating is added, so the signs differ. A field left at 0
+        # stays at 0 - it meant "hand the unit the reading as it is", and that
+        # is now the reading the unit was always meant to get. The result is
+        # kept on the 0.25 K grid and inside the field's range.
+        new_options = dict(entry.options)
+        for key, shift in (
+            (CONF_OVERSHOOT_COOL, -0.5),
+            (CONF_OVERSHOOT_DRY, -0.5),
+            (CONF_OVERSHOOT_HEAT, 0.5),
+        ):
+            value = new_options.get(key)
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and value
+            ):
+                shifted = round((value + shift) * 4) / 4
+                new_options[key] = max(-OVERSHOOT_MAX, min(OVERSHOOT_MAX, shifted))
+
+        hass.config_entries.async_update_entry(entry, options=new_options, version=8)
 
     return True
 

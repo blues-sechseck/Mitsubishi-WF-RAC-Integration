@@ -297,7 +297,7 @@ through "Reconfigure" instead, which re-validates the new address against the
 device before saving it.
 
 The dialog groups these into three sections: **Indoor temperature source**
-(the source sensor and its two overshoot corrections), **Setpoint offsets**
+(the source sensor and its three overshoot corrections), **Setpoint offsets**
 (what gets sent to the unit) and **Sensor offsets** (what Home Assistant
 shows). The overshoot fields only appear once a source is picked and saved -
 without one there is no room temperature for them to correct.
@@ -310,8 +310,8 @@ without one there is no room temperature for them to correct.
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
-| Cooling overshoot | -3..3 °C, in steps of 0.25 | How far past your setting the room actually goes before the unit stops. Applies in `cool` mode only. Set 22 °C, room settles at 21 °C: enter 1. Quarter degrees are the finest step that reaches the unit - the room temperature it is fed is carried in 0.25 °C steps. Only shown, and only has an effect, while an Indoor temperature source is configured. |
-| Dry overshoot | -3..3 °C, in steps of 0.25 | The same for `dry`, which cools as well and takes the same sign. Opens on 0: nobody has measured what a unit does in this mode. |
+| Cooling overshoot | -3..3 °C, in steps of 0.25 | How far past your setting the room actually goes before the unit stops. Applies in `cool` mode only. Set 22 °C, room settles at 21.5 °C: enter 0.5. Quarter degrees are the finest step that reaches the unit - the room temperature it is fed is carried in 0.25 °C steps. Only shown, and only has an effect, while an Indoor temperature source is configured. |
+| Dry overshoot | -3..3 °C, in steps of 0.25 | The same for `dry`, which cools as well and takes the same sign. Opens on 0: the one unit measured in this mode landed on its setting. |
 | Heating overshoot | -3..3 °C, in steps of 0.25 | The same for heating, and in `heat` mode only: how far above your setting the room ends up. Positive in both cases. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 
@@ -362,19 +362,23 @@ You can select a sensor under **Indoor temperature source** in the integration o
 
 Most integrations already handle this: ESPHome, Z-Wave JS and ZHA mark a device unavailable once it stops answering. Where yours does not, give it an availability rule of its own - `expire_after` on an MQTT sensor, or a template sensor wrapping the original and going unavailable when `last_updated` falls behind. Anything that produces `unavailable` hands the unit back to its internal sensor.
 
+**Which sensor.** What matters is how often it reports, not which radio it uses. The unit acts on a reading that moves within minutes, so a sensor that reports every 15 minutes lets the room run past the setting before the unit hears of it - one reader measured about a kelvin either way on a slow sensor, and the same unit held the room within half a kelvin on a fast one. Anything reporting every minute or two is fine; Bluetooth thermometers and WiFi sensors usually do, Zigbee and Thread sensors are usually held back by their own reporting interval rather than by the radio. A Shelly H&T Gen3 on USB power wakes only every five minutes, on battery it reports within a minute of a change. The value reaches the unit with the next frame, within the poll interval, and the unit's own control re-evaluates the room every few minutes anyway, so there is nothing to gain below that. The sensor has to carry `device_class: temperature` to appear in the picker - MQTT and template sensors sometimes lack it, and one line fixes that.
+
 **Shutting Home Assistant down hands the unit back; losing it does not.** An orderly stop spends one last frame clearing the override, so the unit measures for itself while Home Assistant is away and takes the override up again when it returns. An abrupt end cannot do that: a host that loses power or a network that disappears sends nothing, and the unit keeps the last value it was given until something else writes or it is switched off at the wall. Worth weighing before arming an override for a room that is heated while nobody is home.
 
 What an armed override costs is one request per poll cycle, which holds the unit's write lock for part of the cycle exactly as an enabled operation-data sensor does.
 
-**While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, half a kelvin above what you sent - the two protocol fields it travels in differ by that much with or without an override. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; the climate entity shows the value you supplied instead, and your own sensor remains the measurement. Clearing the override brings the real reading back within a cycle.
+**While an override is in effect, the unit stops reporting its own sensor.** Measured on hardware: the value you inject comes back on the next cycle as the unit's reported room temperature, overshoot correction included - the two protocol fields it travels in carry the same byte. So the Indoor Temperature sensor follows your override as well and is no longer a measurement of the room; the climate entity shows the value you supplied instead, and your own sensor remains the measurement. Clearing the override brings the real reading back within a cycle.
 
 An action-driven override survives a restart and a reload. It is re-armed, not re-sent: the unit stays on whatever it last received until the next frame goes out. With a configured source, its current state is used instead of a restored value. The Indoor Temperature sensor shows what the unit reports throughout, so it keeps agreeing with the official app. `current_temperature` does not: with an **Indoor temperature source** configured, the climate entity shows that sensor's reading - including while the unit is off or in `fan_only`, where nothing is written and the unit's own reading means least. An override armed from an automation instead of a source is only shown once the unit is actually using it: there is no sensor behind it, so before then it is an intention rather than a measurement.
 
 ### When the room ends up past your setting
 
-With a room temperature supplied, most units cool the room further than asked before stopping - measured between 0.6 and 1.3 K across four different models, three of them between 1.0 and 1.2, and the same figure repeats every cycle. That is the unit's own thermostat band, not a sensor error: its return-air sensor is out of the loop while it regulates on your value. Heating has so far looked correct.
+With a room temperature supplied, most units cool the room a little further than asked before stopping - about half a kelvin, measured across four different models, and the same figure repeats every cycle. That is the unit's own thermostat band, not a sensor error: its return-air sensor is out of the loop while it regulates on your value. Heating has so far looked correct.
 
-Set **Cooling overshoot** to how far it goes: aim for 22 °C, watch where the room settles, and enter the difference as a positive number. The field opens on 1 because that is what the units measured so far need; it is a starting point, not a measurement of yours, and it only takes effect once you save the options. If your unit stops short instead and never quite gets there, a negative number corrects that the other way. The integration then hands the unit a room temperature that much lower, so the unit reaches its own stopping point exactly when your room is on target. Your setpoint and everything shown in Home Assistant stay the number you asked for.
+Until 2026.9.10 the figure looked like a full kelvin. The room temperature reached the unit half a kelvin warm: the library encoded it with a constant taken from the SPI-bus projects, while the unit and the official app read the byte through the manufacturer's own table, which sits half a kelvin higher across the whole living range. That is also why the app used to show 26.5 for a sent 26.0. The encoding now follows the table, and a stored overshoot figure is shifted by that half kelvin on upgrade, so the unit receives exactly what it received before; only the number in the field changes, and a field at 0 stays at 0. Someone feeding the value through the action without a source gets the corrected reading and nothing to shift.
+
+Set **Cooling overshoot** to how far it goes: aim for 22 °C, watch where the room settles, and enter the difference as a positive number. The field opens on 0.5 because that is what the units measured so far need; it is a starting point, not a measurement of yours, and it only takes effect once you save the options. If your unit stops short instead and never quite gets there, a negative number corrects that the other way. The integration then hands the unit a room temperature that much lower, so the unit reaches its own stopping point exactly when your room is on target. Your setpoint and everything shown in Home Assistant stay the number you asked for.
 
 **Which modes it corrects: `cool`, `dry` and `heat`, each with its own figure.** They are separate
 fields rather than one shared between the modes that cool, because the band being corrected is a property
@@ -382,15 +386,25 @@ of how the unit runs, and dry runs a different airflow. Note that this is not th
 setpoint offsets above, where the cooling override covers `dry` as well - worth knowing before reading a
 difference between the two as a fault.
 
-**Dry opens on 0 where cooling opens on 1**, and that is the honest state of it: the cooling figure rests
-on four measured units, and nobody has yet measured a settled figure for dry. Finding yours takes one
+**Dry opens on 0 where cooling opens on 0.5**, and that is a measured figure rather than a placeholder: the
+one unit measured in dry landed on its setting, with a band about three times as wide as in cooling - the
+compressor stops 1.5 K below the setting and ramps 1.5 K above it. That is how the mode works, not
+something a correction should narrow. If yours does settle past the setting, finding the figure takes one
 evening and nothing extra: set a target it can reach, leave the room alone until the compressor is cycling
 rather than ramping, and read your source sensor. The gap between that reading and your target is the
-number for this field. Measurements welcome in [#218](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/218).
+number for this field.
 
 **`auto` is not corrected at all.** Which direction it is running in is the unit's own cool/heat decision,
 and some units never report it - so there is nothing to hang the sign of a correction on. A correction
 would not help there anyway, which is worth knowing before you go looking for one.
+
+### Heating: the unit adds 2 °C of its own
+
+In `heat` the unit does not regulate to the number you set but to that number plus 2 °C - the setting-temperature correction in MHI's service documentation, and the factory state on the units checked. With the return-air sensor near the ceiling it roughly cancels that sensor's warm reading. With a sensor placed where you sit it does not: the room ends about 2 K above your setting with Compressor Demand still on, as reported on an SRK-ZS-WF set to 22 °C with the room at 24.8 °C.
+
+Two ways out. The service manuals for the ZS-WF, ZSX-WF and ZT-WF series document switching the compensation off at the indoor unit, under "Countermeasure for excessive temperature rise": with the unit powered and having run at least once since, hold the indoor unit's ON/OFF button for 30 seconds or more until it beeps twice. The same hold, answered by three beeps, switches it back on. The ZTL and ZR-WF manuals do not list the procedure. Or leave the unit as it is and set **Target Temp. Offset (Heating)** to 2, which lowers the setting sent to the unit by that much.
+
+Nothing on the wire says which state a unit is in, so the integration cannot allow for it - and two units of the same model can disagree by 2 K on what a heating setpoint means. Worth knowing before comparing heating figures. Whether the switch also removes the 2 °C from `auto` below has not been checked.
 
 ### What `auto` does with your setting
 
@@ -417,7 +431,7 @@ automation's job.
 
 Why here and not in Target Temp. Offset: on the units measured so far, a half-degree setpoint is rounded up to the next whole one, so that field is too coarse for a correction of less than a degree (owners of ZT and ZTL units report their models do take half degrees). The room temperature the unit is fed has 0.25 °C steps on every model, so correcting there is the finer of the two - and it leaves the setpoint matching what the official app shows.
 
-While an override is in effect, the climate entity's `current_temperature` shows the room temperature you supplied and the Indoor Temperature sensor keeps showing what the unit reports - which is the value it was handed, plus the half kelvin it adds on the way back, minus any correction. The two therefore differ, and how far apart they sit is not a measurement of anything: it is the correction and that half kelvin, which cancel out at exactly 0.5.
+While an override is in effect, the climate entity's `current_temperature` shows the room temperature you supplied and the Indoor Temperature sensor keeps showing what the unit reports - which is the value it was handed, minus any correction. The two therefore differ by exactly the correction, and how far apart they sit is not a measurement of anything. Without a correction they agree, and so does the official app.
 
 # Known limitations
 

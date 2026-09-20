@@ -341,7 +341,7 @@ async def test_set_airco_includes_stored_external_temperature_override(device):
 
     raw = base64.b64decode(captured["command"])
 
-    assert raw[5] == round(18.7 * 4) + 61
+    assert raw[5] == round(18.7 * 4) + 59
 
 
 @pytest.mark.parametrize(
@@ -377,7 +377,7 @@ async def test_set_airco_bends_the_override_by_the_configured_overshoot(
     )
 
     raw = base64.b64decode(captured["command"])
-    assert raw[5] == round(expected * 4) + 61
+    assert raw[5] == round(expected * 4) + 59
 
 
 async def test_set_airco_bends_the_override_the_other_way_when_negative(device):
@@ -401,7 +401,7 @@ async def test_set_airco_bends_the_override_the_other_way_when_negative(device):
     )
 
     raw = base64.b64decode(captured["command"])
-    assert raw[5] == round((18.7 + 0.75) * 4) + 61
+    assert raw[5] == round((18.7 + 0.75) * 4) + 59
 
 
 async def test_set_airco_leaves_the_override_alone_in_auto(device):
@@ -435,7 +435,7 @@ async def test_set_airco_leaves_the_override_alone_in_auto(device):
     )
 
     raw = base64.b64decode(captured["command"])
-    assert raw[5] == round(18.7 * 4) + 61
+    assert raw[5] == round(18.7 * 4) + 59
 
 
 async def test_set_airco_explicitly_clears_external_temperature_override(device):
@@ -497,7 +497,7 @@ async def test_release_hands_the_unit_back_before_stopping(device, monkeypatch):
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
 
-    raw = round(18.7 * 4) + 61
+    raw = round(18.7 * 4) + 59
     device.set_external_temperature_override(18.7)
     device.external_temperature._written.append(raw)
     device.airco.ControllerRoomTempRaw = raw
@@ -557,7 +557,7 @@ async def test_external_temperature_applied_reads_the_echoed_byte(device):
     assert device.external_temperature_applied is False
 
     device.set_external_temperature_override(18.7)
-    raw = round(18.7 * 4) + 61
+    raw = round(18.7 * 4) + 59
 
     # Armed, but nothing has carried it yet - the unit is still on its own
     # sensor even if that happens to read the same.
@@ -584,12 +584,12 @@ async def test_external_temperature_applied_survives_a_value_change(device):
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     device.set_external_temperature_override(18.7)
-    old_raw = round(18.7 * 4) + 61
+    old_raw = round(18.7 * 4) + 59
     device.external_temperature._written.append(old_raw)
     device.airco.ControllerRoomTempRaw = old_raw
 
     device.set_external_temperature_override(19.0)
-    new_raw = round(19.0 * 4) + 61
+    new_raw = round(19.0 * 4) + 59
     device.external_temperature._written.append(new_raw)
 
     # The frame is out, the unit still reports the previous value.

@@ -154,7 +154,7 @@ async def test_migration_from_version_1(hass: HomeAssistant) -> None:
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.version == 7
+    assert entry.version == 8
     assert entry.state is ConfigEntryState.LOADED
     assert entry.data[CONF_HOST] == HOST
     assert CONF_HOST not in entry.options
@@ -185,7 +185,7 @@ async def test_migration_brings_the_host_back_into_data(hass: HomeAssistant) -> 
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.version == 7
+    assert entry.version == 8
     assert entry.state is ConfigEntryState.LOADED
     assert entry.data[CONF_HOST] == HOST
     assert CONF_HOST not in entry.options
@@ -209,7 +209,7 @@ async def test_migration_lifts_a_retry_limit_below_the_floor(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.version == 7
+    assert entry.version == 8
     assert entry.options["availability_retry_limit"] == 3
 
 
@@ -236,7 +236,7 @@ async def test_migration_lifts_a_retry_limit_the_old_toggle_left_behind(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.version == 7
+    assert entry.version == 8
     assert entry.options["availability_retry_limit"] == 3
     # The key nothing ever read is gone with the step that wrote it.
     assert "availability_retry" not in entry.options
@@ -340,5 +340,5 @@ async def test_migration_gives_a_hand_added_entry_the_identity_discovery_uses(
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.version == 7
+    assert entry.version == 8
     assert entry.unique_id == AIRCO_ID
