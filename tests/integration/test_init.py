@@ -8,13 +8,8 @@ them at runtime any more - the migration's job is to leave no trace of them.
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pywfrac import WfRacConnectionError, WfRacError
-
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pywfrac import WfRacConnectionError, WfRacError
 
 from custom_components.mitsubishi_wf_rac import (
     async_migrate_entry,
@@ -23,12 +18,16 @@ from custom_components.mitsubishi_wf_rac import (
 )
 from custom_components.mitsubishi_wf_rac.config_flow import WfRacConfigFlow
 from custom_components.mitsubishi_wf_rac.const import (
-    CONF_CONNECTION_METHOD,
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
+    CONF_CONNECTION_METHOD,
     DOMAIN,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import registration_full_issue_id
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 
 _DATA = {
     "name": "Living Room AC",

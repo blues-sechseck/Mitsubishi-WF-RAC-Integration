@@ -6,11 +6,9 @@ the entity service, the restore path, and the one diagnostic sensor that
 reports nothing rather than guessing.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
-from homeassistant.core import HomeAssistant, ServiceCall, State
-from homeassistant.exceptions import ServiceValidationError
 from pytest_homeassistant_custom_component.common import (
     MockEntityPlatform,
     mock_restore_cache_with_extra_data,
@@ -23,6 +21,8 @@ from custom_components.mitsubishi_wf_rac.sensor import (
     EnergyTotalSensor,
     async_set_energy_total,
 )
+from homeassistant.core import HomeAssistant, ServiceCall, State
+from homeassistant.exceptions import ServiceValidationError
 
 
 async def test_setting_the_total_on_the_wrong_sensor_says_which(

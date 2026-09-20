@@ -62,6 +62,19 @@ jobs:
       - name: Run tests
         run: pytest ${{ matrix.args }}
 
+  ruff:
+    name: Ruff
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: "actions/checkout@v4"
+      - uses: "actions/setup-python@v5"
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: pip install -r requirements-lint.txt
+      - name: Run ruff
+        run: ruff check .
+
   mypy:
     name: Mypy
     runs-on: "ubuntu-latest"

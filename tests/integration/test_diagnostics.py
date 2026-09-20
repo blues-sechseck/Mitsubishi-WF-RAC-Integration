@@ -3,21 +3,17 @@
 from dataclasses import fields
 import json
 
-from homeassistant.const import CONF_HOST
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pywfrac import Aircon, HomeLeaveModeSetting, ModelCapabilities
 
 from custom_components.mitsubishi_wf_rac import MitsubishiWfRacData
 from custom_components.mitsubishi_wf_rac.const import DOMAIN
+from custom_components.mitsubishi_wf_rac.coordinator import Device
 from custom_components.mitsubishi_wf_rac.diagnostics import (
     TO_REDACT,
     async_get_config_entry_diagnostics,
 )
-from pywfrac import ModelCapabilities
-from custom_components.mitsubishi_wf_rac.coordinator import Device
-from pywfrac import (
-    Aircon,
-    HomeLeaveModeSetting,
-)
+from homeassistant.const import CONF_HOST
 
 
 async def test_diagnostics_redacts_sensitive_data_and_is_json_serializable(hass):

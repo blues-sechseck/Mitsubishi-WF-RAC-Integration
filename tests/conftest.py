@@ -19,4 +19,4 @@ def hass_config_dir() -> str:
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Enable custom integrations in all tests."""
-    yield
+    return

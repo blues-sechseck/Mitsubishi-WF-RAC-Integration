@@ -9,19 +9,18 @@ this repo's CI.
 from pathlib import Path
 
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from homeassistant.components.automation.config import (
     AUTOMATION_BLUEPRINT_SCHEMA,
     PLATFORM_SCHEMA,
 )
 from homeassistant.components.blueprint import models
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.template import Template
 from homeassistant.util.yaml import loader
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-from custom_components.mitsubishi_wf_rac.const import DOMAIN
 
 BLUEPRINTS = sorted(
     (Path(__file__).parent.parent.parent / "blueprints" / "automation").rglob("*.yaml")

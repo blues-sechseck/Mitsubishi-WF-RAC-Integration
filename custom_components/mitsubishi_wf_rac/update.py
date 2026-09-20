@@ -13,9 +13,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
-from .entity import WfRacEntity
-from .coordinator import Device
 from .const import DOMAIN
+from .coordinator import Device
+from .entity import WfRacEntity
 
 # Read-only as far as the device is concerned: the coordinator does the
 # polling, and nothing on this platform sends a request of its own.
@@ -27,7 +27,7 @@ async def async_setup_entry(
     entry: MitsubishiWfRacConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup update entries"""
+    """Set up update entries."""
 
     device: Device = entry.runtime_data.device
     # Off by default and opt-in only (see const.py's CONF_FIRMWARE_UPDATE_CHECK) -
@@ -55,6 +55,7 @@ class FirmwareUpdateEntity(WfRacEntity, UpdateEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, device: Device) -> None:
+        """Initialize the firmware update entity."""
         super().__init__(device)
         self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-firmware-update"
         self._apply_state()

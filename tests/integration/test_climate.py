@@ -12,26 +12,17 @@ from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from homeassistant.components.climate.const import (
-    ClimateEntityFeature,
-    HVACMode,
-    PRESET_AWAY,
-    PRESET_NONE,
-)
-from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, STATE_UNKNOWN, STATE_UNAVAILABLE, UnitOfTemperature
-from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers.restore_state import RestoredExtraData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pywfrac import AIRFLOW_UNKNOWN, AirconCommands
+from pywfrac.parser import SERVICE_DATA_INDOOR_COIL_RAW
 
 from custom_components.mitsubishi_wf_rac import climate as climate_module
 from custom_components.mitsubishi_wf_rac.climate import AircoClimate
-from custom_components.mitsubishi_wf_rac.sensor import TemperatureSensor
 from custom_components.mitsubishi_wf_rac.const import (
     ATTR_TARGET_TEMPERATURE,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_INDOOR_OFFSET,
     CONF_OVERSHOOT_COOL,
-    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -43,10 +34,21 @@ from custom_components.mitsubishi_wf_rac.const import (
     NORMAL_TEMP,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import Device
-from pywfrac import AIRFLOW_UNKNOWN, AirconCommands
-from pywfrac.parser import (
-    SERVICE_DATA_INDOOR_COIL_RAW,
+from custom_components.mitsubishi_wf_rac.sensor import TemperatureSensor
+from homeassistant.components.climate.const import (
+    PRESET_AWAY,
+    PRESET_NONE,
+    ClimateEntityFeature,
+    HVACMode,
 )
+from homeassistant.const import (
+    ATTR_UNIT_OF_MEASUREMENT,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfTemperature,
+)
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers.restore_state import RestoredExtraData
 
 
 def _set_options(device: Device, options: dict[str, object]) -> None:
@@ -123,7 +125,7 @@ async def test_target_offset_zero_is_identity(device):
 
 
 @pytest.mark.parametrize(
-    "hvac_mode,override_key",
+    ("hvac_mode", "override_key"),
     [
         (HVACMode.COOL, CONF_TARGET_OFFSET_COOL),
         (HVACMode.DRY, CONF_TARGET_OFFSET_COOL),
@@ -177,7 +179,7 @@ async def test_resolve_target_offset_ignores_overrides_for_other_modes(device, h
 
 
 @pytest.mark.parametrize(
-    "hvac_mode,override_key,offset",
+    ("hvac_mode", "override_key", "offset"),
     [
         (HVACMode.COOL, CONF_TARGET_OFFSET_COOL, 1.5),
         (HVACMode.DRY, CONF_TARGET_OFFSET_COOL, 1.5),
@@ -233,7 +235,7 @@ async def test_round_trip_symmetry_survives_unit_being_off(device):
 
 
 @pytest.mark.parametrize(
-    "hvac_mode,override_key,offset",
+    ("hvac_mode", "override_key", "offset"),
     [
         (HVACMode.COOL, CONF_TARGET_OFFSET_COOL, 1.5),
         (HVACMode.DRY, CONF_TARGET_OFFSET_COOL, 1.5),

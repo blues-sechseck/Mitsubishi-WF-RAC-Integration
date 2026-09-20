@@ -1,0 +1,5 @@
+# Ruff alone, so the lint job does not install Home Assistant just to read
+# source files. The version is the one ruff.toml's required-version names -
+# raise both together, and with core's, or the two sides start disagreeing
+# about what a new rule means.
+ruff==0.16.6

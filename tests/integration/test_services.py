@@ -11,13 +11,8 @@ longer depend on a platform having come up.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import voluptuous as vol
-
-from homeassistant import config_entries
-from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
-from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+import voluptuous as vol
 
 from custom_components.mitsubishi_wf_rac import async_setup_entry
 from custom_components.mitsubishi_wf_rac.config_flow import WfRacOptionsFlowHandler
@@ -30,6 +25,10 @@ from custom_components.mitsubishi_wf_rac.const import (
     SERVICE_SET_HORIZONTAL_SWING_MODE,
     SERVICE_SET_VERTICAL_SWING_MODE,
 )
+from homeassistant import config_entries
+from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_setup_component
 
 _ACTIONS = (
     SERVICE_SET_HORIZONTAL_SWING_MODE,

@@ -7,12 +7,12 @@ None as "nothing known" and says so rather than claiming to be up to date.
 
 import aiohttp
 import pytest
-from homeassistant.core import HomeAssistant
 
 from custom_components.mitsubishi_wf_rac.firmware_check import (
     _FIRMWARE_API_URL,
     fetch_latest_firmware,
 )
+from homeassistant.core import HomeAssistant
 
 
 async def test_a_good_answer_gives_both_versions(hass: HomeAssistant, aioclient_mock):

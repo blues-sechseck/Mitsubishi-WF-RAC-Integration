@@ -1,15 +1,16 @@
-"""Config flow WF-RAC"""
+"""Config flow for WF-RAC."""
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from functools import partial
+import logging
 from typing import Any
 from uuid import uuid4
 
-import homeassistant.helpers.config_validation as cv
+from pywfrac import RESULT_CODES, Repository, WfRacError
 import voluptuous as vol
+
 from homeassistant import config_entries, exceptions
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import (
@@ -24,29 +25,29 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import AbortFlow, section
 from homeassistant.helpers import entity_registry as er, selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     AC_CERT_FILENAME,
-    DEFAULT_PORT,
+    CONF_AIRCO_ID,
+    CONF_AVAILABILITY_RETRY_LIMIT,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
+    CONF_FIRMWARE_UPDATE_CHECK,
+    CONF_INDOOR_OFFSET,
+    CONF_OPERATOR_ID,
+    CONF_OUTDOOR_OFFSET,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
-    OVERSHOOT_MAX,
-    CONF_AIRCO_ID,
-    CONF_AVAILABILITY_RETRY_LIMIT,
-    CONF_FIRMWARE_UPDATE_CHECK,
-    CONF_EXTERNAL_TEMPERATURE_SOURCE,
-    CONF_OPERATOR_ID,
-    CONF_INDOOR_OFFSET,
-    CONF_OUTDOOR_OFFSET,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
+    DEFAULT_PORT,
     DOMAIN,
+    OVERSHOOT_MAX,
 )
 from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN
-from pywfrac import RESULT_CODES, Repository, WfRacError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._generated_operator_id: str | None = None
         self._generated_device_id: str | None = None
 
-    def is_matching(self, other_flow: "WfRacConfigFlow") -> bool:
+    def is_matching(self, other_flow: WfRacConfigFlow) -> bool:
         """Return True if two flows are attempting to configure the same device."""
         # Compare based on unique IDs if available, otherwise compare context data
         if self.unique_id and other_flow.unique_id:
@@ -326,7 +327,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # configured, already in progress - not an unexpected error.
                 raise
             except Exception:  # pylint: disable=broad-except
-                _LOGGER.error("Unexpected exception", exc_info=True)
+                _LOGGER.exception("Unexpected exception")
                 errors[CONF_BASE] = "unexpected_error"
 
         return self.async_show_form(
@@ -476,7 +477,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:  # pylint: disable=broad-except
                 # Same outermost boundary as _async_create_common: a bug here
                 # should surface as "unexpected_error", not crash the flow.
-                _LOGGER.error("Unexpected exception", exc_info=True)
+                _LOGGER.exception("Unexpected exception")
                 errors[CONF_BASE] = "unexpected_error"
 
         return self.async_show_form(

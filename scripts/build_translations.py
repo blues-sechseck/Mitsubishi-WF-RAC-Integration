@@ -90,6 +90,7 @@ def _serialised() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Write or check translations/en.json; return a process exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",

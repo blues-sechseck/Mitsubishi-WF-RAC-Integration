@@ -7,6 +7,7 @@ nothing here is ported.
 # pylint: disable = too-few-public-methods
 
 from __future__ import annotations
+
 import logging
 
 from homeassistant.components.switch import SwitchEntity
@@ -15,8 +16,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
-from .coordinator import Device
 from .const import DOMAIN
+from .coordinator import Device
 
 _LOGGER = logging.getLogger(__name__)
 # Zero although this platform writes: the coordinator already serialises and
@@ -29,7 +30,7 @@ async def async_setup_entry(
     entry: MitsubishiWfRacConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup switch entries"""
+    """Set up switch entries."""
 
     device: Device = entry.runtime_data.device
 

@@ -16,6 +16,7 @@ import logging
 from typing import Any
 
 import aiohttp
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -29,8 +30,10 @@ _USER_AGENT = "smartmair_app[1.4.009]"
 
 
 async def fetch_latest_firmware(hass: HomeAssistant, firm_type: str) -> dict[str, Any] | None:
-    """Return {"wireless": <mFirmVer>, "mcu": <cFirmVer>} for firm_type, or
-    None if the request failed or the branch is unknown to the server."""
+    """Return {"wireless": <mFirmVer>, "mcu": <cFirmVer>} for firm_type.
+
+    None if the request failed or the branch is unknown to the server.
+    """
     session = async_get_clientsession(hass)
     try:
         async with session.post(

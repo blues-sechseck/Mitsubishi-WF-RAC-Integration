@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from pywfrac import describe_error_code
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -12,10 +14,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
-from .entity import WfRacEntity
-from .coordinator import Device
-from pywfrac import describe_error_code
 from .const import DOMAIN
+from .coordinator import Device
+from .entity import WfRacEntity
 
 # Read-only as far as the device is concerned: the coordinator does the
 # polling, and nothing on this platform sends a request of its own.
@@ -27,7 +28,7 @@ async def async_setup_entry(
     entry: MitsubishiWfRacConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup binary sensor entries"""
+    """Set up binary sensor entries."""
 
     device: Device = entry.runtime_data.device
 
@@ -81,10 +82,12 @@ class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
 
 
 class CompressorBinarySensor(WfRacEntity, BinarySensorEntity):
-    """Reports whether *this* indoor unit is calling for the compressor
-    (content[9] & 0x02), as opposed to just being powered on - see
+    """Reports whether *this* indoor unit is calling for the compressor.
+
+    The flag is content[9] & 0x02, as opposed to just being powered on - see
     rac_parser.py. On a multi-split the shared compressor can keep running for
-    a sibling unit while this reads off, so it is demand, not compressor state."""
+    a sibling unit while this reads off, so it is demand, not compressor state.
+    """
 
     _attr_device_class = BinarySensorDeviceClass.RUNNING
     _attr_translation_key = "compressor"
@@ -103,8 +106,7 @@ class CompressorBinarySensor(WfRacEntity, BinarySensorEntity):
 
 
 class ExternalControlBinarySensor(WfRacEntity, BinarySensorEntity):
-    """On while another client is using the unit and this integration is
-    holding back because of it.
+    """On while another client is using the unit and this integration holds back.
 
     The unit grants whoever wrote last 60 seconds of exclusive write access,
     so the operation-data request - itself a write - is paused while someone

@@ -7,20 +7,20 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant import config_entries
-from homeassistant.const import CONF_DEVICE_ID, CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType, InvalidData, section
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pywfrac.repository import WfRacError
 
 from custom_components import mitsubishi_wf_rac
+from custom_components.mitsubishi_wf_rac.config_flow import (
+    SECTION_INDOOR_TEMPERATURE_SOURCE,
+    SECTION_SENSOR_OFFSETS,
+    SECTION_SETPOINT_OFFSETS,
+)
 from custom_components.mitsubishi_wf_rac.const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
-    CONF_FIRMWARE_UPDATE_CHECK,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
+    CONF_FIRMWARE_UPDATE_CHECK,
     CONF_INDOOR_OFFSET,
     CONF_OPERATOR_ID,
     CONF_OUTDOOR_OFFSET,
@@ -32,12 +32,12 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_TARGET_OFFSET_HEAT,
     DOMAIN,
 )
-from custom_components.mitsubishi_wf_rac.config_flow import (
-    SECTION_INDOOR_TEMPERATURE_SOURCE,
-    SECTION_SENSOR_OFFSETS,
-    SECTION_SETPOINT_OFFSETS,
-)
-from pywfrac.repository import WfRacError
+from homeassistant import config_entries
+from homeassistant.const import CONF_DEVICE_ID, CONF_HOST, CONF_PORT
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType, InvalidData, section
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 
 def _mock_repository(airco_id="airco-1", update_result=0):
@@ -706,7 +706,7 @@ async def test_options_flow_accepts_a_foreign_temperature_sensor(hass: HomeAssis
 
 
 @pytest.mark.parametrize(
-    "key,value",
+    ("key", "value"),
     [
         (CONF_INDOOR_OFFSET, 100.0),  # outside -15..15
         (CONF_OUTDOOR_OFFSET, -100.0),  # outside -15..15

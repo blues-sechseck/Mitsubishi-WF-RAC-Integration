@@ -1,13 +1,28 @@
-"""Device module"""
+"""Device module."""
 
 import asyncio
+from collections import deque
+from collections.abc import Callable, Mapping
+from datetime import datetime, timedelta
 import logging
 import re
-from collections import deque
-from collections.abc import Mapping
-from datetime import datetime, timedelta
-from collections.abc import Callable
 from typing import Any, Final
+
+from pywfrac import (
+    Aircon,
+    AirconCommands,
+    AirconStat,
+    HomeLeaveModeSetting,
+    RacParser,
+    Repository,
+    WfRacCommandError,
+    WfRacConnectionError,
+    WfRacError,
+    WfRacRegistrationError,
+    WfRacWriteRefusedError,
+)
+from pywfrac.parser import SERVICE_DATA_CODES, SERVICE_DATA_INDOOR_COIL_RAW
+from pywfrac.repository import MIN_TIME_BETWEEN_REQUESTS, REQUEST_TIMEOUT
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -38,22 +53,6 @@ from .const import (
     STATUS_REQUEST_SILENT,
     STATUS_REQUEST_STRICT,
 )
-from pywfrac import (
-    Aircon,
-    AirconCommands,
-    AirconStat,
-    HomeLeaveModeSetting,
-    RacParser,
-    Repository,
-    WfRacCommandError,
-    WfRacConnectionError,
-    WfRacError,
-    WfRacRegistrationError,
-    WfRacWriteRefusedError,
-)
-from pywfrac.parser import SERVICE_DATA_CODES, SERVICE_DATA_INDOOR_COIL_RAW
-from pywfrac.repository import MIN_TIME_BETWEEN_REQUESTS, REQUEST_TIMEOUT
-
 from .firmware_check import fetch_latest_firmware
 
 _LOGGER = logging.getLogger(__name__)
@@ -636,9 +635,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._external_temperature_carrier = None
 
     def _sync_external_temperature_carrier(self) -> None:
-        """Subscribe to an operation-data segment for as long as an override is
-        armed - and for the one frame that hands the unit back afterwards,
-        which is why a pending release holds the subscription up just as an
+        """Hold an operation-data subscription while an override is armed.
+
+        The subscription also covers the one frame that hands the unit back
+        afterwards, which is why a pending release holds it up just as an
         armed value does.
 
         The override needs a frame to ride on, and the operation-data request
@@ -724,8 +724,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def external_temperature_room_value(self) -> float | None:
-        """The room temperature we handed the unit, or None while it is
-        regulating on its own sensor.
+        """The room temperature we handed the unit, or None while it regulates.
+
+        Regulating here means on its own sensor.
 
         Whoever supplies a room temperature has said what "the room" means for
         this unit, so that is what the climate entity shows for as long as the
@@ -786,9 +787,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return raw is not None and raw in self._external_temperature_written
 
     def _subscribed_service_data_codes(self) -> tuple[int, ...]:
-        """Operation-data codes currently subscribed, sorted: one per enabled
-        diagnostic sensor, plus the carrier an armed external temperature
-        override holds (see _sync_external_temperature_carrier).
+        """Operation-data codes currently subscribed, sorted.
+
+        One per enabled diagnostic sensor, plus the carrier an armed external
+        temperature override holds (see _sync_external_temperature_carrier).
         """
         return tuple(sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES)))
 
@@ -865,11 +867,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return True
 
     def _maybe_check_firmware_update(self) -> None:
-        """Kick off a background cloud firmware check if one is due (see
-        FIRMWARE_CHECK_INTERVAL). Fire-and-forget: the result lands whenever
-        the request completes and reaches entities via async_set_updated_data()
-        in _async_check_firmware_update() below, independent of the regular
-        60s poll cycle that triggered this check.
+        """Kick off a background cloud firmware check if one is due.
+
+        Due is FIRMWARE_CHECK_INTERVAL. Fire-and-forget: the result lands
+        whenever the request completes and reaches entities via
+        async_set_updated_data() in _async_check_firmware_update() below,
+        independent of the regular 60s poll cycle that triggered this check.
         """
         # Hard opt-in gate, checked first and unconditionally: this is the
         # only outbound internet call anywhere in this integration (every
@@ -895,8 +898,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def _async_check_firmware_update(
         self, firm_type: str, wireless_firmware_ver: str
     ) -> None:
-        """Compare the locally-reported wireless firmware version against the
-        manufacturer's latest for this firmType."""
+        """Compare the locally-reported wireless firmware version.
+
+        Compared against the manufacturer's latest for this firmType.
+        """
         latest = await fetch_latest_firmware(self.hass, firm_type)
         if latest is None or latest.get("wireless") is None:
             return
@@ -1112,8 +1117,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             )
 
     def _settle_service_data_pause(self) -> None:
-        """Once a stand-down ends, move the operation-data age anchor forward
-        by however long it lasted.
+        """Move the operation-data age anchor forward past a stand-down.
+
+        Forward by however long the stand-down lasted.
 
         Without this the readings would expire on the very first poll after
         resuming: the gap is one we chose, so counting it against
@@ -1137,8 +1143,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def foreign_activity(self) -> bool:
-        """Whether another client wrote to the unit recently enough that we
-        are still standing down - see FOREIGN_ACTIVITY_BACKOFF."""
+        """Whether another client wrote recently enough that we stand down.
+
+        See FOREIGN_ACTIVITY_BACKOFF for what counts as recently.
+        """
         return (
             self._foreign_activity_until is not None
             and dt_util.utcnow() < self._foreign_activity_until
@@ -1172,8 +1180,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         )
 
     def _maybe_request_service_data(self) -> None:
-        """Kick off a background request for active operation-data segments
-        when due (see SERVICE_DATA_MIN_SPACING).
+        """Kick off a background request for active operation-data segments.
+
+        When due, that is - see SERVICE_DATA_MIN_SPACING.
         """
         service_data_codes = self._subscribed_service_data_codes()
         if not service_data_codes:
@@ -1262,11 +1271,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return True
 
     async def _async_request_service_data(self, service_data_codes: tuple[int, ...]) -> None:
-        """Ask the unit for operation-data segments, offset from the poll and
-        retried once if the unit refuses it (see SERVICE_DATA_REQUEST_OFFSET).
-        Sends directly rather than through async_queue_command() so the
-        refusal is visible here: a queued command is flushed by a detached
-        task that deliberately swallows its errors.
+        """Ask the unit for operation-data segments.
+
+        Offset from the poll and retried once if the unit refuses it (see
+        SERVICE_DATA_REQUEST_OFFSET). Sends directly rather than through
+        async_queue_command() so the refusal is visible here: a queued command
+        is flushed by a detached task that deliberately swallows its errors.
         """
         await asyncio.sleep(self.service_data_offset.total_seconds())
         # What the frame carries depends on the module: no set-bits at all
@@ -1332,8 +1342,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # state (set_airco() has already stored it) without the
                 # schedule moving.
                 self.async_update_listeners()
-                return
-            except WfRacWriteRefusedError as ex:
+                # Not an else block: the two handlers below are what decide
+                # whether the loop runs again, and splitting the success path
+                # away from them would put that decision in two places.
+                return  # noqa: TRY300
+            except WfRacWriteRefusedError as ex:  # noqa: PERF203
                 # Someone else may hold the write lock. Unlike a user command
                 # this is not worth contesting: give the cycle up immediately
                 # rather than retrying into a lock we would only be renewing
@@ -1376,7 +1389,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # (see _carry_forward_service_data), so there is nothing to push here.
 
     def _carry_forward_service_data(self, new_airco: Aircon) -> None:
-        """Same rationale as _carry_forward_home_leave_mode() above: the unit
+        """Carry the extension segments forward, as home/leave mode is.
+
+        Same rationale as _carry_forward_home_leave_mode() above: the unit
         reports these extension segments exactly once, so without this the
         sensors would flash the real value for one update cycle and then
         revert to unknown.
@@ -1544,9 +1559,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         )
 
     def _empty_block_matches(self, before: Mapping[str, Any]) -> list[str]:
-        """The settings that moved to exactly what an all-zero command block
-        encodes, comparing the state before our own status request with the one
-        the unit answered it with. Empty when anything moved somewhere else.
+        """The settings that moved to exactly what an all-zero block encodes.
+
+        Compares the state before our own status request with the one the unit
+        answered it with. Empty when anything moved somewhere else.
 
         That veto is what separates this from an ordinary change. A block
         applied as zeros lands every field on its minimum at once; a person at
@@ -1946,7 +1962,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         await asyncio.shield(flush)
 
     def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
-        """The unit reports the Tag-248 HomeLeaveMode extension segment exactly
+        """Carry the last known HomeLeaveMode reading forward.
+
+        The unit reports the Tag-248 HomeLeaveMode extension segment exactly
         once per HomeLeaveModeStatusRequest, then stops: the bridge MCU clears
         its response cache after handing it to the WiFi side, so the segment is
         present in a short window's worth of status blocks and absent from every
@@ -1965,11 +1983,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             new_airco.HomeLeaveModeForHeating = self._airco.HomeLeaveModeForHeating
 
     async def async_request_home_leave_mode_status(self) -> None:
-        """Ask the unit to report its current HomeLeaveMode (Tag 248,
-        capability index 7) thresholds/airflow. Does not change any AC
-        setting by itself - but the unit only reports this extension segment
-        in response to this request, never on an unprompted poll, and matches
-        byte-for-byte against the official app's own display.
+        """Ask the unit to report its current HomeLeaveMode.
+
+        That is Tag 248, capability index 7: thresholds and airflow. Does not
+        change any AC setting by itself - but the unit only reports this
+        extension segment in response to this request, never on an unprompted
+        poll, and matches byte-for-byte against the official app's own display.
 
         Timing, measured: the value shows up only on a later scheduled poll -
         up to MIN_TIME_BETWEEN_UPDATES (60s) later - not in the response to
@@ -2023,9 +2042,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def async_set_home_leave_mode(
         self, cooling: HomeLeaveModeSetting, heating: HomeLeaveModeSetting
     ) -> None:
-        """Write new HomeLeaveMode thresholds/airflow (Tag 248, sub-codes
-        27-32). Written values round-trip exactly through a subsequent
-        read."""
+        """Write new HomeLeaveMode thresholds and airflow.
+
+        That is Tag 248, sub-codes 27-32. Written values round-trip exactly
+        through a subsequent read.
+        """
         await self.async_queue_command(
             {
                 AirconCommands.HomeLeaveModeForCooling: cooling,
@@ -2106,69 +2127,73 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def operator_id(self) -> str:
-        """Return Airco Operator ID"""
+        """Return Airco Operator ID."""
         return self._operator_id
 
     @property
     def num_accounts(self) -> int:
-        """Return Accounts connected"""
+        """Return Accounts connected."""
         return self._connected_accounts
 
     @property
     def updated_by(self) -> str | None:
-        """Return what last updated the airco's state ('local' or a foreign account)"""
+        """Return what last updated the airco's state ('local' or a foreign account)."""
         return self._updated_by
 
     @property
     def account_expires(self) -> int | None:
-        """Return the raw 'expires' timestamp reported alongside our account registration"""
+        """Return the raw 'expires' timestamp reported with our registration."""
         return self._account_expires
 
     @property
     def led_status(self) -> int | None:
-        """Return the airco's front panel LED status"""
+        """Return the airco's front panel LED status."""
         return self._led_status
 
     @property
     def auto_heating(self) -> int | None:
-        """Return the airco's auto-heating flag"""
+        """Return the airco's auto-heating flag."""
         return self._auto_heating
 
     @property
     def wireless_firmware_version(self) -> str | None:
-        """Return the locally-reported wireless-module firmware version"""
+        """Return the locally-reported wireless-module firmware version."""
         return self._wireless_firmware_ver
 
     @property
     def latest_wireless_firmware_version(self) -> str | None:
-        """Return the latest wireless-module firmware version known from the
-        manufacturer's cloud, or None if not yet checked/unknown"""
+        """Return the latest wireless-module firmware version from the cloud.
+
+        None if not yet checked or unknown.
+        """
         return self._latest_wireless_firmware_ver
 
     @property
     def firmware_update_available(self) -> bool | None:
-        """Return whether a newer wireless-module firmware is available, or
-        None if that hasn't been determined yet"""
+        """Return whether a newer wireless-module firmware is available.
+
+        None if that hasn't been determined yet.
+        """
         return self._firmware_update_available
 
     @property
     def firmware_update_check_enabled(self) -> bool:
-        """Return whether the (online, cloud) firmware update check is enabled"""
+        """Return whether the (online, cloud) firmware update check is enabled."""
         return self._firmware_update_check_enabled
 
     @property
     def device_id(self) -> str:
-        """Return Airco device ID"""
+        """Return Airco device ID."""
         return self._device_id
 
     @property
     def host(self) -> str:
-        """Get Host (IP)"""
+        """Get Host (IP)."""
         return self._host
 
     @property
     def port(self) -> int:
-        """Get Port"""
+        """Get Port."""
         return self._port
 
     @property

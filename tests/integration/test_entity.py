@@ -10,16 +10,15 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.button import EnergyTotalResetButton
 from custom_components.mitsubishi_wf_rac.const import DOMAIN
-from custom_components.mitsubishi_wf_rac.entity import WfRacEntity
 from custom_components.mitsubishi_wf_rac.coordinator import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
     Device,
 )
+from custom_components.mitsubishi_wf_rac.entity import WfRacEntity
 
 
 @pytest.fixture

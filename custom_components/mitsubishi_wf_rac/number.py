@@ -2,7 +2,10 @@
 # pylint: disable = too-few-public-methods
 
 from __future__ import annotations
+
 from dataclasses import replace
+
+from pywfrac import HomeLeaveModeSetting
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.const import UnitOfTemperature
@@ -11,10 +14,9 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import MitsubishiWfRacConfigEntry
-from .entity import WfRacEntity
-from .coordinator import Device
-from pywfrac import HomeLeaveModeSetting
 from .const import DOMAIN
+from .coordinator import Device
+from .entity import WfRacEntity
 
 # Zero although this platform writes: the coordinator already serialises and
 # spaces every request.
@@ -33,7 +35,7 @@ async def async_setup_entry(
     entry: MitsubishiWfRacConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup number entries"""
+    """Set up number entries."""
 
     device: Device = entry.runtime_data.device
 
@@ -70,8 +72,10 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
     _attr_mode = NumberMode.BOX
 
     def __init__(self, device: Device, mode: str, attribute: str) -> None:
-        """Initialize the number. mode is 'cooling'/'heating', attribute is
-        'TempRule' or 'TempSetting'."""
+        """Initialize the number.
+
+        mode is 'cooling'/'heating', attribute is 'TempRule' or 'TempSetting'.
+        """
         super().__init__(device)
         self._mode = mode
         self._attribute = attribute
@@ -119,11 +123,10 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
                 cooling = replace(cooling, TempRule=value)
             else:
                 heating = replace(heating, TempRule=value)
+        elif self._mode == "cooling":
+            cooling = replace(cooling, TempSetting=value)
         else:
-            if self._mode == "cooling":
-                cooling = replace(cooling, TempSetting=value)
-            else:
-                heating = replace(heating, TempSetting=value)
+            heating = replace(heating, TempSetting=value)
         await self.coordinator.async_set_home_leave_mode(cooling, heating)
         self._attr_native_value = value
         self.async_write_ha_state()

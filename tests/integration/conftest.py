@@ -7,8 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from custom_components.mitsubishi_wf_rac.coordinator import Device
-
-from ..unit.live_captures import LIVE_CAPTURES
+from tests.unit.live_captures import LIVE_CAPTURES
 
 
 @pytest.fixture
