@@ -1,0 +1,31 @@
+# Same checks the Validate workflow runs, one push earlier.
+#   pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      # Both of these need the virtualenv this repo is developed in - mypy
+      # resolves against the installed Home Assistant, and the translation
+      # script reads that same installation's strings.json for its
+      # `common::` references. An isolated hook environment would have
+      # neither, so these run from the environment you are in.
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
+
+      - id: build-translations
+        name: translations/en.json is current
+        entry: python scripts/build_translations.py --check
+        language: system
+        pass_filenames: false
+        files: ^custom_components/mitsubishi_wf_rac/(strings\.json|translations/en\.json)$
