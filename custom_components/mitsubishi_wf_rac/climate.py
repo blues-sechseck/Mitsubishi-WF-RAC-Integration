@@ -646,7 +646,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         The frame it rides on is the operation-data request, which the
         coordinator starts asking for while an override is armed - the
         override subscribes to a segment itself, exactly like an enabled
-        diagnostic sensor does (see Device._sync_external_temperature_carrier).
+        diagnostic sensor does (see ExternalTemperatureFeed._sync_carrier).
         """
         if temperature is not None and self._external_temperature_source is not None:
             # Two writers would make the service result immediately temporary

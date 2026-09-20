@@ -198,7 +198,7 @@ async def test_external_temperature_active_sensor_shows_when_it_took_effect(plat
     assert entity.is_on is False
 
     raw = round(21.0 * 4) + 61
-    platform_device._external_temperature_written.append(raw)
+    platform_device.external_temperature._written.append(raw)
     platform_device.airco.ControllerRoomTempRaw = raw
     entity._update_state()
     assert entity.is_on is True
