@@ -1,8 +1,7 @@
 """Device module."""
 
 import asyncio
-from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 import logging
 import re
@@ -39,20 +38,14 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     AC_CERT_FILENAME,
-    CONF_EXTERNAL_TEMPERATURE_SOURCE,
-    CONF_OVERSHOOT_COOL,
-    CONF_OVERSHOOT_DRY,
-    CONF_OVERSHOOT_HEAT,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     MIN_TIME_BETWEEN_UPDATES,
-    OPERATION_MODE_COOL,
-    OPERATION_MODE_DRY,
-    OPERATION_MODE_HEAT,
     STATUS_REQUEST_ECHO,
     STATUS_REQUEST_SILENT,
     STATUS_REQUEST_STRICT,
 )
+from .external_temperature import ExternalTemperatureFeed
 from .firmware_check import fetch_latest_firmware
 
 _LOGGER = logging.getLogger(__name__)
@@ -425,20 +418,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._foreign_activity_reported = False
         self._foreign_activity_since: datetime | None = None
         self._service_data_task: asyncio.Task[None] | None = None
-        self._external_temperature_override: float | None = None
-        # The byte-5 values recent frames actually carried. Two, not one: a
-        # frame carrying a new value goes out before the unit reports it back,
-        # so during that one cycle the previous value is still the one the
-        # unit is regulating on. Comparing against only the newest would make
-        # external_temperature_applied - and with it the indoor offset - flip
-        # off and on again on every value a source sensor feeds in.
-        self._external_temperature_written: deque[int] = deque(maxlen=2)
-        self._external_temperature_carrier: Callable[[], None] | None = None
-        # Set when an override goes away after a frame has carried it: the
-        # unit holds the last value it was given until a frame carries the
-        # sentinel instead, so clearing on our side is only half of letting
-        # go. Cleared again by the frame that does it - see set_airco().
-        self._external_temperature_release_pending = False
+        self.external_temperature = ExternalTemperatureFeed(self)
         self._consecutive_failures = 0
         self._availability_failure_limit = max(
             AVAILABILITY_FAILURE_LIMIT_MIN, availability_failure_limit
@@ -474,47 +454,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def external_temperature_override(self) -> float | None:
-        """Return the integration-side external temperature override, if any.
-
-        This is tracked by the integration rather than read back from the unit,
-        because the wire byte reports the temperature the controller is working
-        with regardless of its source and provides no flag for whether that
-        value originated from an external override.
-        """
-        return self._external_temperature_override
+        """Return the integration-side external temperature override, if any."""
+        return self.external_temperature.override
 
     def set_external_temperature_override(self, value: float | None) -> None:
         """Set the integration-side override state.
 
-        Used by the climate entity when restoring persisted state and whenever
-        the configured source reports. Arming asks for the operation-data frame
-        the value rides on (see _sync_external_temperature_carrier), since the
-        poll that would otherwise schedule one runs before the entities exist -
-        but that frame writes no setting of its own, so nothing here commands
-        the unit. Which is exactly why the value counts as unapplied until a
-        frame has carried it: it says what we intend to send, not what the unit
-        currently regulates on.
-
-        Nothing here says the unit has been told - see
-        external_temperature_applied, which reads that off the wire.
-
-        Clearing is not symmetrical with arming. Byte 5 has no set-bit, so the
-        unit keeps regulating on the last value we sent it until a frame
-        carries the sentinel - and the carrier that frame rides on is dropped
-        by this very call. A clear therefore leaves a release outstanding
-        whenever a frame really did carry a value, and the carrier stays up
-        until one has carried the sentinel (#218 follow-up).
+        See ExternalTemperatureFeed.set_override for what arming and clearing
+        each mean on the wire.
         """
-        if value is None:
-            if self._external_temperature_written:
-                self._external_temperature_release_pending = True
-            self._external_temperature_written.clear()
-        else:
-            # Arming again is its own release: whatever goes out next carries
-            # the new value, and the unit was never handed back in between.
-            self._external_temperature_release_pending = False
-        self._external_temperature_override = value
-        self._sync_external_temperature_carrier()
+        self.external_temperature.set_override(value)
 
     async def async_release_external_temperature(self) -> None:
         """Hand the unit back to its own sensor before we stop writing.
@@ -533,10 +482,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         a lost network cannot send anything at all. That residue is the
         unit's, not ours to fix.
         """
-        if self._external_temperature_override is None:
+        if self.external_temperature.override is None:
             return
-        applied = self.external_temperature_applied
-        self.set_external_temperature_override(None)
+        applied = self.external_temperature.applied
+        self.external_temperature.set_override(None)
         if not applied:
             # Nothing on the unit to undo: it is on its own sensor already,
             # because it is off, in fan_only, or no frame ever carried the
@@ -585,16 +534,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def request_external_temperature_release(self) -> None:
         """Ask for a frame that hands the unit back to its own sensor.
 
-        For the case this coordinator cannot see for itself: the frames that
-        carried a value went out before a reload, so _external_temperature_
-        written is empty here and nothing in this object knows the unit is
-        still being fed. The climate entity knows, from its restored state -
-        see AircoClimate.async_added_to_hass().
+        For the case this coordinator cannot see for itself - see
+        ExternalTemperatureFeed.request_release.
         """
-        if self._external_temperature_override is not None:
-            return
-        self._external_temperature_release_pending = True
-        self._sync_external_temperature_carrier()
+        self.external_temperature.request_release()
 
     async def async_shutdown(self) -> None:
         """Shut the coordinator down.
@@ -605,7 +548,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         Failures are logged and swallowed - an unload that raises leaves
         entities on an entry that no longer updates.
         """
-        self._release_external_temperature_carrier()
+        self.external_temperature.release_carrier()
         # A flush that has taken its parameters lets go of
         # _consolidation_task, so that alone leaves nothing to cancel: the
         # send finishes afterwards and publishes to entities that are gone,
@@ -629,162 +572,19 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._service_data_task = None
         await super().async_shutdown()
 
-    def _release_external_temperature_carrier(self) -> None:
-        if self._external_temperature_carrier is not None:
-            self._external_temperature_carrier()
-            self._external_temperature_carrier = None
-
-    def _sync_external_temperature_carrier(self) -> None:
-        """Hold an operation-data subscription while an override is armed.
-
-        The subscription also covers the one frame that hands the unit back
-        afterwards, which is why a pending release holds it up just as an
-        armed value does.
-
-        The override needs a frame to ride on, and the operation-data request
-        is the one frame that goes out on its own without writing anything
-        else. Rather than making that the user's problem - enable a diagnostic
-        sensor or the feature quietly does nothing - the override subscribes
-        like any other consumer of that request, and _maybe_request_service_data()
-        starts asking for the same reason it does for an enabled sensor.
-
-        Costs what an enabled operation-data sensor costs: one extra request
-        per poll cycle, holding the unit's write lock for part of it.
-        """
-        if (
-            self._external_temperature_override is not None
-            or self._external_temperature_release_pending
-        ):
-            needs_request = self._external_temperature_release_pending
-            if self._external_temperature_carrier is None:
-                needs_request = True
-                self._external_temperature_carrier = self.async_add_listener(
-                    lambda: None, context=SERVICE_DATA_INDOOR_COIL_RAW
-                )
-            if needs_request:
-                # Ask for the carrier frame now rather than waiting for a poll
-                # to schedule one. Only a poll calls this otherwise, and the
-                # poll that runs during setup happens before the entities
-                # exist - so nothing is subscribed for it and the request is
-                # skipped. An entry reload is exactly that path, and saving
-                # the options reloads the entry (OptionsFlowWithReload): a
-                # changed overshoot would sit unsent for a full poll interval
-                # on top of the offset, until some other frame happened to
-                # carry it. The spacing and in-flight guards inside still
-                # apply, so a source flapping in and out cannot turn this into
-                # a second request per cycle.
-                self._maybe_request_service_data()
-            return
-        self._release_external_temperature_carrier()
-
-    def _corrected_external_temperature(
-        self, temperature: float | None, operation_mode: int
-    ) -> float | None:
-        """Bend the room temperature we hand the unit by its overshoot.
-
-        The unit's thermostat band sits below the setting in cooling (measured
-        across four units: it keeps calling for cooling until roughly 1-2 K
-        under it, see issue #218). Telling it the room is that much colder than
-        it is moves its stop point to where the room actually reaches the
-        setting - and unlike the setpoint, which the unit rounds to whole
-        degrees, this lever has the protocol's 0.25 K resolution.
-
-        Heating is the mirror image, and zero - the default - changes nothing.
-
-        Dry has a correction of its own rather than sharing the cooling one.
-        It cools too, so the sign matches, but its airflow and its thermostat
-        band are not the cooling ones, and nobody has measured what it does -
-        which is why its field opens on zero where cooling opens on the figure
-        four units needed. Auto is left uncorrected: which direction it is
-        running in is CoolHotJudge, a value some units never report.
-        """
-        if temperature is None:
-            return None
-        overshoot = self._resolve_overshoot(operation_mode)
-        if not overshoot:
-            return temperature
-        if operation_mode in (OPERATION_MODE_COOL, OPERATION_MODE_DRY):
-            return temperature - overshoot
-        if operation_mode == OPERATION_MODE_HEAT:
-            return temperature + overshoot
-        return temperature
-
-    def _resolve_overshoot(self, operation_mode: int) -> float:
-        """The configured overshoot for the mode a frame is going out in."""
-        if operation_mode == OPERATION_MODE_COOL:
-            key = CONF_OVERSHOOT_COOL
-        elif operation_mode == OPERATION_MODE_HEAT:
-            key = CONF_OVERSHOOT_HEAT
-        elif operation_mode == OPERATION_MODE_DRY:
-            key = CONF_OVERSHOOT_DRY
-        else:
-            return 0.0
-        value = self.options.get(key, 0.0)
-        return float(value) if isinstance(value, (int, float)) else 0.0
-
     @property
     def external_temperature_room_value(self) -> float | None:
         """The room temperature we handed the unit, or None while it regulates.
 
-        Regulating here means on its own sensor.
-
-        Whoever supplies a room temperature has said what "the room" means for
-        this unit, so that is what the climate entity shows for as long as the
-        unit is actually using it. What comes back from the unit is not it: an
-        overshoot correction hands it a value that is deliberately not the
-        room, and even without one the echo sits half a kelvin off in the
-        protocol's coarser segment. Deciding this per overshoot - as this did
-        until the reading was found to move half a kelvin when an unrelated
-        option changed - makes the displayed room temperature depend on a
-        setting that has nothing to do with it, and every automation comparing
-        it against a threshold inherits that silently.
-
-        The Indoor Temperature sensor keeps reporting the unit verbatim, so
-        what the unit thinks is still visible - the two disagree exactly while
-        the unit is being fed.
-
-        With a source entity configured this holds even while the unit is not
-        using the value - off, in fan_only, or a restart away from having sent
-        one. A source keeps measuring the room whatever the unit is doing, and
-        deciding whether to switch the unit on is exactly when someone reads
-        that number (#218). The unit's own reading is at its least meaningful
-        then anyway: nothing is drawing air past its sensor.
-
-        A value armed from an automation is different and keeps the stricter
-        rule. There is no source behind it, so it is a number someone pushed
-        once, and showing it as the room while the unit is not even using it
-        would be showing an intention rather than a measurement.
+        See ExternalTemperatureFeed.room_value for why this is not simply what
+        the unit reports back.
         """
-        if self._external_temperature_override is None or self._airco is None:
-            return None
-        source = self.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
-        if isinstance(source, str) and source:
-            return self._external_temperature_override
-        if not self.external_temperature_applied:
-            return None
-        return self._external_temperature_override
+        return self.external_temperature.room_value
 
     @property
     def external_temperature_applied(self) -> bool:
-        """Whether the unit is currently regulating on a value we supplied.
-
-        Read off the wire rather than remembered: the unit echoes an injected
-        value back in byte 5 unchanged, so the byte it reports matching one a
-        recent frame carried is exactly the question - false after a restart
-        until a frame has gone out, false while the unit is off or in fan_only
-        (nothing writes the byte there), and false once another controller
-        takes the unit off the override without telling us.
-
-        One blind spot, and it is harmless: if the room happens to sit within
-        a quarter kelvin of the armed value, the unit's own reading encodes to
-        the same byte and this reads true early. Both branches show the same
-        temperature then, and the calibration offset it suppresses is at most
-        that far from being right anyway.
-        """
-        if self._external_temperature_override is None or self._airco is None:
-            return False
-        raw = self._airco.ControllerRoomTempRaw
-        return raw is not None and raw in self._external_temperature_written
+        """Whether the unit is currently regulating on a value we supplied."""
+        return self.external_temperature.applied
 
     def _subscribed_service_data_codes(self) -> tuple[int, ...]:
         """Operation-data codes currently subscribed, sorted.
@@ -863,7 +663,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firm_type = response.get("firmType")
         self._wireless_firmware_ver = (response.get("wireless") or {}).get("firmVer")
         self._maybe_check_firmware_update()
-        self._maybe_request_service_data()
+        self.maybe_request_service_data()
         return True
 
     def _maybe_check_firmware_update(self) -> None:
@@ -1179,7 +979,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._airco is not None and self._airco.Operation
         )
 
-    def _maybe_request_service_data(self) -> None:
+    def maybe_request_service_data(self) -> None:
         """Kick off a background request for active operation-data segments.
 
         When due, that is - see SERVICE_DATA_MIN_SPACING.
@@ -1189,7 +989,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             return
         if (
             self._service_data_unsupported
-            and self._external_temperature_override is None
+            and self.external_temperature.override is None
         ):
             # Nothing to read here. The frame still goes out for an armed
             # temperature override, which rides on it without needing an
@@ -1787,7 +1587,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # frames that were going out anyway (see AircoClimate.
         # async_set_external_temperature). Applied to every frame, since
         # one that leaves byte 5 alone reverts the unit to its own sensor.
-        airco_stat.ExternalTemperature = self._external_temperature_override
+        airco_stat.ExternalTemperature = self.external_temperature.override
 
         for key, value in params.items():
             setattr(airco_stat, key, value)
@@ -1795,7 +1595,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # After the parameters, not before: the correction depends on the
         # mode this frame is putting the unit into, which a command in
         # params may just have changed.
-        airco_stat.ExternalTemperature = self._corrected_external_temperature(
+        airco_stat.ExternalTemperature = self.external_temperature.corrected(
             airco_stat.ExternalTemperature, airco_stat.OperationMode
         )
         return airco_stat
@@ -1913,25 +1713,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     # A real command explains any settings that move after it,
                     # so the status request before it no longer has to.
                     self._request_baseline = None
-                # After the write, and only for what the frame really carried:
-                # a command sent while the unit is off writes the sentinel, not
-                # the override.
-                written = self._parser.external_temperature_raw_in_frame(airco_stat)
-                if written is None:
-                    self._external_temperature_written.clear()
-                    if (
-                        self._external_temperature_release_pending
-                        and self._external_temperature_override is None
-                    ):
-                        # This frame carried the sentinel, so the unit is back
-                        # on its own sensor and the carrier has nothing left
-                        # to carry. Any frame will do - a command the user
-                        # sent settles the release as well as the
-                        # operation-data request asked for on purpose.
-                        self._external_temperature_release_pending = False
-                        self._release_external_temperature_carrier()
-                else:
-                    self._external_temperature_written.append(written)
+                # After the write, and only for what the frame really carried
+                # - see ExternalTemperatureFeed.note_frame.
+                self.external_temperature.note_frame(
+                    self._parser.external_temperature_raw_in_frame(airco_stat)
+                )
                 # Proof of reachability like a poll: once a unit counts as
                 # away, the service layer drops the calls that would show it
                 # is there.

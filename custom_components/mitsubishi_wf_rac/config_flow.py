@@ -667,7 +667,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
             ),
         }
         # Tied to the source picker on purpose, and not because the correction
-        # needs one: _corrected_external_temperature() bends whatever value is
+        # needs one: ExternalTemperatureFeed.corrected() bends whatever value is
         # armed, including one set from the action. A source entity is what
         # makes the corrections worth offering - it is watched, so a reading
         # that goes unavailable or unusable clears the override and hands the
@@ -684,7 +684,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                     # the field opens on a number that is roughly right
                     # instead of on one that is certainly wrong. It is a
                     # pre-fill and nothing more: the correction applies once
-                    # the form is saved, and _resolve_overshoot still reads 0
+                    # the form is saved, and the feed's overshoot still reads 0
                     # until then, so nobody's regulation moves without them
                     # seeing the value first. Heating has looked symmetric
                     # around the setting wherever it has been measured, so

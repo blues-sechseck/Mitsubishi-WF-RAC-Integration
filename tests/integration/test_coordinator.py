@@ -322,7 +322,7 @@ async def test_set_airco_merges_params_with_current_state(device):
 async def test_set_airco_includes_stored_external_temperature_override(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
-    device._external_temperature_override = 18.7
+    device.external_temperature._override = 18.7
 
     captured = {}
 
@@ -357,7 +357,7 @@ async def test_set_airco_bends_the_override_by_the_configured_overshoot(
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
     _set_options(device, {overshoot_key: 1.25})
-    device._external_temperature_override = 18.7
+    device.external_temperature._override = 18.7
 
     captured = {}
 
@@ -381,7 +381,7 @@ async def test_set_airco_bends_the_override_the_other_way_when_negative(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
     _set_options(device, {CONF_OVERSHOOT_COOL: -0.75})
-    device._external_temperature_override = 18.7
+    device.external_temperature._override = 18.7
 
     captured = {}
 
@@ -415,7 +415,7 @@ async def test_set_airco_leaves_the_override_alone_in_auto(device):
             CONF_OVERSHOOT_DRY: 1.25,
         },
     )
-    device._external_temperature_override = 18.7
+    device.external_temperature._override = 18.7
 
     captured = {}
 
@@ -436,7 +436,7 @@ async def test_set_airco_leaves_the_override_alone_in_auto(device):
 async def test_set_airco_explicitly_clears_external_temperature_override(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
-    device._external_temperature_override = 18.7
+    device.external_temperature._override = 18.7
 
     captured = {}
 
@@ -492,7 +492,7 @@ async def test_release_hands_the_unit_back_before_stopping(device, monkeypatch):
 
     raw = round(18.7 * 4) + 61
     device.set_external_temperature_override(18.7)
-    device._external_temperature_written.append(raw)
+    device.external_temperature._written.append(raw)
     device.airco.ControllerRoomTempRaw = raw
     assert device.external_temperature_applied is True
 
@@ -557,7 +557,7 @@ async def test_external_temperature_applied_reads_the_echoed_byte(device):
     device.airco.ControllerRoomTempRaw = raw
     assert device.external_temperature_applied is False
 
-    device._external_temperature_written.append(raw)
+    device.external_temperature._written.append(raw)
     assert device.external_temperature_applied is True
 
     # 0xFF: the unit is back on its own sensor, whatever is still armed here.
@@ -578,12 +578,12 @@ async def test_external_temperature_applied_survives_a_value_change(device):
     await device.update()
     device.set_external_temperature_override(18.7)
     old_raw = round(18.7 * 4) + 61
-    device._external_temperature_written.append(old_raw)
+    device.external_temperature._written.append(old_raw)
     device.airco.ControllerRoomTempRaw = old_raw
 
     device.set_external_temperature_override(19.0)
     new_raw = round(19.0 * 4) + 61
-    device._external_temperature_written.append(new_raw)
+    device.external_temperature._written.append(new_raw)
 
     # The frame is out, the unit still reports the previous value.
     assert device.external_temperature_applied is True
@@ -1114,7 +1114,7 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
     set_airco = AsyncMock()
     device.set_airco = set_airco
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0.05)
 
     set_airco.assert_awaited_once_with(
@@ -1152,7 +1152,7 @@ async def test_raw_service_data_sensor_requests_its_segment_code(device, monkeyp
     monkeypatch.setattr(device, "async_contexts", lambda: {code})
     device.set_airco = set_airco = AsyncMock()
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0.05)
 
     set_airco.assert_awaited_once_with(
@@ -1375,7 +1375,7 @@ async def test_no_service_data_request_while_another_client_is_active(device, mo
     device.set_airco = set_airco = AsyncMock()
     device._foreign_activity_until = dt_util.utcnow() + timedelta(minutes=3)
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0.05)
 
     set_airco.assert_not_awaited()
@@ -1428,7 +1428,7 @@ async def test_service_data_resumes_once_the_backoff_lapses(device, monkeypatch)
     device.set_airco = set_airco = AsyncMock()
     device._foreign_activity_until = dt_util.utcnow() - timedelta(seconds=1)
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0.05)
 
     set_airco.assert_awaited_once()
@@ -1446,7 +1446,7 @@ async def test_service_data_request_gives_up_immediately_when_refused_as_a_write
         side_effect=WfRacWriteRefusedError("result 1")
     )
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0.05)
 
     set_airco.assert_awaited_once()
@@ -1468,7 +1468,7 @@ async def test_a_refused_service_data_request_is_not_retried_inside_set_airco(
         side_effect=WfRacWriteRefusedError("result 1")
     )
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0)
     task = device._service_data_task
     assert task is not None
@@ -1586,7 +1586,7 @@ async def test_service_data_request_does_not_overlap_an_active_request(device, m
     # attribute, which a MagicMock cannot answer.
     device._service_data_task = asyncio.create_task(_still_asleep())
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
 
     assert device._last_service_data_request is None
 
@@ -1606,7 +1606,7 @@ async def test_shutdown_cancels_a_request_still_waiting_out_its_offset(
     )
     device.set_airco = set_airco = AsyncMock()
 
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0)
     task = device._service_data_task
     assert task is not None and not task.done()
@@ -2136,7 +2136,7 @@ async def _run_service_data_request(device, monkeypatch, ceiling_ms: int = 1):
     monkeypatch.setattr(
         device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES}
     )
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0.05)
 
 
@@ -2509,7 +2509,7 @@ async def test_a_carrying_request_echoes_what_it_just_read(device, monkeypatch):
     monkeypatch.setattr(coordinator_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
     monkeypatch.setattr(device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES})
     device._service_data_offset = timedelta(milliseconds=30)
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
 
     # Somebody reaches for the remote while the request waits out its offset.
     device._api.get_aircon_stats.return_value = _stats_response(FAN_SPEED_4_PAYLOAD)
@@ -2534,7 +2534,7 @@ async def test_a_request_that_does_not_carry_state_reads_nothing_extra(
     monkeypatch.setattr(device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES})
     device._service_data_offset = timedelta(milliseconds=30)
     device._api.get_aircon_stats.reset_mock()
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
     await asyncio.sleep(0.1)
 
     device._api.get_aircon_stats.assert_not_awaited()
@@ -2558,7 +2558,7 @@ async def test_a_unit_switched_off_inside_the_offset_gets_no_request(
     monkeypatch.setattr(coordinator_module, "SERVICE_DATA_MIN_SPACING", timedelta(0))
     monkeypatch.setattr(device, "async_contexts", lambda: {SERVICE_DATA_EEV_PULSES})
     device._service_data_offset = timedelta(milliseconds=30)
-    device._maybe_request_service_data()
+    device.maybe_request_service_data()
 
     # ... and the unit goes off while the request is still waiting out its
     # offset, which is what the read before the echo finds.

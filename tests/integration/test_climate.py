@@ -279,7 +279,7 @@ def _mark_reached_the_unit(device, temperature: float) -> None:
     the frame recorded what it wrote, byte 5 echoes it back, and the 0.1 K
     segment carries the same reading."""
     raw = round(temperature * 4) + 61
-    device._external_temperature_written.append(raw)
+    device.external_temperature._written.append(raw)
     device.airco.ControllerRoomTempRaw = raw
     device.airco.IndoorTemp = temperature + 0.5
 
@@ -638,7 +638,7 @@ async def test_removing_the_source_clears_what_it_had_armed(device):
     await _add_and_remove(entity)
 
     assert entity._external_temperature_override is None
-    assert device._external_temperature_override is None
+    assert device.external_temperature.override is None
 
 
 async def test_an_action_driven_override_still_survives_a_restart(device):
@@ -667,7 +667,7 @@ async def test_restore_state_restores_external_temperature_override(device):
     await _add_and_remove(entity)
 
     assert entity._external_temperature_override == 19.25
-    assert device._external_temperature_override == 19.25
+    assert device.external_temperature.override == 19.25
     # Restored, not sent: nothing has told the unit about it yet.
     assert device.external_temperature_applied is False
 
@@ -681,7 +681,7 @@ async def test_restore_state_ignores_an_unusable_override(device, restored):
     await _add_and_remove(entity)
 
     assert entity._external_temperature_override is None
-    assert device._external_temperature_override is None
+    assert device.external_temperature.override is None
 
 
 async def test_target_temperature_step_matches_the_wire_format(device):
