@@ -10,4 +10,4 @@
 homeassistant>=2026.4.0
 pytest-homeassistant-custom-component
 mypy
-pywfrac==0.1.5
+pywfrac==0.1.6

@@ -673,9 +673,9 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
 async def test_options_flow_refuses_its_own_entity_as_source(hass: HomeAssistant):
     # An armed override makes the unit report the injected value back, so this
     # integration's own temperature sensors follow it. Feeding one back in
-    # would walk the override away from the room half a kelvin per poll, so
-    # the selector excludes them - and rejects one on submit, not just in the
-    # picker.
+    # would feed the override into itself - and with an overshoot set, walk it
+    # away from the room by that much per poll - so the selector excludes them,
+    # and rejects one on submit, not just in the picker.
     import voluptuous as vol
 
     entry = MockConfigEntry(
@@ -946,9 +946,9 @@ async def test_options_flow_only_offers_the_overshoots_with_a_source(
 async def test_options_flow_opens_the_cooling_overshoot_on_the_measured_figure(
     hass: HomeAssistant,
 ):
-    """Four units land 0.6-1.3 K past the setting, so a fresh field opening on
-    0 opens on a number that is certainly wrong. It is a pre-fill: a stored
-    value wins, and nothing is corrected until the form is saved.
+    """Four units stop about half a kelvin past the setting, so a fresh field
+    opening on 0 opens on a number that is certainly wrong. It is a pre-fill:
+    a stored value wins, and nothing is corrected until the form is saved.
     """
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -962,12 +962,11 @@ async def test_options_flow_opens_the_cooling_overshoot_on_the_measured_figure(
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     validated = result["data_schema"](_form_input())[SECTION_INDOOR_TEMPERATURE_SOURCE]
-    assert validated[CONF_OVERSHOOT_COOL] == 1.0
+    assert validated[CONF_OVERSHOOT_COOL] == 0.5
     # Heating has looked symmetric wherever it was measured - no figure to offer.
     assert validated[CONF_OVERSHOOT_HEAT] == 0.0
-    # Dry opens on 0 for the opposite reason to heating: not a figure that
-    # turned out to be zero, but a mode nobody has measured (#218). A guess
-    # pre-filled here would move real regulation on the strength of one.
+    # Dry opens on 0 as a measured figure: the one unit measured there needed
+    # nothing beyond the scale correction pywfrac now applies (#218).
     assert validated[CONF_OVERSHOOT_DRY] == 0.0
     # Nothing is applied by opening the form: the resolver still reads 0.
     assert entry.options.get(CONF_OVERSHOOT_COOL) is None
@@ -1004,7 +1003,7 @@ async def test_options_flow_saves_a_dry_overshoot(hass: HomeAssistant):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_OVERSHOOT_DRY] == 0.75
     # The cooling field is untouched by it: separate figures, separate modes.
-    assert result["data"][CONF_OVERSHOOT_COOL] == 1.0
+    assert result["data"][CONF_OVERSHOOT_COOL] == 0.5
 
 
 async def test_options_flow_keeps_values_it_never_showed(hass: HomeAssistant):

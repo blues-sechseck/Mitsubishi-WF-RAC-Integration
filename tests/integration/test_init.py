@@ -21,6 +21,9 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CONNECTION_METHOD,
+    CONF_OVERSHOOT_COOL,
+    CONF_OVERSHOOT_DRY,
+    CONF_OVERSHOOT_HEAT,
     DOMAIN,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import registration_full_issue_id
@@ -37,7 +40,7 @@ _DATA = {
     "port": 51443,
 }
 
-_CURRENT_VERSION = 7
+_CURRENT_VERSION = 8
 
 
 def _entry(
@@ -364,6 +367,68 @@ async def test_migrate_v6_lowers_the_case_of_the_unique_id(hass: HomeAssistant):
     assert await async_migrate_entry(hass, entry)
 
     assert entry.unique_id == "348e89c5a137"
+
+
+async def test_migrate_v7_shifts_the_overshoots_onto_the_manufacturer_scale(
+    hass: HomeAssistant,
+):
+    """The room temperature used to reach the unit half a kelvin warm; pywfrac
+    now encodes it on the manufacturer's scale. A stored figure moves by that
+    constant so the byte the unit receives on upgrade is the one it received
+    before - subtracted in cooling and dry, added in heating.
+    """
+    entry = _entry(
+        hass,
+        7,
+        {**_DATA, CONF_HOST: "192.168.1.50"},
+        {
+            CONF_OVERSHOOT_COOL: 1.0,
+            CONF_OVERSHOOT_DRY: 0.5,
+            CONF_OVERSHOOT_HEAT: 0.75,
+            "indoor_offset": -1.5,
+        },
+    )
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.version == _CURRENT_VERSION
+    assert entry.options[CONF_OVERSHOOT_COOL] == 0.5
+    assert entry.options[CONF_OVERSHOOT_DRY] == 0.0
+    assert entry.options[CONF_OVERSHOOT_HEAT] == 1.25
+    assert entry.options["indoor_offset"] == -1.5
+
+
+async def test_migrate_v7_leaves_a_zero_overshoot_alone(hass: HomeAssistant):
+    """Zero meant "hand the unit the reading as it is" - and the reading it
+    now gets is the one it was always meant to. Absent fields stay absent."""
+    entry = _entry(
+        hass,
+        7,
+        {**_DATA, CONF_HOST: "192.168.1.50"},
+        {CONF_OVERSHOOT_COOL: 0.0, CONF_OVERSHOOT_DRY: 0},
+    )
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.options[CONF_OVERSHOOT_COOL] == 0.0
+    assert entry.options[CONF_OVERSHOOT_DRY] == 0
+    assert CONF_OVERSHOOT_HEAT not in entry.options
+
+
+async def test_migrate_v7_keeps_the_shifted_overshoot_inside_the_range(
+    hass: HomeAssistant,
+):
+    entry = _entry(
+        hass,
+        7,
+        {**_DATA, CONF_HOST: "192.168.1.50"},
+        {CONF_OVERSHOOT_COOL: -3.0, CONF_OVERSHOOT_HEAT: 3.0},
+    )
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.options[CONF_OVERSHOOT_COOL] == -3.0
+    assert entry.options[CONF_OVERSHOOT_HEAT] == 3.0
 
 
 async def test_the_device_name_follows_the_entry_title(hass: HomeAssistant):

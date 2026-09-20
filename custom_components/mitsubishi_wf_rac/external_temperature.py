@@ -187,20 +187,21 @@ class ExternalTemperatureFeed:
         """Bend the room temperature we hand the unit by its overshoot.
 
         The unit's thermostat band sits below the setting in cooling (measured
-        across four units: it keeps calling for cooling until roughly 1-2 K
-        under it, see issue #218). Telling it the room is that much colder than
-        it is moves its stop point to where the room actually reaches the
-        setting - and unlike the setpoint, which the unit rounds to whole
-        degrees, this lever has the protocol's 0.25 K resolution.
+        across four units: it keeps calling for cooling until roughly half a
+        kelvin under it, see issue #218). Telling it the room is that much
+        colder than it is moves its stop point to where the room actually
+        reaches the setting - and unlike the setpoint, which the unit rounds
+        to whole degrees, this lever has the protocol's 0.25 K resolution.
 
         Heating is the mirror image, and zero - the default - changes nothing.
 
         Dry has a correction of its own rather than sharing the cooling one.
         It cools too, so the sign matches, but its airflow and its thermostat
-        band are not the cooling ones, and nobody has measured what it does -
-        which is why its field opens on zero where cooling opens on the figure
-        four units needed. Auto is left uncorrected: which direction it is
-        running in is CoolHotJudge, a value some units never report.
+        band are not the cooling ones: the band is wider and, on the one unit
+        measured, centred on the setting, which is why its field opens on zero
+        where cooling opens on the figure four units needed. Auto is left
+        uncorrected: which direction it is running in is CoolHotJudge, a value
+        some units never report.
         """
         if temperature is None:
             return None
@@ -236,12 +237,12 @@ class ExternalTemperatureFeed:
         this unit, so that is what the climate entity shows for as long as the
         unit is actually using it. What comes back from the unit is not it: an
         overshoot correction hands it a value that is deliberately not the
-        room, and even without one the echo sits half a kelvin off in the
-        protocol's coarser segment. Deciding this per overshoot - as this did
-        until the reading was found to move half a kelvin when an unrelated
-        option changed - makes the displayed room temperature depend on a
-        setting that has nothing to do with it, and every automation comparing
-        it against a threshold inherits that silently.
+        room, and the echo is that corrected value. Deciding this per
+        overshoot - as this did until the reading was found to move by the
+        correction when an unrelated option changed - makes the displayed room
+        temperature depend on a setting that has nothing to do with it, and
+        every automation comparing it against a threshold inherits that
+        silently.
 
         The Indoor Temperature sensor keeps reporting the unit verbatim, so
         what the unit thinks is still visible - the two disagree exactly while

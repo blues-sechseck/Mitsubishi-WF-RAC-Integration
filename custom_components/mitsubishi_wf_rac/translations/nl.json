@@ -132,9 +132,9 @@
               "overshoot_heat": "Overshoot verwarmen"
             },
             "data_description": {
-              "external_temperature_source": "De airco regelt op deze sensor. Laat leeg om hem terug te zetten op zijn eigen sensor; bij 'unavailable' of 'unknown' gebeurt hetzelfde bij het volgende frame.",
-              "overshoot_cool": "Hoe ver de kamer voorbij je instelling gaat voordat de airco stopt. Ingesteld op 22 °C, kamer blijft op 21 °C staan: vul 1 in. Begint op 1, want dat is wat de tot nu toe gemeten toestellen nodig hebben — kijk waar jouw kamer uitkomt en pas aan. Blijft hij er juist boven en wordt het nooit koud genoeg, vul dan een negatief getal in.",
-              "overshoot_dry": "Hetzelfde voor drogen, dat ook koelt en dus hetzelfde teken heeft. Begint op 0 omdat niemand deze stand heeft gemeten: stel een doel in, laat de kamer tot rust komen en vul in hoever hij eroverheen ging.",
+              "external_temperature_source": "De airco regelt op deze sensor. Laat leeg om hem terug te zetten op zijn eigen sensor; bij 'unavailable' of 'unknown' gebeurt hetzelfde bij het volgende frame. Bij verwarmen telt de meeste airco's uit zichzelf 2 °C bij de instelling op — een sensor in de kamer maakt dat zichtbaar; hoe je dat op het toestel uitschakelt staat in de README.",
+              "overshoot_cool": "Hoe ver de kamer voorbij je instelling gaat voordat de airco stopt. Ingesteld op 22 °C, kamer blijft op 21,5 °C staan: vul 0,5 in. Begint op 0,5, want dat is wat de tot nu toe gemeten toestellen nodig hebben — kijk waar jouw kamer uitkomt en pas aan. Blijft hij er juist boven en wordt het nooit koud genoeg, vul dan een negatief getal in. Geldt alleen bij koelen — drogen heeft een eigen veld, en in automatisch krijgt de airco je meting ongewijzigd.",
+              "overshoot_dry": "Hetzelfde voor drogen, dat ook koelt en dus hetzelfde teken heeft. Begint op 0: het enige tot nu toe gemeten toestel kwam in deze stand precies op zijn instelling uit, met een bredere band dan bij koelen. Gaat jouw kamer eroverheen, stel dan een doel in, laat de kamer tot rust komen en vul in hoever hij eroverheen ging.",
               "overshoot_heat": "Hetzelfde voor verwarmen: positief als de kamer boven je instelling uitkomt, negatief als hij eronder blijft."
             }
           },

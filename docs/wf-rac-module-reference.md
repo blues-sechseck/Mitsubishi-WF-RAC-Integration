@@ -486,13 +486,23 @@ not, and the bit is the one that answers "is this room being served".
 `state[7] & 0x10` stayed set in every sample, at 0 Hz and at full load alike,
 so whatever it means, it is not compressor state.
 
-### 4.5 Temperatures — prefer the segments over `state[5]`
+### 4.5 Temperatures — one byte, one table
 
 `state[5]` is `DB3`, the *room temperature the controller is currently working
-with*, in the SPI encoding `T = (raw − 61) / 4`, 0.25 °C steps `[EXT]`. It is
-populated on a live device — verified against a capture where `state[5] = 0x9A`
-⇒ 23.25 °C while the indoor-temperature segment read 23.5 °C `[HW]`. Usable as a
-coarse fallback, and useful as a plausibility check.
+with*. It is the **same raw byte** the pushed indoor-temperature segment (§5.2)
+carries — verified on two units over nine consecutive frames, `state[5]` equal to
+the segment's data byte every time `[HW]` — and it decodes through the same
+256-entry thermistor table (`indoorTempList`, 0.1 °C steps, −30…52 °C) `[APP]`.
+Over the living range (16…31 °C) that table is linear at `T = (raw − 59) / 4`
+within 0.05 K, i.e. 0.25 °C steps; outside it, it bends like the thermistor curve
+it is, so copy the table rather than fit a line.
+
+The SPI-bus projects decode this byte as `T = (raw − 61) / 4` `[EXT]`. Against the
+manufacturer's own table that reads half a kelvin low across the whole living
+range. It is very likely the "< 0.5 °C" discrepancy between room and return-air
+temperature that MHI-AC-Trace notes without explanation, and it was the constant
+this project encoded with until September 2026 — which is where the apparent
+0.5 K "echo" on injected values came from (§5.6).
 
 **The `0xFF` convention runs the other way.** `0xFF` means "no external value" in
 the *write* direction (`command[5]`, §5.6); in the read direction the AC reports
@@ -502,10 +512,10 @@ Which is literal: with an external room temperature injected, `state[5]` carries
 back exactly the value that was written, and so does the pushed indoor-temperature
 segment below — neither is a reading of the room any more. See §5.6. `[HW]`
 
-The temperature you actually want arrives as **pushed variable segments** (§5.2)
-with much better resolution: 256-entry thermistor lookup tables, 0.1 °C steps,
-−30…52 °C indoor and −50…43 °C outdoor. These tables are non-linear and are not
-derivable from a formula — copy them (the ones in this project live in
+The **pushed variable segments** (§5.2) remain the place to read temperatures
+from: the indoor one carries this same byte, the outdoor one has a table of its
+own (−50…43 °C), and both arrive unsolicited. The tables are non-linear and are
+not derivable from a formula — copy them (the ones in this project live in
 [`pywfrac`'s `utils.py`](https://github.com/blues-sechseck/pywfrac/blob/main/src/pywfrac/utils.py)). `[APP]`
 
 ---
@@ -1014,8 +1024,13 @@ different code byte.
 ### 5.6 Injecting an external room temperature
 
 `command[5]` reaches the bus as `DB3`. Writing a value below `0xFF` makes the AC
-use it **instead of** its built-in sensor `[EXT]`; the encoding is
-`raw = round(T × 4) + 61`.
+use it **instead of** its built-in sensor `[EXT]`. The encoding is the inverse of
+the indoor-temperature table of §4.5: send the index whose table entry is nearest
+to `T`, which over 16…31 °C is `raw = round(T × 4) + 59`. **Not `+ 61`** — with
+that constant every injected value arrives half a kelvin warm, the app shows
+26.5 for a sent 26.0, and a cooling thermostat that stops a quarter to three
+quarters of a kelvin under the setting looks as if it stopped a full kelvin under
+it `[HW]`.
 
 The official app never writes this byte — it is fixed at `0xFF`. `[APP]` The
 path is open on the WF-RAC interface `[FW]`, and it works: **verified on an
@@ -1023,19 +1038,18 @@ SRK20ZS-WF** (`WF-RAC-HTTPS` 025/200) in cooling `[HW]`. It is a real control
 command, not a query. This is the single most requested reason for replacing the
 module with an ESP32, and it does not require replacing anything.
 
-**Both read paths follow the injected value.** 18.0 °C written into `command[5]`
+**Both read paths follow the injected value.** `0x85` written into `command[5]`
 came back one poll cycle later as `state[5] = 0x85` — exactly the byte written —
-and as 18.5 °C in the pushed indoor-temperature segment (§5.2), while the room
-was at 21.2 °C. Writing `0xFF` again restored the real reading within one cycle,
-to 0.05 K of its previous value. So while an override stands, **nothing on the
-wire still reports the unit's own sensor**: a client that wants the room
-temperature has to keep its own source.
+and as 18.5 °C in the pushed indoor-temperature segment (§5.2), the same byte
+through the table, while the room was at 21.2 °C. Writing `0xFF` again restored
+the real reading within one cycle, to 0.05 K of its previous value. So while an
+override stands, **nothing on the wire still reports the unit's own sensor**: a
+client that wants the room temperature has to keep its own source.
 
-The 0.5 K between the two is not something the AC adds to injected values. The
-same gap sits between `state[5]` and the pushed segment in every reading with no
-override in sight (22.50/23.0, 22.25/22.7, 20.75/21.2) — `state[5]` steps in
-0.25 K, the pushed segment comes from the 0.1 K table of §5.2. One source, two
-resolutions.
+The AC adds nothing to an injected value on the way back. The 0.5 K gap between
+`state[5]` and the pushed segment that earlier captures seemed to show
+(22.50/23.0, 22.25/22.7, 20.75/21.2) was the `− 61` decoding of `state[5]` held
+against the table's decoding of the very same byte — see §4.5.
 
 The value has no set-bit of its own (§4.3), so it is written by whichever frame
 goes out next and reverted by any frame that leaves the byte at `0xFF` — there is

@@ -282,12 +282,12 @@ def _service_entity(device) -> AircoClimate:
 
 def _mark_reached_the_unit(device, temperature: float) -> None:
     """Put the device in the state that follows a frame carrying the override:
-    the frame recorded what it wrote, byte 5 echoes it back, and the 0.1 K
-    segment carries the same reading."""
-    raw = round(temperature * 4) + 61
+    the frame recorded what it wrote, byte 5 echoes it back, and the pushed
+    indoor-temperature segment decodes that same byte."""
+    raw = round(temperature * 4) + 59
     device.external_temperature._written.append(raw)
     device.airco.ControllerRoomTempRaw = raw
-    device.airco.IndoorTemp = temperature + 0.5
+    device.airco.IndoorTemp = temperature
 
 
 async def test_set_external_temperature_arms_without_sending_anything(device):
@@ -333,8 +333,8 @@ async def test_update_state_uses_indoor_temp_without_override(device):
 
 async def test_update_state_shows_the_value_the_unit_is_being_fed(device):
     # Whoever supplied the value has said what the room is, so that is what the
-    # card shows - not the unit's echo of it, which lands half a kelvin off in
-    # the protocol's coarser segment. The calibration offset drops out too: it
+    # card shows - not the unit's echo of it, which carries the overshoot
+    # correction rather than the room. The calibration offset drops out too: it
     # corrects the unit's own sensor, which is not what the unit is regulating
     # on any more.
     _set_options(device, {CONF_INDOOR_OFFSET: 1.5})
@@ -482,7 +482,7 @@ async def test_current_temperature_shows_the_room_not_the_bent_value(device):
 @pytest.mark.parametrize("overshoot", [0.0, 1.0])
 async def test_current_temperature_does_not_move_with_the_overshoot(device, overshoot):
     # The reading used to switch source depending on whether an overshoot was
-    # set, which moved the displayed room temperature by half a kelvin when an
+    # set, which moved the displayed room temperature by the correction when an
     # unrelated option changed - and every automation comparing it against a
     # threshold inherited that silently.
     _set_options(device, {CONF_OVERSHOOT_COOL: overshoot})

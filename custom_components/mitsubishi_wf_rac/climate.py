@@ -798,9 +798,9 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         # While the unit is regulating on a temperature someone supplied, that
         # value is the room and the card shows it - see
         # Device.external_temperature_room_value. What the unit reports back
-        # is its own rendering of what it was handed, which is why the Indoor
-        # Temperature sensor (still verbatim) and the card disagree exactly
-        # then and only then.
+        # is what it was handed, overshoot correction included, which is why
+        # the Indoor Temperature sensor (still verbatim) and the card disagree
+        # exactly then and only then - by the correction.
         # Otherwise the reading is the unit's, plus the calibration offset -
         # which is suspended while an override is in effect, because it
         # corrects the unit's own return-air sensor and that sensor is out of

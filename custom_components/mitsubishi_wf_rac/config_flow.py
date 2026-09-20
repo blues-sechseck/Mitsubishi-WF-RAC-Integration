@@ -64,7 +64,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # Has to match the highest version async_migrate_entry produces. Home
     # Assistant skips migration entirely once entry.version equals this, so a
     # new step that is not reflected here never runs.
-    VERSION = 7
+    VERSION = 8
     DOMAIN = DOMAIN
 
     def __init__(self) -> None:
@@ -636,7 +636,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         # correction the other way, and there is no reason to make that
         # impossible before anyone has looked.
         # A quarter degree is where this one stops mattering: the room
-        # temperature byte it corrects is round(T * 4) + 61, and the source
+        # temperature byte it corrects carries 0.25 K steps, and the source
         # value entering that sum has already been snapped to the same grid
         # (see AircoClimate._external_temperature_from_source_state), so a
         # finer correction is rounded away for every reading rather than only
@@ -658,8 +658,9 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                     device_class="temperature",
                     # This integration's own temperature sensors report the
                     # injected value back while an override is armed, so
-                    # picking one would feed the override into itself and walk
-                    # it away from the room half a kelvin per poll.
+                    # picking one would feed the override into itself - and
+                    # with an overshoot set, walk it away from the room by
+                    # that much per poll.
                     # EntitySelector rejects an excluded entity on submit, not
                     # just in the picker, so this is the enforcement and not
                     # only a convenience.
@@ -680,24 +681,25 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         if self._source_configured:
             source_fields.update(
                 {
-                    # Cooling starts at the figure four units have measured
-                    # (0.6-1.3 K past the setting, three of them 1.0-1.2), so
-                    # the field opens on a number that is roughly right
-                    # instead of on one that is certainly wrong. It is a
-                    # pre-fill and nothing more: the correction applies once
-                    # the form is saved, and the feed's overshoot still reads 0
-                    # until then, so nobody's regulation moves without them
-                    # seeing the value first. Heating has looked symmetric
-                    # around the setting wherever it has been measured, so
-                    # there is no figure to offer - and dry opens on zero for
-                    # the opposite reason: nobody has measured it at all, and a
-                    # pre-filled guess there would move real regulation on the
-                    # strength of one (#218).
+                    # Cooling starts at the figure four units have measured:
+                    # their thermostat band stops 0.25-0.75 K past the
+                    # setting once the reading reaches the unit on the
+                    # manufacturer's scale (#218), so the field opens on a
+                    # number that is roughly right instead of on one that is
+                    # certainly wrong. It is a pre-fill and nothing more: the
+                    # correction applies once the form is saved, and the
+                    # feed's overshoot still reads 0 until then, so nobody's
+                    # regulation moves without them seeing the value first.
+                    # Heating has looked symmetric around the setting wherever
+                    # it has been measured, so there is no figure to offer -
+                    # and the one dry measurement so far needed no correction
+                    # beyond the scale itself, so dry opens on zero as a
+                    # measured figure rather than a placeholder.
                     vol.Optional(
                         key, default=options.get(key, suggested)
                     ): overshoot_validator
                     for key, suggested in (
-                        (CONF_OVERSHOOT_COOL, 1.0),
+                        (CONF_OVERSHOOT_COOL, 0.5),
                         (CONF_OVERSHOOT_DRY, 0.0),
                         (CONF_OVERSHOOT_HEAT, 0.0),
                     )
