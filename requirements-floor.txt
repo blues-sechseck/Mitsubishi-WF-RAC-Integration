@@ -7,4 +7,4 @@
 # that the number we publish is the number the tests ran against.
 pytest-homeassistant-custom-component==0.13.325
 mypy
-pywfrac==0.1.4
+pywfrac==0.1.5
