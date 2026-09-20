@@ -34,6 +34,8 @@ from .coordinator import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
     Device,
     registration_full_issue_id,
+)
+from .foreign_writers import (
     request_stops_unit_issue_id,
     status_request_unsupported_issue_id,
 )

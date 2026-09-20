@@ -50,7 +50,7 @@ _LOGGER = logging.getLogger(__name__)
 # on every poll. Confirmed against a real module. Detecting the other client
 # cannot substitute for the free window:
 # a refused write changes nothing the module reports back, so a client we never
-# let through is a client we never see (see _detect_foreign_activity).
+# let through is a client we never see (see ForeignWriterWatch.detect).
 SERVICE_DATA_REQUEST_INTERVAL = MIN_TIME_BETWEEN_UPDATES
 
 # A guard against a second request landing in the same poll, not a skip of

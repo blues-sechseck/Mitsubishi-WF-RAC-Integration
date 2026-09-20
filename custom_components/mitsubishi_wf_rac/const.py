@@ -35,7 +35,7 @@ CONF_FIRMWARE_UPDATE_CHECK = "firmware_update_check"
 CONF_CREATE_SWING_MODE_SELECT = "create_swing_mode_select"
 CONF_CONNECTION_METHOD = "connection_method"
 # Learned, not configured: which shape of operation-data request this unit can
-# be asked with. Written by Device._check_request_was_applied() the first time
+# be asked with. Written by ForeignWriterWatch.check_request_was_applied() the first time
 # the unit answers one by changing its own settings.
 #
 # strict  the request carries an empty command block, no set-bits. Correct

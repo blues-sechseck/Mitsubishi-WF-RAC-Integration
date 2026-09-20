@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from datetime import datetime, timedelta
 import logging
 import re
-from typing import Any, Final
+from typing import Any
 
 from pywfrac import (
     Aircon,
@@ -47,6 +47,7 @@ from .const import (
 )
 from .external_temperature import ExternalTemperatureFeed
 from .firmware_check import fetch_latest_firmware
+from .foreign_writers import ForeignWriterWatch
 from .service_data import ServiceDataChannel
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,16 +95,6 @@ SERVICE_DATA_STAMP_BACKDATE = timedelta(seconds=55)
 # these refusals are transient, so one retry is worth the extra request.
 SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
 
-# How long another client's last write keeps us from sending operation-data
-# requests at all. Someone who has just taken the lock is someone using the
-# unit right now, and the free window SERVICE_DATA_REQUEST_INTERVAL leaves is
-# only wide enough for one write - not for a session of them. Three minutes
-# covers a typical app session. The operation-data sensors hold their last
-# values throughout - a pause we chose is not the stale-data case
-# SERVICE_DATA_MAX_AGE guards against, and External Control says plainly that
-# it is happening. See _settle_service_data_pause().
-FOREIGN_ACTIVITY_BACKOFF = timedelta(minutes=3)
-
 # One retry for a user command refused because someone else holds the lock,
 # timed to land just after the lock lapses (see _async_write_lock_delay). Used
 # as-is only when the remaining lock time cannot be established, where a short
@@ -112,27 +103,6 @@ FOREIGN_ACTIVITY_BACKOFF = timedelta(minutes=3)
 # than repeated - two clients are genuinely fighting over the unit at that
 # point.
 WRITE_LOCK_RETRY_DELAY = timedelta(seconds=10)
-
-# What the settings look like on a unit that applied an all-zero command block.
-# Every field in it decodes to the lowest value it can hold: power off, mode
-# auto, fan and both vane axes to their first position. The setpoint is not
-# listed because its zero is clamped by the unit to a floor we cannot know from
-# here (10 C on the one module that does this) - it is checked as "moved down"
-# instead. See _check_request_was_applied().
-EMPTY_BLOCK_SETTINGS: Final = {
-    "Operation": False,
-    "OperationMode": 0,
-    "AirFlow": 1,
-    "WindDirectionUD": 1,
-    "WindDirectionLR": 1,
-}
-
-# How many of those fields have to land on their zero value at once before we
-# call it applied rather than coincidence. Three, and only when no field moved
-# anywhere else in the same answer: somebody turning the fan down to step 1 and
-# the setpoint down with it would otherwise read as the fault, and the cost of
-# believing that is undoing the change they just made.
-EMPTY_BLOCK_MATCH_MIN: Final = 3
 
 # The lock runs 60 seconds, so a longer wait than that means the deadline was
 # stamped by a client whose clock is off rather than that the lock is really
@@ -163,21 +133,6 @@ POLL_TIMEOUT = 2 * REQUEST_TIMEOUT + MIN_TIME_BETWEEN_REQUESTS + timedelta(secon
 # genuinely gone. Raising it is a legitimate choice on a weak link; lowering it
 # only ever produced the phantom outages this floor exists to prevent.
 AVAILABILITY_FAILURE_LIMIT_MIN = 3
-
-
-def request_stops_unit_issue_id(entry_id: str) -> str:
-    """Repair-issue id for a unit that applies the request meant only to ask."""
-    return f"request_stops_unit_{entry_id}"
-
-
-def status_request_unsupported_issue_id(entry_id: str) -> str:
-    """Repair-issue id for a unit we have stopped asking altogether.
-
-    Its own id rather than a second wording under the one above: the two say
-    different things and the second replaces the first, so the first has to be
-    withdrawn rather than overwritten.
-    """
-    return f"status_request_unsupported_{entry_id}"
 
 
 def registration_full_issue_id(entry_id: str) -> str:
@@ -269,9 +224,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firmware = ""
         self._connected_accounts = -1
         self._updated_by: str | None = None
-        # The settings a status request was built from, kept until something
-        # has been able to answer for them - see _check_request_was_applied().
-        self._request_baseline: dict[str, Any] | None = None
         self._account_expires: int | None = None
         self._led_status: int | None = None
         self._auto_heating: int | None = None
@@ -281,24 +233,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firmware_update_available: bool | None = None
         self._last_firmware_check: datetime | None = None
         self._firmware_update_check_enabled = firmware_update_check_enabled
-        # Foreign-write detection, see _detect_foreign_activity(). The flag is
-        # set by our own successful writes and consumed by the next poll, so a
-        # rise in `expires` can be attributed to us or to someone else.
-        self._wrote_since_last_poll = False
-        # Narrower than the flag above and consumed by the same poll: only a
-        # frame that could actually move a setting sets this one. Our own
-        # operation-data request moves `expires` every cycle without carrying
-        # a single set-bit, and reading that as "a write happened" is what
-        # would leave every change made at the unit unattributable.
-        self._wrote_settings_since_last_poll = False
-        self._expected_settings: dict[str, Any] | None = None
         # When we last sent a real (set-bit) command, so an operation-data
         # request within one lock's span of it stamps honestly instead of
         # trimming that command's lease - see _service_data_stamp_backdate().
         self._last_command_at: datetime | None = None
-        self._foreign_activity_until: datetime | None = None
-        self._foreign_activity_reported = False
-        self._foreign_activity_since: datetime | None = None
+        self.foreign_writers = ForeignWriterWatch(self)
         self.service_data = ServiceDataChannel(self)
         self.external_temperature = ExternalTemperatureFeed(self)
         self._consecutive_failures = 0
@@ -516,7 +455,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # response. Tolerate absence (.get()) since it's undocumented and
             # could be missing on older firmware.
             self._updated_by = response.get("updatedBy")
-            self._detect_foreign_activity(response.get("expires"))
+            self.foreign_writers.detect(response.get("expires"))
             self._account_expires = response.get("expires")
             self._led_status = response.get("ledStat")
             self._auto_heating = response.get("autoHeating")
@@ -606,139 +545,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._firmware_update_available = update_available
         self.async_set_updated_data(self._airco)
 
-    def _detect_foreign_activity(self, expires: Any) -> None:
-        """Notice when someone else has written to the unit, from `expires`.
-
-        The module reports the moment its 60-second write lock lapses, and
-        that moment only moves when a setAirconStat succeeds. So a higher
-        `expires` than the previous poll saw means a write happened in
-        between - ours if we sent one, somebody else's if we did not. That is
-        the whole detector: no extra request, and no dependence on the
-        module's clock agreeing with ours, because only the difference is
-        read.
-
-        `updatedBy` cannot do this job. It reports the literal "local" for
-        any account registered with remote=0, which is how this integration
-        registers (remote=1 is what makes the module open its cloud
-        connection, so it is not an option) - and a locally paired Smart
-        M-Air app registers the same way. Both therefore show up as "local"
-        and cannot be told apart.
-
-        A write the module refused is a write that never happened as far as
-        it is concerned: it reports neither the attempt nor who made it. So a
-        client we lock out permanently is a client we never learn about, and
-        this detector only works on top of a lock we let go of regularly -
-        see SERVICE_DATA_REQUEST_INTERVAL.
-
-        Known blind spot: someone else writing in the same gap in which we
-        did hides behind our own write, and this poll says nothing. The next
-        one catches them as soon as they act again, which for anyone actually
-        using the app is seconds away.
-        """
-        wrote = self._wrote_since_last_poll
-        self._wrote_since_last_poll = False
-        wrote_settings = self._wrote_settings_since_last_poll
-        self._wrote_settings_since_last_poll = False
-
-        expires_moved = (
-            isinstance(expires, int)
-            and isinstance(self._account_expires, int)
-            and expires > self._account_expires
-        )
-        if expires_moved and not wrote:
-            self._note_foreign_write(f"expires moved {self._account_expires} -> {expires}")
-        # Not `expires_moved or wrote`: our own operation-data request moves
-        # `expires` in most cycles and carries no set-bits, so that reading
-        # would call every change unattributable and never name the one thing
-        # this detector exists for. What is asked here is narrower - could a
-        # write, ours or anyone's, have moved a setting in this gap?
-        self._note_unexpected_settings(
-            wrote_settings or (expires_moved and not wrote)
-        )
-        # After the settings diff, because the poll that carries the evidence
-        # is the one that has just refreshed the state it is read from.
-        self._check_request_was_applied(self._request_baseline)
-        self._request_baseline = None
-        self._report_foreign_activity()
-
-    def _note_foreign_write(self, evidence: str) -> None:
-        if self._foreign_activity_since is None:
-            self._foreign_activity_since = dt_util.utcnow()
-        self._foreign_activity_until = dt_util.utcnow() + FOREIGN_ACTIVITY_BACKOFF
-        _LOGGER.debug("Another client wrote to [%s]: %s", self.device_name, evidence)
-
-    def _settings_snapshot(self) -> dict[str, Any] | None:
-        """The fields nothing but a write changes.
-
-        Deliberately none of the measurements: temperatures, currents and the
-        operation-data values move on their own every cycle. Vacant and
-        self-clean are left out for the same reason one step removed - the
-        unit turns those on by itself, and both drag a setpoint with them.
-        """
-        if self._airco is None:
-            return None
-        return {
-            name: getattr(self._airco, name)
-            for name in (
-                "Operation",
-                "OperationMode",
-                "PresetTemp",
-                "AirFlow",
-                "WindDirectionUD",
-                "WindDirectionLR",
-                "Entrust",
-            )
-        }
-
-    def _note_unexpected_settings(self, someone_wrote: bool) -> None:
-        """Notice a setting that changed without us changing it.
-
-        The only signal our own traffic cannot erase: `expires` and
-        `updatedBy` are overwritten by our next write, a changed setting is
-        not. It adds the case no write lock was taken for - only a
-        setAirconStat moves `expires`, so a setting that moved while `expires`
-        stood still was not changed over the network at all, but at the IR
-        remote, by a timer, or by one of the unit's own modes. No lock is held
-        there, so this only reports; the stand-down stays with the writes.
-
-        someone_wrote asks whether a set-bit could have been sent in this gap,
-        not whether any frame was - our own operation-data request moves
-        `expires` every cycle while changing nothing. The price is a wrong
-        label rather than a missing message: a foreign client writing in the
-        same gap as one of our requests reads as the unit itself, the module
-        offering no second record to tell them apart.
-
-        Not every one of these is somebody's doing - the unit resets its own
-        setpoint after a power cycle, and Vacant and self-clean move settings
-        with nobody asking. And one case is invisible by construction: a
-        change we undo while carrying the power state back leaves the value
-        exactly where we expect it.
-        """
-        current = self._settings_snapshot()
-        expected = self._expected_settings
-        self._expected_settings = current
-        if current is None or expected is None or current == expected:
-            return
-        changed = ", ".join(
-            f"{name} {expected[name]} -> {value}"
-            for name, value in current.items()
-            if expected[name] != value
-        )
-        if someone_wrote:
-            _LOGGER.debug(
-                "[%s] changed while a write was in flight, so who did it "
-                "cannot be told from here: %s",
-                self.device_name,
-                changed,
-            )
-            return
-        _LOGGER.debug(
-            "[%s] was changed at the unit itself - nothing took the write "
-            "lock: %s",
-            self.device_name,
-            changed,
-        )
-
     async def _async_write_lock_delay(self) -> float:
         """Seconds to wait before retrying a write the unit just refused.
 
@@ -773,63 +579,28 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         remaining = expires - dt_util.utcnow().timestamp() + 1
         return max(0.0, min(remaining, WRITE_LOCK_MAX_WAIT.total_seconds()))
 
-    def _report_foreign_activity(self) -> None:
-        """Say so, once, when we start and stop holding back.
-
-        Worth a log line rather than only the binary sensor: while this is on,
-        the operation-data sensors report unknown, and someone reading the log
-        to find out why deserves to find the reason there.
-        """
-        active = self.foreign_activity
-        if active == self._foreign_activity_reported:
-            return
-        self._foreign_activity_reported = active
-        if active:
-            _LOGGER.info(
-                "Another client is controlling [%s]; pausing operation-data "
-                "requests for up to %.0fs so it keeps working. Its sensors "
-                "hold their last values meanwhile.",
-                self.device_name,
-                FOREIGN_ACTIVITY_BACKOFF.total_seconds(),
-            )
-        else:
-            _LOGGER.info(
-                "No other client active on [%s]; resuming operation-data requests",
-                self.device_name,
-            )
-
     def settle_service_data_pause(self) -> None:
-        """Move the operation-data age anchor forward past a stand-down.
+        """Move the operation-data age anchor past a stand-down we chose.
 
-        Forward by however long the stand-down lasted.
-
-        Without this the readings would expire on the very first poll after
-        resuming: the gap is one we chose, so counting it against
-        SERVICE_DATA_MAX_AGE would throw away values that are perfectly good
-        and about to be refreshed anyway.
-
-        Kept out of _report_foreign_activity() on purpose - that one only
-        logs, and runs after _carry_forward_service_data() has already
-        decided. This has to have happened before that decision.
+        See ForeignWriterWatch.pause_to_settle for why the gap is not counted
+        against SERVICE_DATA_MAX_AGE.
         """
-        if self._foreign_activity_since is None or self.foreign_activity:
-            return
-        if self._foreign_activity_until is not None:
-            self.service_data.shift_anchor(
-                self._foreign_activity_until - self._foreign_activity_since
-            )
-        self._foreign_activity_since = None
+        span = self.foreign_writers.pause_to_settle()
+        if span is not None:
+            self.service_data.shift_anchor(span)
 
     @property
     def foreign_activity(self) -> bool:
-        """Whether another client wrote recently enough that we stand down.
+        """Whether another client wrote recently enough that we stand down."""
+        return self.foreign_writers.active
 
-        See FOREIGN_ACTIVITY_BACKOFF for what counts as recently.
+    @property
+    def status_request_mode(self) -> str:
+        """Which shape of operation-data request this unit gets, if any.
+
+        Learned from the unit and persisted - see adopt_status_request_mode.
         """
-        return (
-            self._foreign_activity_until is not None
-            and dt_util.utcnow() < self._foreign_activity_until
-        )
+        return self._status_request_mode
 
     @property
     def service_data_supported(self) -> bool:
@@ -967,14 +738,14 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # Taken here rather than at the poll: what the answer has to be read
         # against is the state this very frame was built from, and on the echo
         # path _async_read_before_echo() has just refreshed it.
-        before = self._settings_snapshot()
+        before = self.foreign_writers.snapshot()
         # Kept for the poll as well. The module answers our request with its
         # own cached state, and the frame's trip down the CNS bus to the indoor
         # unit need not have finished by then - measured on the affected unit,
         # the settings it cleared showed up a poll later, not in the answer
         # (#329). Checking only the answer would have reproduced the blind spot
         # this detector was rewritten to close.
-        self._request_baseline = before
+        self.foreign_writers.note_status_request(before)
         # _carry_forward_service_data() moves this whenever a segment arrives,
         # so comparing it across the request says whether this one was answered
         # - which the state itself cannot, the previous reading being carried
@@ -991,7 +762,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
-                self._check_request_was_applied(before)
+                self.foreign_writers.check_request_was_applied(before)
                 self.service_data.note_whether_anything_answered(answered_before)
                 self.service_data.note_offset_survived()
                 # Notify, but deliberately not through async_set_updated_data():
@@ -1085,122 +856,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._clear_registration_full_issue()
         return result
 
-    def _empty_block_matches(self, before: Mapping[str, Any]) -> list[str]:
-        """The settings that moved to exactly what an all-zero block encodes.
-
-        Compares the state before our own status request with the one the unit
-        answered it with. Empty when anything moved somewhere else.
-
-        That veto is what separates this from an ordinary change. A block
-        applied as zeros lands every field on its minimum at once; a person at
-        the remote picks values, and one field moving to a value of its own is
-        enough to say this was not our frame being applied.
-
-        The setpoint counts when it moved *down*: its zero is clamped by the
-        unit to a floor we do not know from here, so the value cannot be
-        predicted - only the direction can. Upwards it is a contradiction like
-        any other.
-        """
-        if self._airco is None:
-            return []
-        matched: list[str] = []
-        for name, zero in EMPTY_BLOCK_SETTINGS.items():
-            if before.get(name) == getattr(self._airco, name):
-                continue
-            if getattr(self._airco, name) != zero:
-                return []
-            matched.append(name)
-        setpoint_before = before.get("PresetTemp")
-        if setpoint_before is not None and self._airco.PresetTemp != setpoint_before:
-            if self._airco.PresetTemp > setpoint_before:
-                return []
-            matched.append("PresetTemp")
-        return matched
-
-    def _check_request_was_applied(self, before: Mapping[str, Any] | None) -> None:
-        """Notice a unit that applies the request we only meant to ask with.
-
-        A status request has no set-bits, so on every unit we have measured it
-        changes nothing. On at least one it is applied field by field instead
-        (issue #329): the zeros become power off, mode auto, fan and both vanes
-        to position 1, and a setpoint of zero clamped up to the unit's heating
-        floor. Since the request repeats every minute, such a unit cannot be
-        held at any setting at all while one operation-data sensor is enabled.
-
-        What is watched for is that whole pattern, not the shutdown alone. The
-        shutdown is only its most visible part and it is also the part a unit
-        that is already off can no longer show - which is where the earlier
-        version of this got stuck, on the one unit it was written for.
-
-        One occurrence is enough. The test is not that something moved but that
-        everything that moved landed on its minimum at the moment of our own
-        request, and nothing else does that: the remote and the app write the
-        values somebody chose.
-
-        Escalates rather than gives up. First occurrence switches the request
-        to carrying the unit's own settings, which is the shape the
-        manufacturer's app uses and should make the frame confirm them. A
-        second occurrence in that shape means the frame is not what the unit
-        objects to, and then the only honest answer is to stop sending it.
-        """
-        if before is None or self._status_request_mode == STATUS_REQUEST_SILENT:
-            return
-        matched = self._empty_block_matches(before)
-        if len(matched) < EMPTY_BLOCK_MATCH_MIN:
-            return
-        changed = ", ".join(
-            f"{name} {before[name]} -> {getattr(self._airco, name)}"
-            for name in matched
-        )
-        if self._status_request_mode == STATUS_REQUEST_STRICT:
-            self._adopt_status_request_mode(STATUS_REQUEST_ECHO)
-            _LOGGER.warning(
-                "[%s] applied the settings in the request that asked it for "
-                "operation data, which carries none: %s. From now on that "
-                "request carries the unit's own settings back to it, so the "
-                "frame confirms them instead of clearing them",
-                self.device_name,
-                changed,
-            )
-        else:
-            self._adopt_status_request_mode(STATUS_REQUEST_SILENT)
-            _LOGGER.warning(
-                "[%s] changed its settings during an operation-data request "
-                "that carried its own state: %s. Nothing this integration can "
-                "put in that frame leaves the unit alone, so it will not be "
-                "sent again. The operation-data sensors and the external "
-                "temperature override stop working on this unit; everything "
-                "else is unaffected",
-                self.device_name,
-                changed,
-            )
-        # Answered for: without this the poll would read the same change again
-        # and escalate a step that has just been taken.
-        self._request_baseline = None
-        self.hass.async_create_task(self._async_restore_settings(before))
-        if self._status_request_mode == STATUS_REQUEST_SILENT:
-            # The advice in the first issue - watch it for a few minutes - has
-            # been overtaken by what just happened.
-            ir.async_delete_issue(
-                self.hass, DOMAIN, request_stops_unit_issue_id(self.entry_id)
-            )
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            request_stops_unit_issue_id(self.entry_id)
-            if self._status_request_mode == STATUS_REQUEST_ECHO
-            else status_request_unsupported_issue_id(self.entry_id),
-            is_fixable=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key=(
-                "request_stops_unit"
-                if self._status_request_mode == STATUS_REQUEST_ECHO
-                else "status_request_unsupported"
-            ),
-            translation_placeholders={"device_name": self.device_name},
-        )
-
-    def _adopt_status_request_mode(self, mode: str) -> None:
+    def adopt_status_request_mode(self, mode: str) -> None:
         """Switch the shape of the status request and write the choice down.
 
         Persisted because it is a property of the unit in front of us, not of
@@ -1215,34 +871,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self.hass.config_entries.async_update_entry(
             entry, data={**entry.data, CONF_STATUS_REQUEST_MODE: mode}
         )
-
-    async def _async_restore_settings(self, before: Mapping[str, Any]) -> None:
-        """Put back what the request just cleared.
-
-        The values are one round trip old rather than current, which is the
-        same freshness the echo itself runs on - and the alternative is
-        leaving the unit on settings nobody chose until somebody notices. Only
-        reached on the one frame that revealed the fault, so it cannot become
-        a loop: by the time it runs, the mode has already changed.
-        """
-        try:
-            await self.set_airco(
-                {
-                    AirconCommands.Operation: before["Operation"],
-                    AirconCommands.OperationMode: before["OperationMode"],
-                    AirconCommands.PresetTemp: before["PresetTemp"],
-                    AirconCommands.AirFlow: before["AirFlow"],
-                    AirconCommands.WindDirectionUD: before["WindDirectionUD"],
-                    AirconCommands.WindDirectionLR: before["WindDirectionLR"],
-                },
-                log_failure=False,
-            )
-        except (WfRacError, KeyError, TypeError, ValueError) as ex:
-            _LOGGER.warning(
-                "Could not restore the settings [%s] lost to our own request: %s",
-                self.device_name,
-                ex,
-            )
 
     def _report_registration_full(self) -> None:
         ir.async_create_issue(
@@ -1380,13 +1008,14 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # status request moves it too - it is a setAirconStat like any
                 # other - which is why the narrower flag below is a separate
                 # one and not this same value read twice.
-                self._wrote_since_last_poll = True
-                if not is_status_request or self._parser.status_request_carries_state:
-                    # A status request's block carries no set-bits, so nothing
-                    # in it can explain a setting that moved - unless this is
-                    # one of the units we carry the power state for (#329),
-                    # where the frame really does write Operation.
-                    self._wrote_settings_since_last_poll = True
+                # A status request's block carries no set-bits, so nothing in
+                # it can explain a setting that moved - unless this is one of
+                # the units we carry the power state for (#329), where the
+                # frame really does write Operation.
+                self.foreign_writers.note_write(
+                    could_move_a_setting=not is_status_request
+                    or self._parser.status_request_carries_state
+                )
                 new_airco = self._parser.translate_bytes(response)
                 self._carry_forward_home_leave_mode(new_airco)
                 self.service_data.carry_forward(new_airco)
@@ -1399,10 +1028,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # change made at the unit since the poll, which taking it as
                 # our expectation would swallow whole.
                 if not is_status_request:
-                    self._expected_settings = self._settings_snapshot()
-                    # A real command explains any settings that move after it,
-                    # so the status request before it no longer has to.
-                    self._request_baseline = None
+                    self.foreign_writers.note_own_command()
                 # After the write, and only for what the frame really carried
                 # - see ExternalTemperatureFeed.note_frame.
                 self.external_temperature.note_frame(
