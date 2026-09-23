@@ -106,7 +106,11 @@ OPERATION_MODE_DRY = 4
 CONF_OVERSHOOT_COOL = "overshoot_cool"
 CONF_OVERSHOOT_HEAT = "overshoot_heat"
 CONF_OVERSHOOT_DRY = "overshoot_dry"
-OVERSHOOT_MAX = 3.0
+# The heating band measured on one unit needs 3.0 on its own, which is what the
+# field used to allow in total. The bound is here to catch a typo: the room
+# temperature byte carries -29..51.6 °C, so a correction this size only leaves
+# that span for a reading no room sensor produces.
+OVERSHOOT_MAX = 5.0
 
 
 # Heating uses the unit's own Heating TempSetting (10.0°C), which matches

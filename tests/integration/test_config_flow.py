@@ -845,7 +845,7 @@ async def test_options_flow_saves_submitted_per_mode_offsets(hass: HomeAssistant
     assert result["data"][CONF_TARGET_OFFSET_HEAT] == -1.5
 
 
-@pytest.mark.parametrize("value", [1.25, -1.25, 0.0, 3.0, -3.0])
+@pytest.mark.parametrize("value", [1.25, -1.25, 0.0, 5.0, -5.0])
 async def test_options_flow_accepts_a_signed_overshoot(hass: HomeAssistant, value):
     # Overshooting is what everyone has measured, but a unit that stops short
     # of the setting needs the correction the other way. The fields only exist

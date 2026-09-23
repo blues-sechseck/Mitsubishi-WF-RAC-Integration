@@ -310,9 +310,9 @@ without one there is no room temperature for them to correct.
 | Target Temp. Offset | -5..5 °C | Calibrates the *setpoint sent to the unit* - see "Target Temp. Offset sign convention" below. Applies to every `hvac_mode` unless overridden by the two options below. |
 | Target Temp. Offset (Cooling) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `cool` and `dry` mode. Leave unset to keep using Target Temp. Offset for those modes too. |
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
-| Cooling overshoot | -3..3 °C, in steps of 0.25 | How far past your setting the room actually goes before the unit stops. Applies in `cool` mode only. Set 22 °C, room settles at 21.5 °C: enter 0.5. Quarter degrees are the finest step that reaches the unit - the room temperature it is fed is carried in 0.25 °C steps. Only shown, and only has an effect, while an Indoor temperature source is configured. |
-| Dry overshoot | -3..3 °C, in steps of 0.25 | The same for `dry`, which cools as well and takes the same sign. Opens on 0: the one unit measured in this mode landed on its setting. |
-| Heating overshoot | -3..3 °C, in steps of 0.25 | The same for heating, and in `heat` mode only: how far above your setting the room ends up. Positive in both cases. |
+| Cooling overshoot | -5..5 °C, in steps of 0.25 | How far past your setting the room actually goes before the unit stops. Applies in `cool` mode only. Set 22 °C, room settles at 21.5 °C: enter 0.5. Quarter degrees are the finest step that reaches the unit - the room temperature it is fed is carried in 0.25 °C steps. Only shown, and only has an effect, while an Indoor temperature source is configured. |
+| Dry overshoot | -5..5 °C, in steps of 0.25 | The same for `dry`, which cools as well and takes the same sign. Opens on 0: the one unit measured in this mode landed on its setting. |
+| Heating overshoot | -5..5 °C, in steps of 0.25 | The same for heating, and in `heat` mode only: how far above your setting the room ends up. Positive in both cases. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 
 ### Target Temp. Offset sign convention
