@@ -15,6 +15,39 @@ who use them on their own systems.
   is its Compressor Demand. Running on a four-head SCM80.
   ([discussion](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/discussions/328))
 
+- **[MHI multi-split AUTO replacement](automation/smdev0925/mhi-multi-split-auto-replacement.yaml)**
+  by [smdev0925](https://github.com/smdev0925) — takes MHI's AUTO off each
+  indoor unit and makes the heat/cool decision outside the unit. The setpoint
+  stays yours: the blueprint reads it and never writes one. The two limits are
+  distances from that setpoint rather than temperatures, so one pair of values
+  suits every room and the band moves when you move the setpoint. A unit cooling
+  whose room falls past the Cooling Limit turns to heating; a unit heating whose
+  room rises past the Heating Limit turns to cooling; everything else is left
+  alone. `off`, `dry`, `auto` and `fan_only` are ignored, and dry is a known
+  limitation. Optional lockout protection resolves the split this creates on a
+  multi-split, using the rules of the resolver above but without needing a
+  Cool/Heat Status sensor, because no unit is in AUTO and a unit's mode is its
+  request. A second option, Cooling priority, deals with the indoor expansion
+  valves staying open while the outdoor unit heats: a unit that changes to
+  cooling takes the outdoor unit at once, even from a heating unit that is
+  running, and while heating runs, every unit in cooling goes to heating
+  together, so it settles, closes its louvres and stops its fan rather than
+  blowing warm air into its room. With lockout protection on, the side that
+  ran last keeps the outdoor unit until a waiting room leaves its band; that
+  room then takes it, even while the other side runs, so neither side can keep
+  it for hours. A unit changed by hand between cooling and heating does not wait
+  for its band edge. A debug switch writes every decision, and
+  the reason for it, to the logbook. **Use this blueprint or the resolver on a
+  unit, never both — they deadlock each other.** Proven on a four-head SCM80: the
+  stand-down with its ten-second fan time, the restore and the handover; the
+  idle-units part of Cooling priority (before 0.10.0 it moved only rooms at or
+  below their setpoint); the immediate response to a mode changed by hand; and
+  one unit turning from heating to cooling at its own limit. **Cooling
+  priority's stand-down of a running heating side and the forced turn for a
+  room outside its band are off-line-tested only.**
+  **The cooling-to-heating rule has still not been seen to fire on hardware**,
+  nor has a genuine recovery from a stranded unit, nor the dry block.
+
 ## Why they live here and not in the integration
 
 The integration reports what a unit says and sends what you ask it to. It does
@@ -38,6 +71,25 @@ Home Assistant fetches it, checks it, and stores it under
 `blueprints/automation/<author>/` in your configuration directory. It then shows
 up under "Create automation → Use a blueprint". Re-importing the same URL later
 picks up changes.
+
+## Keeping one up to date
+
+Re-importing the same URL picks up changes, but you have to remember to do it,
+and two things quietly hand you a stale copy: `raw.githubusercontent.com` caches
+for five minutes, so a re-import straight after a push fetches the old file; and
+Home Assistant keeps parsed blueprints in memory, so editing the file on disk by
+hand changes nothing until you re-import or restart.
+
+[Blueprints Updater](https://github.com/luuquangvu/blueprints-updater) (MIT,
+install as a HACS custom repository under **Integration**) removes the chore. It
+watches the `source_url` each blueprint was imported from, offers updates as
+normal Home Assistant update entities, and can apply them automatically with a
+backup. It needs Home Assistant 2024.12 or later — one release newer than these
+blueprints require.
+
+Either way, check what is actually running rather than what the file says. The
+AUTO replacement blueprint prints its version at the front of every logbook
+entry for that reason.
 
 Each blueprint's header says which entities it needs. Several of the useful ones
 are diagnostic entities that are **disabled by default** — you turn those on
