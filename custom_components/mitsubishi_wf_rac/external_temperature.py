@@ -18,7 +18,11 @@ from collections import deque
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from pywfrac.parser import SERVICE_DATA_INDOOR_COIL_RAW
+from pywfrac.parser import (
+    EXTERNAL_TEMPERATURE_MAX,
+    EXTERNAL_TEMPERATURE_MIN,
+    SERVICE_DATA_INDOOR_COIL_RAW,
+)
 
 from .const import (
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
@@ -202,6 +206,13 @@ class ExternalTemperatureFeed:
         where cooling opens on the figure four units needed. Auto is left
         uncorrected: which direction it is running in is CoolHotJudge, a value
         some units never report.
+
+        Everything that enters the integration is checked against the span
+        byte 5 can carry (the action's schema, a restored override, a source
+        reading); the sum with the correction is not, and
+        encode_external_temperature() raises rather than saturating - the
+        frame is then dropped with a warning, and the next one too, for as
+        long as the reading stays out there.
         """
         if temperature is None:
             return None
@@ -209,10 +220,12 @@ class ExternalTemperatureFeed:
         if not overshoot:
             return temperature
         if operation_mode in (OPERATION_MODE_COOL, OPERATION_MODE_DRY):
-            return temperature - overshoot
-        if operation_mode == OPERATION_MODE_HEAT:
-            return temperature + overshoot
-        return temperature
+            bent = temperature - overshoot
+        elif operation_mode == OPERATION_MODE_HEAT:
+            bent = temperature + overshoot
+        else:
+            return temperature
+        return min(max(bent, EXTERNAL_TEMPERATURE_MIN), EXTERNAL_TEMPERATURE_MAX)
 
     def _resolve_overshoot(self, operation_mode: int) -> float:
         """The configured overshoot for the mode a frame is going out in."""

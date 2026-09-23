@@ -15,6 +15,8 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pywfrac import Aircon, AirconCommands, AirconStat
 from pywfrac.parser import (
+    EXTERNAL_TEMPERATURE_MAX,
+    EXTERNAL_TEMPERATURE_MIN,
     SERVICE_DATA_CODE_BY_FIELD,
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
@@ -402,6 +404,41 @@ async def test_set_airco_bends_the_override_the_other_way_when_negative(device):
 
     raw = base64.b64decode(captured["command"])
     assert raw[5] == round((18.7 + 0.75) * 4) + 59
+
+
+@pytest.mark.parametrize(
+    ("operation_mode", "overshoot_key", "override", "expected_raw"),
+    [
+        # Byte 5 is a table lookup, not a formula, and the table runs out:
+        # 0x10 is the coldest entry it distinguishes and 0xFE the warmest.
+        (2, CONF_OVERSHOOT_HEAT, EXTERNAL_TEMPERATURE_MAX - 1, 0xFE),
+        (1, CONF_OVERSHOOT_COOL, EXTERNAL_TEMPERATURE_MIN + 1, 0x10),
+    ],
+)
+async def test_set_airco_holds_the_bent_override_inside_the_encodable_span(
+    device, operation_mode, overshoot_key, override, expected_raw
+):
+    # Nothing a room sensor reports gets near the edge of the span, but the
+    # correction is the only arithmetic between a checked value and the wire.
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    _set_options(device, {overshoot_key: 5.0})
+    device.external_temperature._override = override
+
+    captured = {}
+
+    async def _capture_and_echo(airco_id, command, **_kwargs):
+        captured["command"] = command
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
+
+    await device.set_airco(
+        {AirconCommands.Operation: True, AirconCommands.OperationMode: operation_mode}
+    )
+
+    raw = base64.b64decode(captured["command"])
+    assert raw[5] == expected_raw
 
 
 async def test_set_airco_leaves_the_override_alone_in_auto(device):
