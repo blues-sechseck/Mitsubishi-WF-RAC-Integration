@@ -422,13 +422,13 @@ async def test_migrate_v7_keeps_the_shifted_overshoot_inside_the_range(
         hass,
         7,
         {**_DATA, CONF_HOST: "192.168.1.50"},
-        {CONF_OVERSHOOT_COOL: -3.0, CONF_OVERSHOOT_HEAT: 3.0},
+        {CONF_OVERSHOOT_COOL: -5.0, CONF_OVERSHOOT_HEAT: 5.0},
     )
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.options[CONF_OVERSHOOT_COOL] == -3.0
-    assert entry.options[CONF_OVERSHOOT_HEAT] == 3.0
+    assert entry.options[CONF_OVERSHOOT_COOL] == -5.0
+    assert entry.options[CONF_OVERSHOOT_HEAT] == 5.0
 
 
 async def test_the_device_name_follows_the_entry_title(hass: HomeAssistant):
