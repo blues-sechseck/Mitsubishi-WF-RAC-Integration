@@ -43,8 +43,9 @@
 # cooling room that had just finished, and Cooling priority moved that room to
 # heating, where it stayed until its Heating Limit. [HW]
 #
-# Changing a mode yourself. A change between cooling and heating, from anywhere,
-# triggers the automation directly rather than waiting for the five-minute check,
+# Changing a mode yourself. Putting a unit into cooling or heating - from the
+# other mode, or from off, dry or auto - triggers the automation directly
+# rather than waiting for the five-minute check,
 # and skips the settle time when nothing holds the compressor. A unit that is
 # running keeps it; the change waits its turn. The same holds for a change this
 # automation makes itself: the run it triggers is queued behind the one that
@@ -146,7 +147,7 @@ blueprint:
   homeassistant:
     min_version: "2024.10.0"
   description: >-
-    **Version 0.10.6** — 22 September 2026
+    **Version 0.10.7** — 24 September 2026
 
 
     To keep this up to date automatically, install
@@ -463,17 +464,28 @@ triggers:
   - trigger: time_pattern
     minutes: "/5"
 
-  # A mode changed between cooling and heating - by you, from the app, or from
-  # the remote control. Waiting up to five minutes to notice is too slow when
-  # nothing holds the compressor, so this fires at once. The from and to lists
-  # keep it to real mode changes: the hourly drop off the network moves a unit
-  # through unavailable and does not match.
+  # A unit put into cooling or heating - by you, from the app, or from the
+  # remote control. Waiting up to five minutes to notice is too slow when
+  # nothing holds the compressor, so this fires at once.
+  #
+  # The from list holds every state a person can leave: the other mode, off,
+  # dry and auto. Switching a unit on is as much a request as changing its
+  # mode. Until 0.10.7 only cool and heat were listed, so a unit switched on
+  # from off got neither the immediate handover nor Cooling priority, and
+  # waited for its band edge. [HW]
+  #
+  # Two states stay out of the list. `unavailable` is the hourly drop off the
+  # network, which is not a request. `fan_only` is what a stand-down writes, so
+  # listing it would make every restore trigger another run.
   - trigger: state
     id: mode_changed
     entity_id: !input climate_entities
     from:
       - cool
       - heat
+      - "off"
+      - dry
+      - auto
     to:
       - cool
       - heat
@@ -482,7 +494,7 @@ variables:
   # Bumped on every change. It appears at the top of the description, in the
   # trace, and at the front of every logbook entry, so the version actually
   # running can be read off a live system rather than assumed.
-  version: "0.10.6"
+  version: "0.10.7"
 
   climate_entities: !input climate_entities
   cool_limit: !input cool_limit
@@ -894,12 +906,15 @@ variables:
     {{ mode_change_trigger and in_use | count == 0 and settle_others }}
 
   # --- cooling priority ------------------------------------------------------
-  # This run was started by a unit changing from heating to cooling - by a rule,
-  # by you, the app or the remote - and the unit is still in cooling.
+  # This run was started by a unit being put into cooling - by a rule, by you,
+  # the app or the remote - and the unit is still in cooling. From heating, and
+  # also from off, dry or auto: switching a unit on into cooling is the same
+  # request. A restore from fan_only does not reach here, because the trigger
+  # does not match it.
   cool_request: >-
     {% set t = trigger | default({}) %}
     {{ t.get('id', '') == 'mode_changed'
-       and t.from_state.state == 'heat' and t.to_state.state == 'cool'
+       and t.from_state.state != 'cool' and t.to_state.state == 'cool'
        and states(t.entity_id) == 'cool' }}
 
   # The units that hold the heating side.
