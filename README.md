@@ -312,7 +312,7 @@ without one there is no room temperature for them to correct.
 | Target Temp. Offset (Heating) | -5..5 °C, unset by default | Overrides Target Temp. Offset for `heat` mode. Leave unset to keep using Target Temp. Offset for `heat` too. |
 | Cooling overshoot | -5..5 °C, in steps of 0.25 | How far past your setting the room actually goes before the unit stops. Applies in `cool` mode only. Set 22 °C, room settles at 21.5 °C: enter 0.5. Quarter degrees are the finest step that reaches the unit - the room temperature it is fed is carried in 0.25 °C steps. Only shown, and only has an effect, while an Indoor temperature source is configured. |
 | Dry overshoot | -5..5 °C, in steps of 0.25 | The same for `dry`, which cools as well and takes the same sign. Opens on 0: the one unit measured in this mode landed on its setting. |
-| Heating overshoot | -5..5 °C, in steps of 0.25 | The same for heating, and in `heat` mode only: how far above your setting the room ends up. Positive in both cases. |
+| Heating overshoot | -5..5 °C, in steps of 0.25 | The same for `heat`, and in that mode only: how far above your setting the room ends up. Both fields take a positive number for a room that goes past the setting, but the direction of the correction follows the mode: cooling hands the unit the room temperature minus the figure, heating hands it the room temperature plus the figure. Opens on 0, although the one unit measured needs 2.5 to 3 - see "Heating needs a much larger figure" below. |
 | Check for firmware updates | on/off, off by default | Creates the Firmware Update entity (see Update above) and periodically checks the manufacturer's `getFirmware` endpoint. The only outbound internet call this integration makes - leave off to stay fully local. |
 
 ### Target Temp. Offset sign convention
@@ -374,7 +374,7 @@ An action-driven override survives a restart and a reload. It is re-armed, not r
 
 ### When the room ends up past your setting
 
-With a room temperature supplied, most units cool the room a little further than asked before stopping - about half a kelvin, measured across four different models, and the same figure repeats every cycle. That is the unit's own thermostat band, not a sensor error: its return-air sensor is out of the loop while it regulates on your value. Heating has so far looked correct.
+With a room temperature supplied, most units cool the room a little further than asked before stopping - about half a kelvin, measured across four different models, and the same figure repeats every cycle. That is the unit's own thermostat band, not a sensor error: its return-air sensor is out of the loop while it regulates on your value. Heating goes considerably further, see below.
 
 Until 2026.9.10 the figure looked like a full kelvin. The room temperature reached the unit half a kelvin warm: the library encoded it with a constant taken from the SPI-bus projects, while the unit and the official app read the byte through the manufacturer's own table, which sits half a kelvin higher across the whole living range. That is also why the app used to show 26.5 for a sent 26.0. The encoding now follows the table, and a stored overshoot figure is shifted by that half kelvin on upgrade, so the unit receives exactly what it received before; only the number in the field changes, and a field at 0 stays at 0. Someone feeding the value through the action without a source gets the corrected reading and nothing to shift.
 
@@ -394,6 +394,19 @@ evening and nothing extra: set a target it can reach, leave the room alone until
 rather than ramping, and read your source sensor. The gap between that reading and your target is the
 number for this field.
 
+**Heating needs a much larger figure.** Measured on an SRK20ZS-WF with a room sensor as source: over five
+cycles the unit stopped heating once the room temperature it was fed stood 2.5 to 3 K above the setting.
+Most of that is the 2 °C the unit adds to every heating setpoint (see "Heating: the unit adds 2 °C of its
+own" below), the rest is the same band as in cooling. On that unit a **Heating overshoot** of 2.75 lands
+the room within a quarter degree of the setting. The field still opens on 0: one unit is not a default,
+and a unit with the compensation switched off should need about 1 instead - not measured yet. Find your
+figure the same way as for dry, with a target the unit can reach and a few full cycles.
+
+**If a figure is already set, correct from there** - there is no need to go back to 0 and measure again.
+If the room still goes past your setting, raise the figure by the remaining gap; if it now stops short,
+lower it by that much. "Past" means below the setting in cooling and dry, above it in heating. For
+example, heating with 3 set and the room settling 0.5 K below your setting: it stops short, so enter 2.5.
+
 **`auto` is not corrected at all.** Which direction it is running in is the unit's own cool/heat decision,
 and some units never report it - so there is nothing to hang the sign of a correction on. A correction
 would not help there anyway, which is worth knowing before you go looking for one.
@@ -402,7 +415,7 @@ would not help there anyway, which is worth knowing before you go looking for on
 
 In `heat` the unit does not regulate to the number you set but to that number plus 2 °C - the setting-temperature correction in MHI's service documentation, and the factory state on the units checked. With the return-air sensor near the ceiling it roughly cancels that sensor's warm reading. With a sensor placed where you sit it does not: the room ends about 2 K above your setting with Compressor Demand still on, as reported on an SRK-ZS-WF set to 22 °C with the room at 24.8 °C.
 
-Two ways out. The service manuals for the ZS-WF, ZSX-WF and ZT-WF series document switching the compensation off at the indoor unit, under "Countermeasure for excessive temperature rise": with the unit powered and having run at least once since, hold the indoor unit's ON/OFF button for 30 seconds or more until it beeps twice. The same hold, answered by three beeps, switches it back on. The ZTL and ZR-WF manuals do not list the procedure. Or leave the unit as it is and set **Target Temp. Offset (Heating)** to 2, which lowers the setting sent to the unit by that much.
+Three ways out. The service manuals for the ZS-WF, ZSX-WF and ZT-WF series document switching the compensation off at the indoor unit, under "Countermeasure for excessive temperature rise": with the unit powered and having run at least once since, hold the indoor unit's ON/OFF button for 30 seconds or more until it beeps twice. The same hold, answered by three beeps, switches it back on. The ZTL and ZR-WF manuals do not list the procedure. Or leave the unit as it is and set **Target Temp. Offset (Heating)** to 2, which lowers the setting sent to the unit by that much. With an Indoor temperature source configured, **Heating overshoot** covers the same 2 K in quarter degrees and leaves the setting as the official app shows it - use one of the two for it, not both.
 
 Nothing on the wire says which state a unit is in, so the integration cannot allow for it - and two units of the same model can disagree by 2 K on what a heating setpoint means. Worth knowing before comparing heating figures. Whether the switch also removes the 2 °C from `auto` below has not been checked.
 
