@@ -1,119 +1,123 @@
+# MHI multi-split mode lockout resolver - notes for anyone reading the source.
+# None of this is in the blueprint description, which is a setup form rather
+# than a document.
+#
+# THE PROBLEM
+# One outdoor unit, one mode at a time. Whichever head claims the compressor
+# first wins; heads wanting the opposite mode are locked out and their rooms
+# drift, showing "auto" while doing nothing. MHI's AUTO also latches its
+# heat/cool choice, so a lockout can persist long after the reason for it has
+# gone - including while the head holding the system sits idle.
+#
+# THE DESIGN - TRUST THE UNIT
+# This automation makes no judgement about what any room needs. The unit already
+# decides that, per room, with its own sensor and its own logic. Second-guessing
+# it means running a competing thermostat off the same return-air sensor, which
+# in practice produced a system that hunted between heat and cool every 15
+# minutes, chasing its own measurement error.
+#
+# Two inputs, both straight from the unit. Cool/Heat Status is what a head is
+# asking the outdoor unit for - the vote, and the only demand signal. Compressor
+# Demand is whether the compressor is running for that head right now. Room
+# temperature and setpoint are logged as evidence only; nothing branches on
+# them. If you find yourself adding a threshold in degrees here, the old design
+# is creeping back in.
+#
+# WHY FAN-ONLY AND NOT DRY
+# Fan-only is what drops the latch, because the Cool/Heat Status sensor reports
+# nothing in that state. Dry is still a cooling vote and would keep blocking.
+#
+# HOW EACH MODE IS TREATED
+# `auto` is a full participant - its vote is the unit's own judgement. `cool`,
+# `heat` and `dry` set a hard mode lock: while any head is explicitly in cool the
+# system is never handed away from cooling, and vice versa (dry counts as cool).
+# An idle head left on in the opposite mode still gets hot gas bleeding through
+# its coil on the shared circuit and runs its fan, so it blows warm air into a
+# room you asked to be cooled. Release the lock by putting that head back to auto
+# or switching it off. Setting one head to `cool` and another to `heat` pins both
+# sides at once: nothing can stand down, and the automation says so in the
+# logbook rather than rotating silently. `fan_only` and `off` are ignored and
+# never touched.
+#
+# HOW THE THREE LISTS ARE MATCHED
+# By device, so their order does not matter; what matters is that every head you
+# list contributes all three entities. A head missing its status sensor has no
+# vote and no conflict is ever seen; a head missing its demand sensor cannot be
+# told apart from one that just had its turn, so the automation declines to act
+# rather than guess. Both fail safe and silent.
+#
+# TWO THINGS TO KNOW BEFORE CHANGING THE NUMBERS
+# After a Home Assistant restart every demand sensor's last change is young, so
+# every head reads as calling and nothing rotates until the release grace has
+# passed. That settling window is a side effect of the grace period, not a
+# separate mechanism: shortening the grace shortens the window too.
+#
+# A stand-down that logs but does not stick means the delay was too short - it
+# has to outlast the outdoor unit letting go AND the waiting side re-latching and
+# starting to call. Lengthen it, never shorten it. And the unit bursts on a mode
+# change, running hard and overshooting for roughly 15 minutes; the cooldown has
+# to stay longer than that, or each change starts reacting to the overshoot from
+# the last one.
+#
+# ONE KNOWN EXPOSURE
+# Standing down and restoring happen in a single run with a delay between. If
+# that run is interrupted - a restart, a reload, a config check - the restore
+# never happens and those heads stay in fan-only. They then have no vote, so the
+# automation cannot see them to fix it. Set them back to auto by hand; they show
+# up in the trace as heads that are not participating.
+
 blueprint:
   name: MHI multi-split mode lockout resolver
   author: smdev0925
   homeassistant:
     min_version: "2024.10.0"
   description: >-
-    Resolves outdoor-unit mode lockout on an MHI multi-split by standing down
-    the side that just had its turn, using the units' own heat/cool decisions.
+    **Version 1.0.0** — 14 September 2026
 
 
-    ## The problem
+    To keep this up to date automatically, install
+    [Blueprints Updater](https://github.com/luuquangvu/blueprints-updater) from
+    HACS. Needs Home Assistant 2024.12 or later.
 
 
-    One outdoor unit, one mode at a time. Whichever head claims the compressor
-    first wins; heads wanting the opposite mode are locked out and their rooms
-    drift, showing "auto" while doing nothing. MHI's AUTO also *latches* its
-    heat/cool choice, so a lockout can persist long after the reason for it has
-    gone — including while the head holding the system sits idle.
-
-
-    ## The design — trust the unit
-
-
-    This automation makes no judgement about what any room needs. The unit
-    already decides that, per room, with its own sensor and its own logic.
-    Second-guessing it means running a competing thermostat off the same
-    return-air sensor, which in practice produced a system that hunted between
-    heat and cool every 15 minutes, chasing its own measurement error.
-
-
-    Two inputs, both straight from the unit. **Cool/Heat Status** is what a head
-    is asking the outdoor unit for — the vote, and the only demand signal.
-    **Compressor Demand** is whether the compressor is running for that head
-    right now. Room temperature and setpoint are logged as evidence only;
-    nothing branches on them. If you find yourself adding a threshold in degrees
-    here, the old design is creeping back in.
+    Frees a head that is locked out on a multi-split. One outdoor unit serves one
+    mode at a time, so a head asking for the opposite mode gets nothing and its
+    room drifts — and MHI's AUTO holds on to its choice even after the head that
+    claimed it has gone quiet.
 
 
     ## The rules
 
 
-    1. Votes unanimous — nothing to do, no lockout exists.
+    1. Every head agrees — nothing to do.
 
-    2. Votes split, someone calling — in use means priority. The side running
-       the compressor keeps it.
+    2. Heads disagree and one is calling — the head running the compressor keeps
+       it.
 
-    3. Votes split, nobody calling — the side most recently served stands down
-       to fan-only, dropping its latch, so the waiting side takes the system.
-       After the stand-down delay they return to their mode.
-
-
-    Fan-only is what drops the latch, because the Cool/Heat Status sensor
-    reports nothing in that state. Not dry: dry is still a cooling vote and
-    would keep blocking.
+    3. Heads disagree and none is calling — the side served most recently drops
+       to fan-only for a few minutes. That releases the outdoor unit, the waiting
+       side takes it, and the heads return to their mode.
 
 
-    ## How each mode is treated
+    It decides nothing about what a room needs. The unit already does that. Both
+    signals come straight from the unit: **Cool/Heat Status** is the vote,
+    **Compressor Demand** is the priority.
 
 
-    `auto` is a full participant — its vote is the unit's own judgement.
-    `cool`, `heat` and `dry` set a **hard mode lock**: while any head is
-    explicitly in cool the system is never handed away from cooling, and vice
-    versa (dry counts as cool). An idle head left on in the opposite mode still
-    gets hot gas bleeding through its coil on the shared circuit and runs its
-    fan, so it blows warm air into a room you asked to be cooled. Release the
-    lock by putting that head back to auto or switching it off. Setting one head
-    to `cool` and another to `heat` pins both sides at once: nothing can stand
-    down, and the automation says so in the logbook rather than rotating
-    silently. `fan_only` and `off` are ignored and never touched.
+    ## Read this first
 
 
-    ## What it needs
+    A head you set to `cool`, `heat` or `dry` yourself is never overridden, and
+    while it is there the system is never handed away from that side. Put it back
+    to `auto` to release it. `fan_only` and `off` are ignored.
 
 
-    Both required entities are **disabled by default** on each unit — enable
-    them per device before selecting them here:
+    **Do not use this and the MHI multi-split AUTO replacement on the same
+    heads.** They work against each other.
 
 
-    - **Cool/Heat Status** (sensor) — the vote.
-
-    - **Compressor Demand** (binary sensor) — the priority signal.
-
-
-    The three lists are matched up by device, so their order does not matter;
-    what matters is that every head you list contributes all three entities.
-    A head missing its status sensor has no vote and no conflict is ever seen;
-    a head missing its demand sensor cannot be told apart from one that just had
-    its turn, so the automation declines to act rather than guess. Both fail
-    safe and silent.
-
-
-    ## Two things to know before changing the numbers
-
-
-    **After a Home Assistant restart** every demand sensor's last change is
-    young, so every head reads as calling and nothing rotates until the release
-    grace has passed. That settling window is a side effect of the grace period,
-    not a separate mechanism: shortening the grace shortens the window too.
-
-
-    **A stand-down that logs but does not stick** means the delay was too short
-    — it has to outlast the outdoor unit letting go *and* the waiting side
-    re-latching and starting to call. Lengthen it, never shorten it. And the
-    unit bursts on a mode change, running hard and overshooting for roughly 15
-    minutes; the cooldown has to stay longer than that, or each change starts
-    reacting to the overshoot from the last one.
-
-
-    ## One known exposure
-
-
-    Standing down and restoring happen in a single run with a delay between. If
-    that run is interrupted — a restart, a reload, a config check — the restore
-    never happens and those heads stay in fan-only. They then have no vote, so
-    the automation cannot see them to fix it. Set them back to auto by hand;
-    they show up in the trace as heads that are not participating.
+    If a run is interrupted part-way, a head can be left in `fan_only` and
+    nothing here will bring it back. Set it to `auto` by hand.
   domain: automation
   input:
     fleet:
@@ -159,10 +163,10 @@ blueprint:
         release_grace_minutes:
           name: Release grace
           description: >-
-            How long a head still counts as in use after its compressor demand
-            drops. The bit goes off between compressor cycles, so without this a
-            head mid-job reads as finished and loses the system. Everything has
-            to be quiet this long before priority changes hands.
+            How long a head still counts as in use after its compressor stops.
+            The compressor cycles mid-job, so without this a head that is not
+            finished loses the system. Everything must be quiet this long before
+            priority changes hands.
           default: 10
           selector:
             number:
@@ -205,6 +209,10 @@ triggers:
     minutes: "/2"
 
 variables:
+  # Bumped on every change. Printed at the front of each logbook entry so the
+  # version actually running can be read off a live system.
+  version: "1.0.0"
+
   climate_entities: !input climate_entities
   judge_sensors: !input judge_sensors
   demand_sensors: !input demand_sensors
@@ -344,7 +352,7 @@ actions:
             data:
               name: MHI Mode Lockout
               message: >-
-                Manual run ignored — nothing to resolve.
+                v{{ version }} — manual run ignored, nothing to resolve.
                 {%- if not conflict %} The heads do not disagree.
                 {%- elif in_use | count > 0 %}
                 {{ in_use | map(attribute='entity') | map('replace', 'climate.', '') | join(', ') }}
@@ -361,7 +369,8 @@ actions:
             data:
               name: MHI Mode Lockout
               message: >-
-                {{ 'DEADLOCK' if deadlocked else 'Held' }} by manual modes —
+                v{{ version }} — {{ 'DEADLOCK' if deadlocked else 'held' }} by
+                manual modes.
                 {{ waiting_side }} cannot get the system because
                 {{ locked_by | map(attribute='entity') | map('replace', 'climate.', '') | join(', ') }}
                 {{ 'is' if locked_by | count == 1 else 'are' }} set to
@@ -379,7 +388,7 @@ actions:
         data:
           name: MHI Mode Lockout
           message: >-
-            {{ last_served }} had its turn — standing down
+            v{{ version }} — {{ last_served }} had its turn, standing down
             {{ standdown | map(attribute='entity') | map('replace', 'climate.', '') | join(', ') }}
             so {{ waiting_side }} can run.
             Fleet: {% for f in fleet %}{{ f.entity | replace('climate.', '') }}

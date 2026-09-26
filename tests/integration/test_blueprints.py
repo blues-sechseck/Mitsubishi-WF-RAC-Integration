@@ -25,7 +25,9 @@ from homeassistant.util.yaml import loader
 BLUEPRINTS = sorted(
     (Path(__file__).parent.parent.parent / "blueprints" / "automation").rglob("*.yaml")
 )
-LOCKOUT = next(p for p in BLUEPRINTS if p.name.startswith("mhi-multi-split"))
+# By name, and not by prefix: a second blueprint in this directory shares the
+# prefix and sorts ahead of this one.
+LOCKOUT = next(p for p in BLUEPRINTS if p.name == "mhi-multi-split-mode-lockout.yaml")
 
 HEADS = {
     "bedroom": ("cooling", "off"),
