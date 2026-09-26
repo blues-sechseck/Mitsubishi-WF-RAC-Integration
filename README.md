@@ -397,8 +397,8 @@ number for this field.
 **Heating needs a much larger figure.** Measured on an SRK20ZS-WF with a room sensor as source: over five
 cycles the unit stopped heating once the room temperature it was fed stood 2.5 to 3 K above the setting.
 Most of that is the 2 °C the unit adds to every heating setpoint (see "Heating: the unit adds 2 °C of its
-own" below), the rest is the same band as in cooling. On that unit a **Heating overshoot** of 2.75 lands
-the room within a quarter degree of the setting. The field still opens on 0: one unit is not a default,
+own" below), the rest is the same band as in cooling. On that unit the stopping points put the
+**Heating overshoot** at 2.75, with none of the five more than a quarter degree from it. The field still opens on 0: one unit is not a default,
 and a unit with the compensation switched off should need about 1 instead - not measured yet. Find your
 figure the same way as for dry, with a target the unit can reach and a few full cycles.
 
@@ -415,7 +415,7 @@ would not help there anyway, which is worth knowing before you go looking for on
 
 In `heat` the unit does not regulate to the number you set but to that number plus 2 °C - the setting-temperature correction in MHI's service documentation, and the factory state on the units checked. With the return-air sensor near the ceiling it roughly cancels that sensor's warm reading. With a sensor placed where you sit it does not: the room ends about 2 K above your setting with Compressor Demand still on, as reported on an SRK-ZS-WF set to 22 °C with the room at 24.8 °C.
 
-Three ways out. The service manuals for the ZS-WF, ZSX-WF and ZT-WF series document switching the compensation off at the indoor unit, under "Countermeasure for excessive temperature rise": with the unit powered and having run at least once since, hold the indoor unit's ON/OFF button for 30 seconds or more until it beeps twice. The same hold, answered by three beeps, switches it back on. The ZTL and ZR-WF manuals do not list the procedure. Or leave the unit as it is and set **Target Temp. Offset (Heating)** to 2, which lowers the setting sent to the unit by that much. With an Indoor temperature source configured, **Heating overshoot** covers the same 2 K in quarter degrees and leaves the setting as the official app shows it - use one of the two for it, not both.
+Three ways out. With an Indoor temperature source at seating height, **switching the compensation off is the recommended one**: the sensor already measures where you sit, so there is nothing left for the 2 °C to correct. The service manuals for the ZS-WF, ZSX-WF and ZT-WF series document it at the indoor unit, under "Countermeasure for excessive temperature rise": with the unit powered and having run at least once since, hold the indoor unit's ON/OFF button for 30 seconds or more until it beeps twice. The same hold, answered by three beeps, switches it back on. The ZTL and ZR-WF manuals do not list the procedure. Or leave the unit as it is and set **Target Temp. Offset (Heating)** to 2, which lowers the setting sent to the unit by that much. With an Indoor temperature source configured, **Heating overshoot** covers the same 2 K in quarter degrees and leaves the setting as the official app shows it - use one of the two for it, not both. Both are the way to go where the switch is not documented, or where you would rather keep the unit as it left the factory: if the source drops out, the unit falls back to its own return-air sensor, and that is the case the compensation was made for.
 
 Nothing on the wire says which state a unit is in, so the integration cannot allow for it - and two units of the same model can disagree by 2 K on what a heating setpoint means. Worth knowing before comparing heating figures. Whether the switch also removes the 2 °C from `auto` below has not been checked.
 
