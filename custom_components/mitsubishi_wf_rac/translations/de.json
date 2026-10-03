@@ -88,6 +88,12 @@
     },
     "status_request_not_sent": {
       "message": "Home Assistant sendet an die Klimaanlage {device} keine Statusanfragen mehr, weil dieses Gerät sich daraufhin selbst verstellt."
+    },
+    "silent_operation_not_applied": {
+      "message": "Die Klimaanlage unter {device} hat die Änderung am Silent-Betrieb nicht bestätigt. Wurde der Silent-Betrieb mit der IR-Fernbedienung eingeschaltet, lässt er sich nur mit ihr wieder ausschalten."
+    },
+    "silent_operation_unit_off": {
+      "message": "Den Silent-Betrieb der Klimaanlage unter {device} kann man nur ändern, während sie läuft."
     }
   },
   "issues": {
@@ -386,6 +392,9 @@
       },
       "protection_raw": {
         "name": "Schutznummer (Rohwert)"
+      },
+      "research_data": {
+        "name": "Forschungsdaten"
       }
     },
     "binary_sensor": {
@@ -413,6 +422,11 @@
     "button": {
       "reset_energy_total": {
         "name": "Energieverbrauch gesamt zurücksetzen"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Silent-Betrieb"
       }
     }
   },

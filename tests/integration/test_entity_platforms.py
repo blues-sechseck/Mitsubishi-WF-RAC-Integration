@@ -202,7 +202,13 @@ async def test_platform_option_and_capability_gates(hass, platform_device):
         False,
         False,
     ]
-    assert await _entities(switch.async_setup_entry, hass, entry) == []
+    # Silent operation is offered on every unit and decided by its answer,
+    # not by a capability flag - but only for those who switch it on.
+    switches = await _entities(switch.async_setup_entry, hass, entry)
+    assert [
+        (entity.unique_id, entity.entity_registry_enabled_default)
+        for entity in switches
+    ] == [(f"{DOMAIN}-airco-id-silent-operation", False)]
 
     platform_device._firmware_update_check_enabled = False
     assert await _entities(update.async_setup_entry, hass, entry) == []

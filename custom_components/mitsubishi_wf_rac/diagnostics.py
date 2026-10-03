@@ -7,6 +7,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import MitsubishiWfRacConfigEntry
+from .sensor import is_prerelease_build
 
 # These values let a third party identify or control a unit, so diagnostic
 # downloads must remain safe to attach to public issue reports.
@@ -46,5 +47,14 @@ async def async_get_config_entry_diagnostics(
         "result_codes": device.result_codes,
         "aircon": asdict(device.airco),
     }
+    if await is_prerelease_build(hass):
+        diagnostics["research"] = {
+            f"0x{code:02X}": {
+                "state": state,
+                "bytes": device.research_data.values.get(code),
+                "seen": device.research_data.seen.get(code),
+            }
+            for code, state in device.research_data.states.items()
+        }
 
     return async_redact_data(diagnostics, TO_REDACT)

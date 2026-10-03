@@ -107,6 +107,7 @@ SERVICE_DATA_MAX_AGE = 3 * SERVICE_DATA_REQUEST_INTERVAL
 
 # Fields fed exclusively by those segments.
 SERVICE_DATA_FIELDS = (
+    "SilentOperation",
     "CompressorFrequency",
     "CompressorFrequencyRaw",
     "OperatingCurrent",
@@ -123,6 +124,97 @@ SERVICE_DATA_FIELDS = (
     "DischargeSuperheatRaw",
     "ProtectionRaw",
 )
+
+# These codes answer on at least one tested unit, meaning unknown.
+RESEARCH_SERVICE_DATA_CODES: Final = (
+    0x0C,
+    0x10,
+    0x14,
+    0x15,
+    0x1C,
+    0x1D,
+    0x22,
+    0x23,
+    0x2A,
+    0x3E,
+    0x45,
+    0x7B,
+    0x84,
+    0x86,
+    0x88,
+    0x8D,
+    0xA0,
+    0xA1,
+    0xA3,
+    0xA4,
+    0xA5,
+    0xAD,
+    0xB0,
+    0xD2,
+    0xD5,
+)
+RESEARCH_CONTEXT: Final = "research_data"
+
+
+# A single code is written off only after this many refusals: result 11 is
+# also what a request gets while another client holds the write lock.
+RESEARCH_REFUSALS_TO_DROP: Final = 2
+RESEARCH_BATCH_SIZE: Final = 10
+
+
+class ResearchData:
+    """Which research codes a unit answers, and what they said last.
+
+    A unit that does not know one requested code refuses the whole request,
+    so a code is tried alone before it may join a batch: untested -> ok, or
+    refused once it was turned down alone often enough. A refused batch puts
+    its codes back to untested. Memory only - a reload starts over.
+    """
+
+    def __init__(self) -> None:
+        """Start with every candidate untested."""
+        self.states: dict[int, str] = dict.fromkeys(
+            RESEARCH_SERVICE_DATA_CODES, "untested"
+        )
+        self.values: dict[int, tuple[int, int, int]] = {}
+        self.seen: dict[int, datetime] = {}
+        self._refusals: dict[int, int] = {}
+        self._rotation = 0
+
+    def request_codes(self) -> tuple[int, ...]:
+        """One untested code alone, or else a rotating batch of answering ones."""
+        untested = [code for code, state in self.states.items() if state == "untested"]
+        if untested:
+            return (untested[0],)
+        ok = [code for code, state in self.states.items() if state == "ok"]
+        if not ok:
+            return ()
+        start = self._rotation % len(ok)
+        self._rotation += RESEARCH_BATCH_SIZE
+        return tuple((ok + ok)[start : start + min(RESEARCH_BATCH_SIZE, len(ok))])
+
+    def note_answer(self, airco: Aircon) -> None:
+        """Keep every research segment the frame carried."""
+        now = dt_util.utcnow()
+        for code, value in airco.ServiceDataRaw.items():
+            if code not in self.states:
+                continue
+            self.values[code] = value
+            self.seen[code] = now
+            self.states[code] = "ok"
+            self._refusals.pop(code, None)
+
+    def note_refused(self, requested: tuple[int, ...]) -> None:
+        """Count a refusal against a lone code; a batch goes back to untested."""
+        if len(requested) == 1:
+            code = requested[0]
+            self._refusals[code] = self._refusals.get(code, 0) + 1
+            if self._refusals[code] >= RESEARCH_REFUSALS_TO_DROP:
+                self.states[code] = "refused"
+            return
+        for code in requested:
+            self.states[code] = "untested"
+
 
 # Converted fields, and the raw field each is derived from. A conversion can
 # fail while its segment arrives perfectly well - the coil temperatures are

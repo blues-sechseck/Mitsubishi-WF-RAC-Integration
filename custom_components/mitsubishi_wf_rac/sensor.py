@@ -32,6 +32,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.loader import async_get_integration
 
 from . import MitsubishiWfRacConfigEntry
 from .const import (
@@ -71,6 +72,7 @@ from .const import (
 )
 from .coordinator import Device
 from .entity import WfRacEntity
+from .service_data import RESEARCH_CONTEXT
 
 _LOGGER = logging.getLogger(__name__)
 # Read-only as far as the device is concerned: the coordinator does the
@@ -138,9 +140,34 @@ async def async_setup_entry(
         ServiceDataSensor(device, ATTR_PROTECTION_RAW),
     ]
 
+    if await is_prerelease_build(hass):
+        entities.append(ResearchDataSensor(device))
+    else:
+        _async_remove_research_data_sensor(hass, device)
+
     _async_remove_home_leave_mode_sensors(hass, device)
 
     async_add_entities(entities)
+
+
+async def is_prerelease_build(hass: HomeAssistant) -> bool:
+    """Return whether this installed integration is a beta or development build."""
+    cache_key = f"{DOMAIN}_prerelease_build"
+    if cache_key not in hass.data:
+        integration = await async_get_integration(hass, DOMAIN)
+        version = integration.manifest.get("version", "")
+        hass.data[cache_key] = "-beta" in version or "-dev" in version
+    return bool(hass.data[cache_key])
+
+
+def _async_remove_research_data_sensor(hass: HomeAssistant, device: Device) -> None:
+    """Drop the beta-only sensor when this is a final build."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-research-data"
+    )
+    if entity_id:
+        registry.async_remove(entity_id)
 
 
 async def async_set_energy_total(entity: SensorEntity, call: ServiceCall) -> None:
@@ -510,3 +537,29 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         self._attr_native_value = getattr(
             self.coordinator.airco, self._FIELD_BY_TYPE[self._custom_type]
         )
+
+
+class ResearchDataSensor(WfRacEntity, SensorEntity):
+    """Expose raw, not-yet-understood operation-data answers to beta testers."""
+
+    _attr_translation_key = "research_data"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, device: Device) -> None:
+        """Subscribe the beta-only research request cycle."""
+        super().__init__(device, context=RESEARCH_CONTEXT)
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-research-data"
+        self._apply_state()
+
+    def _mark_state_unknown(self) -> None:
+        self._attr_native_value = None
+
+    def _update_state(self) -> None:
+        research = self.coordinator.research_data
+        self._attr_native_value = len(research.values)
+        attributes: dict[str, str] = {}
+        for code, value in research.values.items():
+            attributes[f"0x{code:02X}"] = " ".join(f"{byte:02X}" for byte in value)
+            attributes[f"0x{code:02X}_seen"] = research.seen[code].isoformat()
+        self._attr_extra_state_attributes = attributes
