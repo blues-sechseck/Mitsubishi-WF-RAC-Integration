@@ -786,7 +786,7 @@ This table is the decoded subset. The whole code space has since been swept and
 | `0x1E` | Total run hours [h] | `OP2 × 100` | `ff ff ff` ⇒ **no value** |
 | `0x1F` | Indoor fan speed | `OP1 & 0x0f`, **not `OP2`** `[EXT]` | `ff ff ff` ⇒ **no value** |
 | `0x0D` | *unknown* | — | `00 ff ff`, `sel` = `0x00` |
-| `0x21` | *unknown* | — | `10 ff ff` ⇒ no value |
+| `0x21` | *unknown* as a read; as a write, silent operation (see below) | — | `10 ff ff` ⇒ no value |
 | `0x32` | *unknown* | — | `2e 04 ff`, unusual `sel` |
 | `0x34` | *unknown* | — | `11 01 04`, **uses `OP3`** — multi-byte value |
 | `0x35` | *unknown* | — | `10 00 ff` |
@@ -944,7 +944,7 @@ the sentinel and cannot be asked for (see below). SRK20ZS-WF on
 **switched off** throughout, two confirmation passes that returned the same 49
 codes with the same bytes. `[HW]`
 
-**49 codes answer in total, and 30 of them have no known meaning** — neither in
+**49 codes answer in total, and 29 of them have no known meaning** — neither in
 the table above nor anywhere else in this section. Grouped by what they did at
 rest:
 
@@ -954,7 +954,7 @@ rest:
 | reports `0` while the unit is off | `0x10` `0x15` `0x22` `0x2A` `0x3E` `0x7B` `0x84` `0x86` `0x88` `0x8D` `0xA0` `0xA1` `0xA3` `0xA4` `0xA5` `0xB0` `0xD5` |
 | answers with no value (`OP2 = 0xFF`) | `0x02` (selector `0x12`), `0x0C` `0x14` `0x1C` `0x1D` `0x23` `0x45` |
 | answers all-`0xFF` | `0x44` `0xF1` |
-| answers with selector `0x80` | `0xDD` (`80 00 00`) |
+| answers with selector `0x80` | `0xDD` (`80 00 00`) — silent operation, see below |
 
 Read this as a map of where something exists, not as a set of new sensors. A
 value of `0` from a unit that is standing still carries no information, and 17
@@ -972,8 +972,19 @@ the ones worth chasing first, and one of them has a visible lead:
 - **`0xAD` sat at `0x1E` (30) and `0xD2` at `0x01`** through every pass.
   Nothing distinguishes a constant from a parameter that simply did not change
   while the unit was off.
-- **`0xDD` answers with selector `0x80`**, a value that appears nowhere else in
-  any reply. Unexplained.
+- **`0xDD` is silent operation.** It answers with selector `0x80`, a value
+  that appears nowhere else in any reply, and carries the state in bit `0x20`
+  of `OP2`: `80 20 00` on, `80 00 00` off. The same layout the CNS projects
+  read as `C0/DD` `[EXT]`. It is written with the segment
+  `21 01 ff ff` (on) or `21 00 ff ff` (off) in a set-bit-free frame, and the
+  module answers that with `result: 11` or a body that is not valid UTF-8 —
+  yet the unit applies it, on both indoor units tested. **Only reading `0xDD`
+  back tells whether a write took effect.** `[HW]` The flag survives the unit
+  being switched off and on, and status requests do not disturb it. `[HW]`
+  The IR remote can change it as well, and a state set there may not clear
+  over the bus `[EXT]`. Whether it changes anything measurable on a
+  multi-split system is open: heating ran past the outdoor unit's documented
+  silent limit with the flag set. `[HW]`
 
 **A refusal does not always arrive as JSON.** Of the 206 codes that were
 refused, 127 came back as `result: 11` and **79 came back as a response body

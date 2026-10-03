@@ -88,6 +88,12 @@
     },
     "status_request_not_sent": {
       "message": "{device} のエアコンは状態要求に応じて自身の設定を変えてしまうため、Home Assistant は状態要求の送信を停止しました。"
+    },
+    "silent_operation_not_applied": {
+      "message": "{device} のエアコンは静音運転の変更を確認しませんでした。静音運転を赤外線リモコンで設定した場合は、リモコンでのみ解除できます。"
+    },
+    "silent_operation_unit_off": {
+      "message": "{device} のエアコンの静音運転は、運転中にのみ変更できます。"
     }
   },
   "issues": {
@@ -386,6 +392,9 @@
       },
       "protection_raw": {
         "name": "保護番号 (生値)"
+      },
+      "research_data": {
+        "name": "調査データ"
       }
     },
     "binary_sensor": {
@@ -413,6 +422,11 @@
     "button": {
       "reset_energy_total": {
         "name": "エネルギー使用量 合計をリセット"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "静音運転"
       }
     }
   },

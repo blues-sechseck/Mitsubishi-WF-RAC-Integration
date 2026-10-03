@@ -146,6 +146,7 @@ Any one of them switches the request on, so pick one that always has something t
 | Outdoor Coil Temperature (raw) *(diagnostic, disabled by default)* | unitless | Undecoded operation-data byte behind the outdoor coil temperature, useful for protocol work. |
 | Discharge Superheat (raw) *(diagnostic, disabled by default)* | unitless | Undecoded operation-data byte behind discharge superheat, useful for protocol work. |
 | Protection Number (raw) *(diagnostic, disabled by default)* | unitless | Undecoded operation-data byte behind the protection number, useful for protocol work. No module tested here has answered this code, so it may remain `unknown`. |
+| Research data *(beta releases only, diagnostic, disabled by default)* | count | Operation-data codes whose meaning is not known yet, as raw bytes in the attributes (`0xAB: "10 1E FF"`, with the time each was last seen). Lets testers with other models see what their unit answers. Asked for every fifth operation-data cycle, never in a request of its own; codes a unit refuses are dropped for that unit. Final releases remove this sensor again, and the next beta brings it back. The diagnostics download carries the same data.
 | Airco ID *(diagnostic, disabled by default)* | text | Internal ID of the airco. |
 | Operator ID *(diagnostic, disabled by default)* | text | Internal operator/account ID. |
 | Device ID *(diagnostic, disabled by default)* | text | Internal device ID. |
@@ -172,6 +173,12 @@ Any one of them switches the request on, so pick one that always has something t
 | Entity | Values | Description |
 |---|---|---|
 | Firmware Update *(opt-in)* | on/off | Reports whether newer WF-RAC module firmware is available, by comparing the version reported locally against the manufacturer's `getFirmware` endpoint. Only created if "Check for firmware updates" is enabled in the integration's options - off by default, since it's the only call this integration makes outside the local network. Read-only; installing an update isn't offered here. |
+
+## Switch
+
+| Entity | Values | Description |
+|---|---|---|
+| Silent operation *(disabled by default)* | on/off | The unit's own silent operation: it limits the outdoor unit's compressor and fan to make it quieter, at the cost of maximum capacity. The state is what the unit reports, read on every operation-data request, so the switch stays unavailable on a unit that never answers. A change is only accepted once the unit confirms it. The IR remote can switch it as well, and a state set there may only clear with the remote. Mitsubishi's documentation is not consistent on multi-split systems, and on mine I could not measure a difference while heating; please report what you see on yours. |
 
 ## Home Leave Mode
 

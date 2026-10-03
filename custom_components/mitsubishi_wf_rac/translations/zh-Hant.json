@@ -88,6 +88,12 @@
     },
     "status_request_not_sent": {
       "message": "Home Assistant 已停止向 {device} 上的空調發送狀態請求，因為該機組會因此變更自身設定。"
+    },
+    "silent_operation_not_applied": {
+      "message": "位於 {device} 的空調未確認靜音運轉的變更。如果靜音運轉是用紅外線遙控器開啟的，只能用遙控器關閉。"
+    },
+    "silent_operation_unit_off": {
+      "message": "位於 {device} 的空調只有在運轉時才能變更靜音運轉。"
     }
   },
   "issues": {
@@ -386,6 +392,9 @@
       },
       "protection_raw": {
         "name": "保護編號（原始）"
+      },
+      "research_data": {
+        "name": "研究資料"
       }
     },
     "binary_sensor": {
@@ -413,6 +422,11 @@
     "button": {
       "reset_energy_total": {
         "name": "重置能耗總計"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "靜音運轉"
       }
     }
   },

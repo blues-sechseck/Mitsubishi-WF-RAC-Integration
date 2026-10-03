@@ -62,6 +62,14 @@
             "home_leave_mode": {
                 "default": "mdi:home-export-outline"
             }
+        },
+        "switch": {
+            "silent_operation": {
+                "default": "mdi:volume-high",
+                "state": {
+                    "on": "mdi:volume-off"
+                }
+            }
         }
     }
 }

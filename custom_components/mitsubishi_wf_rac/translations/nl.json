@@ -88,6 +88,12 @@
     },
     "status_request_not_sent": {
       "message": "Home Assistant stuurt geen statusverzoeken meer naar de airco op {device}, omdat dit apparaat daarop zijn eigen instellingen wijzigt."
+    },
+    "silent_operation_not_applied": {
+      "message": "De airco op {device} heeft de wijziging van de stille werking niet bevestigd. Als de stille werking met de IR-afstandsbediening is ingeschakeld, kan alleen de afstandsbediening haar weer uitschakelen."
+    },
+    "silent_operation_unit_off": {
+      "message": "De stille werking van de airco op {device} kan alleen worden gewijzigd terwijl deze draait."
     }
   },
   "issues": {
@@ -386,6 +392,9 @@
       },
       "protection_raw": {
         "name": "Beveiligingsnummer (onbewerkt)"
+      },
+      "research_data": {
+        "name": "Onderzoeksgegevens"
       }
     },
     "binary_sensor": {
@@ -413,6 +422,11 @@
     "button": {
       "reset_energy_total": {
         "name": "Energieverbruik totaal resetten"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Stille werking"
       }
     }
   },

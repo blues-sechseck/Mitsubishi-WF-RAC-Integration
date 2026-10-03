@@ -166,6 +166,12 @@
     },
     "status_request_not_sent": {
       "message": "Home Assistant no longer sends status requests to the Airco at {device}, because this unit changes its own settings in response to them."
+    },
+    "silent_operation_not_applied": {
+      "message": "The Airco at {device} did not confirm the Silent operation change. If Silent operation was set with the IR remote, it can only be cleared with the remote."
+    },
+    "silent_operation_unit_off": {
+      "message": "Silent operation on the Airco at {device} can only be changed while it is running."
     }
   },
   "entity": {
@@ -269,6 +275,9 @@
       },
       "protection_raw": {
         "name": "Protection number (raw)"
+      },
+      "research_data": {
+        "name": "Research data"
       }
     },
     "update": {
@@ -413,6 +422,11 @@
     "button": {
       "reset_energy_total": {
         "name": "Reset energy usage total"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Silent operation"
       }
     }
   },

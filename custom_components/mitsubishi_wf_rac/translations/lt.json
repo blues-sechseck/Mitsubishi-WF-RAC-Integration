@@ -88,6 +88,12 @@
     },
     "status_request_not_sent": {
       "message": "Home Assistant nebesiunčia būsenos užklausų oro kondicionieriui adresu {device}, nes šis įrenginys dėl jų pakeičia savo paties nuostatas."
+    },
+    "silent_operation_not_applied": {
+      "message": "Oro kondicionierius adresu {device} nepatvirtino tylaus veikimo pakeitimo. Jei tylus veikimas buvo įjungtas IR pulteliu, išjungti jį galima tik pulteliu."
+    },
+    "silent_operation_unit_off": {
+      "message": "Oro kondicionieriaus adresu {device} tylų veikimą galima keisti tik jam veikiant."
     }
   },
   "issues": {
@@ -386,6 +392,9 @@
       },
       "protection_raw": {
         "name": "Apsaugos numeris (neapdorota)"
+      },
+      "research_data": {
+        "name": "Tyrimo duomenys"
       }
     },
     "binary_sensor": {
@@ -413,6 +422,11 @@
     "button": {
       "reset_energy_total": {
         "name": "Atstatyti bendrą energijos suvartojimą"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Tylus veikimas"
       }
     }
   },
