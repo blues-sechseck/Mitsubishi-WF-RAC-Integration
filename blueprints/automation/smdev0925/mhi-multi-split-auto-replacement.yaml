@@ -147,7 +147,7 @@ blueprint:
   homeassistant:
     min_version: "2024.10.0"
   description: >-
-    **Version 0.10.7** — 24 September 2026
+    **Version 0.10.8** — 5 October 2026
 
 
     To keep this up to date automatically, install
@@ -494,7 +494,7 @@ variables:
   # Bumped on every change. It appears at the top of the description, in the
   # trace, and at the front of every logbook entry, so the version actually
   # running can be read off a live system rather than assumed.
-  version: "0.10.7"
+  version: "0.10.8"
 
   climate_entities: !input climate_entities
   cool_limit: !input cool_limit
@@ -626,7 +626,6 @@ variables:
     {{ after_cooling | count > 0 and after_heating | count > 0 }}
 
   # --- lockout ---------------------------------------------------------------
-  # --- lockout ---------------------------------------------------------------
   # The mode of a unit is its request. No unit is in AUTO, thus there is no
   # selection to read from a Cool/Heat Status sensor.
   cooling_votes: >-
@@ -700,10 +699,6 @@ variables:
   # The units that change to fan mode: all units on the side that operated last.
   # Fan mode removes the demand that holds the outdoor unit.
   standdown: "{{ fleet | selectattr('mode', 'eq', last_served) | list }}"
-
-  # Dry requests cooling, and the blueprint does not write to it. Thus dry holds
-  # the cooling side.
-  blocked_by_dry: "{{ last_served == 'cool' and dry_heads | count > 0 }}"
 
   # No unit may be stood down twice inside the cooldown. Measured on the units
   # that would be stood down: a stand-down writes fan mode and then writes the
@@ -924,9 +919,24 @@ variables:
   # a heating unit that is calling does NOT keep the compressor - that is the
   # whole point. Only when cooling does not already have it.
   #
-  # When nothing is calling, the heating units are stood down whatever side ran
-  # last. That costs the fan time and nothing else, and it does not depend on
-  # last_served, which is at its least reliable straight after a mode change.
+  # `direction != 'cool'` and not `direction == 'heat'`, on purpose: it is also
+  # true when nothing is calling ('none'). 'none' means only that no compressor
+  # is running. The outdoor unit still holds a direction while it is idle: the
+  # direction of the unit that called for its mode first, which it keeps as its
+  # master. Nothing in the integration can detect which unit is held as
+  # "Master". If the master is one of the units in heating, the outdoor unit
+  # stays in heating and the unit just changed to cooling is locked out. Only a
+  # stand-down of every unit in heating makes sure the master is released. It
+  # does not depend on last_served, which is at its least reliable straight
+  # after a mode change. [HW] MHI documents it too: service manual
+  # '19 SCM-SM-276 (SCM71ZS-W/80ZS-W), page 39, (10) "Determining the operating
+  # mode" - a unit that selects a mode different from the one already
+  # determined shows that mode on its display, but only the fan operates.
+  #
+  # The cost is not only the fan time. The stand-down and the put-back reset
+  # the last_changed of each heating unit, so its dwell, cooldown_passed and
+  # turn_passed all start again from zero, and so does settle_passed for the
+  # group.
   #
   # Only on the trigger, not on the five-minute run: it is the change to cooling
   # that has priority, not every unit in cooling. If the trigger is lost - two

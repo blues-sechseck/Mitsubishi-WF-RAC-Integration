@@ -72,7 +72,7 @@ blueprint:
   homeassistant:
     min_version: "2024.10.0"
   description: >-
-    **Version 1.0.0** — 14 September 2026
+    **Version 1.0.1** — 5 October 2026
 
 
     To keep this up to date automatically, install
@@ -211,7 +211,7 @@ triggers:
 variables:
   # Bumped on every change. Printed at the front of each logbook entry so the
   # version actually running can be read off a live system.
-  version: "1.0.0"
+  version: "1.0.1"
 
   climate_entities: !input climate_entities
   judge_sensors: !input judge_sensors
@@ -232,8 +232,12 @@ variables:
       {% set dev = device_id(c) %}
       {% set mode = states(c) %}
       {% if dev is not none and mode in ['auto', 'cool', 'heat', 'dry'] %}
-        {% set judge = judge_sensors | select('in', device_entities(dev)) | list | first %}
-        {% set demand = demand_sensors | select('in', device_entities(dev)) | list | first %}
+        {# The filter 'first' gives Undefined for an empty list, and Undefined is
+           not none. Thus the index is explicit here. #}
+        {% set judges = judge_sensors | select('in', device_entities(dev)) | list %}
+        {% set judge = judges[0] if judges | count > 0 else none %}
+        {% set demands = demand_sensors | select('in', device_entities(dev)) | list %}
+        {% set demand = demands[0] if demands | count > 0 else none %}
         {% set j = states(judge) if judge is not none else 'unknown' %}
         {% set vote = j if j in ['cooling', 'heating'] else 'none' %}
         {% set d = states[demand] if demand is not none else none %}

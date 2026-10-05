@@ -38,15 +38,18 @@ who use them on their own systems.
   it for hours. A unit changed by hand between cooling and heating does not wait
   for its band edge. A debug switch writes every decision, and
   the reason for it, to the logbook. **Use this blueprint or the resolver on a
-  unit, never both — they deadlock each other.** Proven on a four-head SCM80: the
-  stand-down with its ten-second fan time, the restore and the handover; the
-  idle-units part of Cooling priority (before 0.10.0 it moved only rooms at or
-  below their setpoint); the immediate response to a mode changed by hand; and
-  one unit turning from heating to cooling at its own limit. **Cooling
-  priority's stand-down of a running heating side and the forced turn for a
-  room outside its band are off-line-tested only.**
-  **The cooling-to-heating rule has still not been seen to fire on hardware**,
-  nor has a genuine recovery from a stranded unit, nor the dry block.
+  unit, never both — they deadlock each other.** Proven on a four-head SCM80:
+  the stand-down with its ten-second fan time, the restore and the handover;
+  both parts of Cooling priority — the idle-units part (before 0.10.0 it moved
+  only rooms at or below their setpoint), and a unit changed to cooling taking
+  the outdoor unit from a heating side that was calling (one heating unit's
+  Compressor Demand had changed 30 seconds before; the log does not show
+  whether it was running or inside its release grace); the immediate response
+  to a mode changed by hand; and one unit turning from heating to cooling at
+  its own limit. **The forced turn for a room outside its band is
+  off-line-tested only.** **The cooling-to-heating rule has still not been
+  seen to fire on hardware**, nor has a genuine recovery from a stranded unit,
+  nor the dry block.
 
 ## Why they live here and not in the integration
 
