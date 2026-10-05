@@ -840,8 +840,13 @@ Notes on the shape of the answers `[HW]`:
   Mapping the byte linearly onto 0–100 % is fine as a *relative* reading —
   idle against load, or one indoor unit against another — but do not present
   it as a calibrated valve opening.
-- `0x13` reads 0 on an indoor unit whose compressor is not running, and a
-  normal value on an active one at the same moment. `[HW]`
+- `0x13` on an indoor unit without demand depends on the system's direction.
+  While another indoor unit cools, it reads 0 and only the working unit's
+  valve is open. `[HW]` While another one heats, it stays at roughly 16–24 % of
+  `c8`, and a unit locked out of its own mode is treated like one in fan mode.
+  With nothing running, all four units of that system read `c8`, the idle
+  value above. `[UR]` (4 × SRK25ZS-WF on an SCM80,
+  [#328](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/discussions/328))
 - **`0x85` below `OP2 = 0x12` is not a temperature.** MHI-AC-Trace states the
   conversion as two branches: below that byte the sensor only reports "30 °C or
   colder", above it the value is `OP2 / 2 + 32`. `[EXT]` Applying the second
