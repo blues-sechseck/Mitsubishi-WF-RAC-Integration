@@ -26,6 +26,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     SERVICE_SET_VERTICAL_SWING_MODE,
 )
 from homeassistant import config_entries
+from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
@@ -113,6 +114,55 @@ async def test_set_external_temperature_takes_a_numeric_string(hass: HomeAssista
             {"temperature": "99", "entity_id": "climate.not_here"},
             blocking=True,
         )
+
+
+@pytest.mark.parametrize(
+    ("action", "swing_mode"),
+    [
+        (SERVICE_SET_HORIZONTAL_SWING_MODE, "left_left"),
+        (SERVICE_SET_VERTICAL_SWING_MODE, "highest"),
+    ],
+)
+async def test_swing_actions_reach_the_unit(
+    hass: HomeAssistant, repository: AsyncMock, action: str, swing_mode: str
+):
+    """Both actions take swing_mode, while the horizontal method takes
+    swing_horizontal_mode - bound by name, that call raised TypeError (#400).
+    """
+    repository.send_airco_command.return_value = (
+        repository.get_aircon_stats.return_value["airconStat"]
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=8,
+        data={
+            "name": "AC",
+            CONF_HOST: "127.0.0.1",
+            "device_id": "d",
+            "operator_id": "o",
+            "airco_id": "a",
+            "port": 51443,
+        },
+        options={},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=repository,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        (entity_id,) = hass.states.async_entity_ids(CLIMATE_DOMAIN)
+
+        await hass.services.async_call(
+            DOMAIN,
+            action,
+            {"entity_id": entity_id, "swing_mode": swing_mode},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+    repository.send_airco_command.assert_awaited()
 
 
 async def test_options_flow_reloads_itself(hass: HomeAssistant):
