@@ -113,12 +113,14 @@ CONF_OVERSHOOT_DRY = "overshoot_dry"
 OVERSHOOT_MAX = 5.0
 
 
-# Heating uses the unit's own Heating TempSetting (10.0°C), which matches
-# HOME_LEAVE_TEMP_HEAT exactly. Cooling does not: the unit's Cooling
-# TempSetting reads 33.0°C, but the temperature actually applied while the
-# official app's away-cool mode is running is 31.0°C - so this hardcodes the
-# applied value rather than trusting the configured TempSetting, since only
-# the applied value is known to flip Vacant.
+# The unit reports Home Leave (Vacant) for any setpoint below
+# HOME_LEAVE_SETPOINT_CEILING, cooling and heating alike, whatever its Tag-248
+# TempSetting says. Heating therefore follows the unit's own Heating
+# TempSetting where it is known and in range, with HOME_LEAVE_TEMP_HEAT as the
+# fallback and floor. Cooling does not: the unit's Cooling TempSetting reads
+# 33.0°C, but the official app's away-cool mode applies 31.0°C, so the
+# applied value is hardcoded.
+HOME_LEAVE_SETPOINT_CEILING = 18.0
 HOME_LEAVE_TEMP_HEAT = 10.0
 HOME_LEAVE_TEMP_COOL = 31.0
 NORMAL_TEMP = 21.0

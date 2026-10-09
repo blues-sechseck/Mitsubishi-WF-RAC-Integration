@@ -45,6 +45,7 @@ from .const import (
     CONF_INDOOR_OFFSET,
     DOMAIN,
     FAN_MODE_TRANSLATION,
+    HOME_LEAVE_SETPOINT_CEILING,
     HOME_LEAVE_TEMP_COOL,
     HOME_LEAVE_TEMP_HEAT,
     HVAC_TRANSLATION,
@@ -693,14 +694,14 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             # raw, _update_state() would add the offset back and leave the card
             # showing 21 plus it. Held to the device's range too, which a
             # user's own request never is: this value is ours, and an offset
-            # can push it under the mode's floor. It can never land back on a
-            # Home Leave setpoint, but only because the options flow caps a
-            # target offset at +/-5: reaching HOME_LEAVE_TEMP_HEAT would take
-            # +11, HOME_LEAVE_TEMP_COOL -10. Widening that would need a guard
-            # here.
+            # can push it under the mode's floor. Never below
+            # HOME_LEAVE_SETPOINT_CEILING either: the unit reports Home Leave
+            # for any setpoint under it, which an offset of +3.5 or more
+            # reaches in cooling and on a model whose heating starts at 10.
             low, high = self._setpoint_range_for_mode(
                 self._writing_mode(self._attr_hvac_mode)
             )
+            low = max(low, HOME_LEAVE_SETPOINT_CEILING)
             normal_temp = NORMAL_TEMP - self._offset_for_target(self._attr_hvac_mode)
             await self.coordinator.async_queue_command(
                 {AirconCommands.PresetTemp: max(low, min(high, normal_temp))}
@@ -710,7 +711,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         if self._attr_hvac_mode == HVACMode.COOL:
             away_temp = HOME_LEAVE_TEMP_COOL
         elif self._attr_hvac_mode == HVACMode.HEAT:
-            away_temp = HOME_LEAVE_TEMP_HEAT
+            away_temp = self.coordinator.home_leave_heat_setpoint
         else:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,

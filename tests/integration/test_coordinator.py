@@ -7,6 +7,7 @@ than tests/unit/.
 
 import asyncio
 import base64
+from dataclasses import replace
 from datetime import timedelta
 import logging
 from unittest.mock import AsyncMock, MagicMock
@@ -2862,3 +2863,48 @@ async def test_our_own_command_is_not_read_as_somebody_elses(device, caplog):
 
     assert "changed at the unit" not in caplog.text
     assert device.foreign_activity is False
+
+
+async def test_home_leave_mode_is_read_once_at_setup(device):
+    """Away heating follows the unit's Tag-248 setting, which only a request
+    brings in - so setup asks once."""
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.airco.Capabilities = replace(device.airco.Capabilities, home_leave_mode=True)
+    device.async_request_home_leave_mode_status = AsyncMock()
+
+    await device.async_read_home_leave_mode_once()
+
+    device.async_request_home_leave_mode_status.assert_awaited_once()
+
+
+@pytest.mark.parametrize("skip", ["no_capability", "silent", "carries_state"])
+async def test_home_leave_mode_is_not_read_where_the_request_writes(device, skip):
+    """No capability, nothing to read; on a #329 module the request is a
+    write, which setup must not make unasked."""
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.airco.Capabilities = replace(
+        device.airco.Capabilities, home_leave_mode=skip != "no_capability"
+    )
+    if skip == "silent":
+        device._status_request_mode = STATUS_REQUEST_SILENT
+    if skip == "carries_state":
+        device._parser.status_request_carries_state = True
+    device.async_request_home_leave_mode_status = AsyncMock()
+
+    await device.async_read_home_leave_mode_once()
+
+    device.async_request_home_leave_mode_status.assert_not_awaited()
+
+
+async def test_a_failed_home_leave_read_at_setup_stays_quiet(device):
+    """Away still works on the fallback, so a failed read is no error."""
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.airco.Capabilities = replace(device.airco.Capabilities, home_leave_mode=True)
+    device.async_request_home_leave_mode_status = AsyncMock(
+        side_effect=WfRacError("no answer")
+    )
+
+    await device.async_read_home_leave_mode_once()

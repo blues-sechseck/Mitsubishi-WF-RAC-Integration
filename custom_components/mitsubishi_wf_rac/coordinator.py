@@ -44,6 +44,8 @@ from .const import (
     AC_CERT_FILENAME,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
+    HOME_LEAVE_SETPOINT_CEILING,
+    HOME_LEAVE_TEMP_HEAT,
     MIN_TIME_BETWEEN_UPDATES,
     STATUS_REQUEST_ECHO,
     STATUS_REQUEST_SILENT,
@@ -1268,6 +1270,30 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             is_status_request=True,
         )
 
+    async def async_read_home_leave_mode_once(self) -> None:
+        """Read Tag 248 once at setup, so away heating has its setting.
+
+        The reading lives in memory only, and without it away heats to
+        HOME_LEAVE_TEMP_HEAT rather than what the Smart M-Air app shows.
+        Skipped on a module whose status request carries state or is not sent
+        at all (#329): there the request is a write. A failure is not worth
+        more than a debug line - away still works, on the fallback.
+        """
+        if (
+            not self._airco.Capabilities.home_leave_mode
+            or self._status_request_mode == STATUS_REQUEST_SILENT
+            or self._parser.status_request_carries_state
+        ):
+            return
+        try:
+            await self.async_request_home_leave_mode_status()
+        except (HomeAssistantError, WfRacError, KeyError, TypeError, ValueError) as ex:
+            # Same set the queued-command flush catches: set_airco() raises
+            # the encoder's errors as they come.
+            _LOGGER.debug(
+                "[%s] Home Leave mode not read at setup: %s", self.device_name, ex
+            )
+
     async def async_set_home_leave_mode(
         self, cooling: HomeLeaveModeSetting, heating: HomeLeaveModeSetting
     ) -> None:
@@ -1439,6 +1465,25 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def airco(self) -> Aircon:
         """Return parsed Aircon object if set otherwise None."""
         return self._airco
+
+    @property
+    def home_leave_heat_setpoint(self) -> float:
+        """Return the setpoint the away preset heats to.
+
+        The unit's own Heating TempSetting once a Tag-248 reading is in, so
+        Home Assistant and the Smart M-Air app agree. A value outside
+        HOME_LEAVE_TEMP_HEAT..HOME_LEAVE_SETPOINT_CEILING would either not
+        register as Home Leave or is unconfirmed on hardware, and falls back.
+        """
+        heating = self._airco.HomeLeaveModeForHeating if self._airco else None
+        if (
+            heating is not None
+            and HOME_LEAVE_TEMP_HEAT
+            <= heating.TempSetting
+            < HOME_LEAVE_SETPOINT_CEILING
+        ):
+            return heating.TempSetting
+        return HOME_LEAVE_TEMP_HEAT
 
     @property
     def swing_selects_enabled_default(self) -> bool:
