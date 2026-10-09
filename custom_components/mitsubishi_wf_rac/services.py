@@ -15,8 +15,9 @@ from pywfrac.parser import EXTERNAL_TEMPERATURE_MAX, EXTERNAL_TEMPERATURE_MIN
 # sites handing it over carry a type: ignore.
 import voluptuous as vol
 
+from homeassistant.components.climate import ClimateEntity
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers.service import async_register_platform_entity_service
 
 from .const import (
@@ -37,6 +38,17 @@ from .const import (
 _home_leave_temperature = vol.All(vol.Coerce(float), vol.Range(min=0, max=127.5))
 
 
+async def _async_set_horizontal_swing_mode(
+    entity: ClimateEntity, call: ServiceCall
+) -> None:
+    """Hand the action's swing_mode field to the climate method.
+
+    The field keeps the name both swing actions share, so existing automations
+    stay valid; the method takes it as swing_horizontal_mode.
+    """
+    await entity.async_set_swing_horizontal_mode(call.data["swing_mode"])
+
+
 @callback
 def async_setup_services(hass: HomeAssistant) -> None:
     """Register this integration's entity service actions."""
@@ -53,7 +65,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         SERVICE_SET_HORIZONTAL_SWING_MODE,
         entity_domain=Platform.CLIMATE,
-        func="async_set_swing_horizontal_mode",
+        func=_async_set_horizontal_swing_mode,
         schema={vol.Required("swing_mode"): vol.In(SUPPORT_SWING_HORIZONTAL_MODES)},  # type: ignore[dict-item]
     )
 
