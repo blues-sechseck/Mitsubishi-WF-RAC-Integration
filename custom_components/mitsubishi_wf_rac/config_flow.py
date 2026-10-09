@@ -9,6 +9,10 @@ from typing import Any
 from uuid import uuid4
 
 from pywfrac import RESULT_CODES, Repository, WfRacError
+
+# HA 2026.10 types flow and service schemas against probatio. voluptuous
+# stays until the floor in hacs.json reaches that release, so the call
+# sites handing it over carry a type: ignore.
 import voluptuous as vol
 
 from homeassistant import config_entries, exceptions
@@ -332,7 +336,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id=step_id,
-            data_schema=build_schema(),
+            data_schema=build_schema(),  # type: ignore[arg-type]
             errors=errors,
             description_placeholders=description_placeholders,
         )
@@ -482,7 +486,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=data_schema,
+            data_schema=data_schema,  # type: ignore[arg-type]
             errors=errors,
             description_placeholders=description_placeholders,
         )
@@ -741,7 +745,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
+            data_schema=vol.Schema(  # type: ignore[arg-type]
                 {
                     # Floor, not a free number: values below the minimum were
                     # the reason this option kept needing correcting in
@@ -760,7 +764,8 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                         default=options.get(CONF_FIRMWARE_UPDATE_CHECK, False),
                     ): bool,
                     vol.Required(SECTION_INDOOR_TEMPERATURE_SOURCE): section(
-                        vol.Schema(source_fields), {"collapsed": False}
+                        vol.Schema(source_fields),  # type: ignore[arg-type]
+                        {"collapsed": False},
                     ),
                     # Collapsed once a source is in use: the overshoot above is
                     # the right lever then, and these two stack with it if both
@@ -768,11 +773,12 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                     # they correct is the unit's own sensor bias, which is out
                     # of the loop while the unit regulates on a supplied value.
                     vol.Required(SECTION_SETPOINT_OFFSETS): section(
-                        vol.Schema(setpoint_fields),
+                        vol.Schema(setpoint_fields),  # type: ignore[arg-type]
                         {"collapsed": self._source_configured},
                     ),
                     vol.Required(SECTION_SENSOR_OFFSETS): section(
-                        vol.Schema(sensor_fields), {"collapsed": True}
+                        vol.Schema(sensor_fields),  # type: ignore[arg-type]
+                        {"collapsed": True},
                     ),
                 },
             ),

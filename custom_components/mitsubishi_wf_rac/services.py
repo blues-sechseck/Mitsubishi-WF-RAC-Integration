@@ -9,6 +9,10 @@ never does. Calls still resolve only to this integration's entities.
 from __future__ import annotations
 
 from pywfrac.parser import EXTERNAL_TEMPERATURE_MAX, EXTERNAL_TEMPERATURE_MIN
+
+# HA 2026.10 types flow and service schemas against probatio. voluptuous
+# stays until the floor in hacs.json reaches that release, so the call
+# sites handing it over carry a type: ignore.
 import voluptuous as vol
 
 from homeassistant.const import Platform
@@ -50,7 +54,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_SET_HORIZONTAL_SWING_MODE,
         entity_domain=Platform.CLIMATE,
         func="async_set_swing_horizontal_mode",
-        schema={vol.Required("swing_mode"): vol.In(SUPPORT_SWING_HORIZONTAL_MODES)},
+        schema={vol.Required("swing_mode"): vol.In(SUPPORT_SWING_HORIZONTAL_MODES)},  # type: ignore[dict-item]
     )
 
     async_register_platform_entity_service(
@@ -59,7 +63,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_SET_VERTICAL_SWING_MODE,
         entity_domain=Platform.CLIMATE,
         func="async_set_swing_mode",
-        schema={vol.Required("swing_mode"): vol.In(SUPPORT_SWING_MODES)},
+        schema={vol.Required("swing_mode"): vol.In(SUPPORT_SWING_MODES)},  # type: ignore[dict-item]
     )
 
     # HomeLeaveMode (Tag 248, capability index 7) - deliberately actions, not
@@ -81,17 +85,17 @@ def async_setup_services(hass: HomeAssistant) -> None:
         entity_domain=Platform.CLIMATE,
         func="async_set_home_leave_mode",
         schema={
-            vol.Required("temp_rule_cooling"): _home_leave_temperature,
-            vol.Required("temp_setting_cooling"): _home_leave_temperature,
+            vol.Required("temp_rule_cooling"): _home_leave_temperature,  # type: ignore[dict-item]
+            vol.Required("temp_setting_cooling"): _home_leave_temperature,  # type: ignore[dict-item]
             # The select selector in services.yaml submits its value as a
             # string ("0".."4") - coerce before checking range so both that
             # and a programmatic int call work.
-            vol.Required("air_flow_cooling"): vol.All(
+            vol.Required("air_flow_cooling"): vol.All(  # type: ignore[dict-item]
                 vol.Coerce(int), vol.In([0, 1, 2, 3, 4])
             ),
-            vol.Required("temp_rule_heating"): _home_leave_temperature,
-            vol.Required("temp_setting_heating"): _home_leave_temperature,
-            vol.Required("air_flow_heating"): vol.All(
+            vol.Required("temp_rule_heating"): _home_leave_temperature,  # type: ignore[dict-item]
+            vol.Required("temp_setting_heating"): _home_leave_temperature,  # type: ignore[dict-item]
+            vol.Required("air_flow_heating"): vol.All(  # type: ignore[dict-item]
                 vol.Coerce(int), vol.In([0, 1, 2, 3, 4])
             ),
         },
@@ -104,7 +108,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         entity_domain=Platform.CLIMATE,
         func="async_set_external_temperature",
         schema={
-            vol.Optional("temperature"): vol.Any(
+            vol.Optional("temperature"): vol.Any(  # type: ignore[dict-item]
                 vol.All(
                     vol.Coerce(float),
                     vol.Range(
@@ -122,5 +126,5 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_SET_ENERGY_TOTAL,
         entity_domain=Platform.SENSOR,
         func=async_set_energy_total,
-        schema={vol.Required("value"): vol.All(vol.Coerce(float), vol.Range(min=0))},
+        schema={vol.Required("value"): vol.All(vol.Coerce(float), vol.Range(min=0))},  # type: ignore[dict-item]
     )

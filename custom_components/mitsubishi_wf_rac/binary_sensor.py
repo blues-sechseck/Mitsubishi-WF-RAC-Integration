@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from pywfrac import describe_error_code
 
-from homeassistant.components.binary_sensor import (
+# HA 2026.10 keeps BinarySensorDeviceClass in binary_sensor.const without an
+# explicit re-export; that module does not exist on the floor in hacs.json.
+from homeassistant.components.binary_sensor import (  # type: ignore[attr-defined]
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
