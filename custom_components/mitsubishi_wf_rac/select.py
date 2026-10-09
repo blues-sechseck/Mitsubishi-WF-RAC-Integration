@@ -17,7 +17,6 @@ from .const import (
     DOMAIN,
     FAN_MODE_TRANSLATION,
     HOME_LEAVE_TEMP_COOL,
-    HOME_LEAVE_TEMP_HEAT,
     HVAC_TRANSLATION,
     NORMAL_TEMP,
     SUPPORT_SWING_HORIZONTAL_MODES,
@@ -263,7 +262,7 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
                 {
                     AirconCommands.Operation: True,
                     AirconCommands.OperationMode: HVAC_TRANSLATION[HVACMode.HEAT],
-                    AirconCommands.PresetTemp: HOME_LEAVE_TEMP_HEAT,
+                    AirconCommands.PresetTemp: self.coordinator.home_leave_heat_setpoint,
                 }
             )
         elif option == HOME_LEAVE_MODE_AWAY_COOL:

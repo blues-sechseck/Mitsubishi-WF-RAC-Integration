@@ -28,6 +28,14 @@ DIVERGENCES = {
     "mitsubishi_wf_rac/test_coordinator.py::test_a_command_issued_during_a_poll_waits_for_what_it_brings": (
         "Same lock, other direction - see above."
     ),
+    "mitsubishi_wf_rac/test_coordinator.py::test_a_refused_write_is_retried_once_the_lock_lapses": (
+        "Setup here sends one more frame: it reads Home Leave (Tag 248) once, "
+        "so away heating follows the unit's own setting. Core has no away "
+        "setpoint to follow, and the frame counts in send_airco_command."
+    ),
+    "mitsubishi_wf_rac/test_coordinator.py::test_an_evicted_account_re_registers_before_retrying": (
+        "Same setup-time Home Leave read - see above."
+    ),
     "mitsubishi_wf_rac/test_init.py::test_migration_from_version_1": (
         "Core's migration writes no availability_retry_limit because no form "
         "there can change one. This integration has that form, so writing the "

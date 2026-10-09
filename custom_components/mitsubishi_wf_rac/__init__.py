@@ -248,6 +248,12 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    entry.async_create_background_task(
+        hass,
+        _device.async_read_home_leave_mode_once(),
+        f"{DOMAIN} home leave mode {entry.entry_id}",
+    )
+
     return True
 
 

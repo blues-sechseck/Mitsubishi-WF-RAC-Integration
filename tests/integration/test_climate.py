@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pywfrac import AIRFLOW_UNKNOWN, AirconCommands
-from pywfrac.parser import SERVICE_DATA_INDOOR_COIL_RAW
+from pywfrac.parser import SERVICE_DATA_INDOOR_COIL_RAW, HomeLeaveModeSetting
 
 from custom_components.mitsubishi_wf_rac import climate as climate_module
 from custom_components.mitsubishi_wf_rac.climate import AircoClimate
@@ -28,6 +28,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_TARGET_OFFSET_HEAT,
     DOMAIN,
     FAN_MODE_TRANSLATION,
+    HOME_LEAVE_SETPOINT_CEILING,
     HOME_LEAVE_TEMP_COOL,
     HOME_LEAVE_TEMP_HEAT,
     HVAC_TRANSLATION,
@@ -751,6 +752,41 @@ async def test_set_preset_away_sends_the_away_target_of_the_running_direction(
     assert sent[AirconCommands.OperationMode] == HVAC_TRANSLATION[hvac_mode]
 
 
+@pytest.mark.parametrize(
+    ("temp_setting", "expected_temp"),
+    [
+        (None, HOME_LEAVE_TEMP_HEAT),
+        (16.0, 16.0),
+        (17.5, 17.5),
+        # 18 and above would not register as Home Leave, below 10 is
+        # unconfirmed on hardware.
+        (18.0, HOME_LEAVE_TEMP_HEAT),
+        (5.0, HOME_LEAVE_TEMP_HEAT),
+    ],
+)
+async def test_away_heat_follows_the_units_home_leave_setting(
+    device, temp_setting, expected_temp
+):
+    """Any heating setpoint below 18 C makes the unit report Home Leave, so
+    away can use the TempSetting the Smart M-Air app shows (#401)."""
+    device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.HEAT]
+    device.airco.HomeLeaveModeForHeating = (
+        None
+        if temp_setting is None
+        else HomeLeaveModeSetting(TempRule=0.0, TempSetting=temp_setting, AirFlow=1)
+    )
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+    entity._update_state()
+
+    await entity.async_set_preset_mode(PRESET_AWAY)
+
+    sent = device.async_queue_command.call_args.args[0]
+    assert sent[AirconCommands.PresetTemp] == expected_temp
+
+
 @pytest.mark.parametrize("hvac_mode", [HVACMode.AUTO, HVACMode.DRY, HVACMode.FAN_ONLY])
 async def test_set_preset_away_refuses_a_direction_it_cannot_name(device, hvac_mode):
     """Auto, dry and fan-only have no away target to send - the direction has
@@ -951,3 +987,27 @@ async def test_leaving_home_leave_lands_on_the_normal_setpoint_the_card_shows(de
     device.airco.PresetTemp = sent[AirconCommands.PresetTemp]
     entity._update_state()
     assert entity._attr_target_temperature == NORMAL_TEMP
+
+
+@pytest.mark.parametrize(
+    ("hvac_mode", "range_2"),
+    [(HVACMode.COOL, False), (HVACMode.HEAT, True)],
+)
+async def test_leaving_home_leave_never_lands_back_in_it(device, hvac_mode, range_2):
+    """A large offset must not take the normal setpoint under 18 C, where
+    the unit reports Home Leave again - in cooling on every model, in heating
+    where the range reaches down to 10."""
+    _set_options(device, {CONF_TARGET_OFFSET: 5.0})
+    device.airco.Capabilities = replace(
+        device.airco.Capabilities, vacant_property=True, preset_temp_range_2=range_2
+    )
+    device.airco.Operation = True
+    device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+    entity._update_state()
+
+    await entity.async_set_preset_mode(PRESET_NONE)
+
+    sent = device.async_queue_command.call_args.args[0]
+    assert sent[AirconCommands.PresetTemp] == HOME_LEAVE_SETPOINT_CEILING

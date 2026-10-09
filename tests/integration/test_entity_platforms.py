@@ -29,6 +29,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     ATTR_PROTECTION_RAW,
     DOMAIN,
     FAN_MODE_TRANSLATION,
+    HOME_LEAVE_TEMP_HEAT,
     HVAC_TRANSLATION,
     SWING_3D_AUTO,
     SWING_HORIZONTAL_MODE_TRANSLATION,
@@ -507,7 +508,7 @@ async def test_select_command_and_state_branches(hass, platform_device):
         platform_device.async_queue_command.await_args.args[0][
             AirconCommands.PresetTemp
         ]
-        == select.HOME_LEAVE_TEMP_HEAT
+        == HOME_LEAVE_TEMP_HEAT
     )
     await away.async_select_option(select.HOME_LEAVE_MODE_AWAY_COOL)
     assert (
