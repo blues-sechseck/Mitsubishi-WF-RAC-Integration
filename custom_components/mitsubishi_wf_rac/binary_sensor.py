@@ -59,7 +59,7 @@ class ProblemBinarySensor(WfRacEntity, BinarySensorEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-problem"
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-problem"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -97,7 +97,7 @@ class CompressorBinarySensor(WfRacEntity, BinarySensorEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-compressor"
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-compressor"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -123,7 +123,7 @@ class ExternalControlBinarySensor(WfRacEntity, BinarySensorEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-external-control"
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-external-control"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -147,7 +147,9 @@ class ExternalTemperatureActiveBinarySensor(WfRacEntity, BinarySensorEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-external-temperature-active"
+        self._attr_unique_id = (
+            f"{DOMAIN}-{device.airco_id_lower}-external-temperature-active"
+        )
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -166,7 +168,7 @@ class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-occupancy"
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-occupancy"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:

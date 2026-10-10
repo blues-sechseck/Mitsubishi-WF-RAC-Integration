@@ -177,6 +177,22 @@ async def test_user_flow_cannot_connect_shows_error(hass: HomeAssistant):
     assert result["errors"] == {"base": "cannot_connect"}
 
 
+async def test_user_flow_stores_the_airco_id_as_reported(hass: HomeAssistant):
+    repo = _mock_repository(airco_id="348E89C5A137", update_result=0)
+    with _patch_repository(repo):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"host": "192.168.1.50", "port": 51443},
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_AIRCO_ID] == "348E89C5A137"
+    assert result["result"].unique_id == "348e89c5a137"
+
+
 async def test_user_flow_empty_airco_id_is_cannot_connect(hass: HomeAssistant):
     repo = _mock_repository(airco_id="")
     with _patch_repository(repo):

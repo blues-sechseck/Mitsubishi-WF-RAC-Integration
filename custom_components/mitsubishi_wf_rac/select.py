@@ -90,7 +90,7 @@ class HorizontalSwingSelect(WfRacEntity, SelectEntity):
         )
         self._attr_options = SUPPORT_SWING_HORIZONTAL_MODES
         self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-horizontal-swing-direction"
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-horizontal-swing-direction"
         )
         self._apply_state()
 
@@ -140,7 +140,7 @@ class VerticalSwingSelect(WfRacEntity, SelectEntity):
         )
         self._attr_options = SUPPORT_SWING_MODES
         self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-vertical-swing-direction"
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-vertical-swing-direction"
         )
         self._apply_state()
 
@@ -187,7 +187,7 @@ class FanSpeedSelect(WfRacEntity, SelectEntity):
             device.swing_selects_enabled_default
         )
         self._attr_options = SUPPORTED_FAN_MODES
-        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-fan-speed"
+        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id_lower}-fan-speed"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -232,7 +232,9 @@ class HomeLeaveModeSelect(WfRacEntity, SelectEntity):
             HOME_LEAVE_MODE_AWAY_COOL,
             HOME_LEAVE_MODE_AWAY_HEAT,
         ]
-        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-home-leave-mode"
+        self._attr_unique_id = (
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-home-leave-mode"
+        )
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -301,9 +303,7 @@ class HomeLeaveAirFlowSelect(WfRacEntity, SelectEntity):
         self._mode = mode
         self._attr_translation_key = f"home_leave_{mode}_air_flow"
         self._attr_options = HOME_LEAVE_AIRFLOW_OPTIONS
-        self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-home-leave-{mode}-air-flow-select"
-        )
+        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id_lower}-home-leave-{mode}-air-flow-select"
         self._apply_state()
 
     def _current_setting(self) -> HomeLeaveModeSetting | None:

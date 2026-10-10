@@ -30,7 +30,11 @@ from custom_components.mitsubishi_wf_rac.coordinator import registration_full_is
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er, issue_registry as ir
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 
 _DATA = {
     "name": "Living Room AC",
@@ -266,7 +270,10 @@ async def test_migration_renames_the_climate_unique_id_and_keeps_the_entity_id(
     assert migrated is not None
     assert migrated.unique_id == "aabbccddeeff"
     assert migrated.entity_id == "climate.kept_name"
-    assert registry.async_get(other.entity_id).unique_id == other.unique_id
+    assert (
+        registry.async_get(other.entity_id).unique_id
+        == f"{DOMAIN}-aabbccddeeff-problem"
+    )
     assert (
         sum(
             1
@@ -275,6 +282,134 @@ async def test_migration_renames_the_climate_unique_id_and_keeps_the_entity_id(
         )
         == 1
     )
+
+
+async def _setup_81(hass, repository, entry):
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=repository,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+
+def _entry_81(airco_id: str) -> MockConfigEntry:
+    return MockConfigEntry(
+        domain=DOMAIN,
+        version=8,
+        minor_version=1,
+        data={**_DATA, CONF_HOST: "192.168.1.50", "airco_id": airco_id},
+    )
+
+
+async def test_migration_lower_cases_the_identities_but_not_the_stored_id(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    entry = _entry_81("AABBCCDDEEFF")
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "AABBCCDDEEFF"), ("other", "keep")},
+    )
+    old_ids = {
+        ("climate", f"{DOMAIN}-AABBCCDDEEFF-climate"): "aabbccddeeff",
+        ("sensor", f"{DOMAIN}-AABBCCDDEEFF-energy-sensor"): (
+            f"{DOMAIN}-aabbccddeeff-energy-sensor"
+        ),
+        ("switch", f"{DOMAIN}-AABBCCDDEEFF-silent-operation"): (
+            f"{DOMAIN}-aabbccddeeff-silent-operation"
+        ),
+        ("select", f"{DOMAIN}-AABBCCDDEEFF-fan-speed"): (
+            f"{DOMAIN}-aabbccddeeff-fan-speed"
+        ),
+        ("binary_sensor", f"{DOMAIN}-AABBCCDDEEFF-problem"): (
+            f"{DOMAIN}-aabbccddeeff-problem"
+        ),
+    }
+    created = {
+        key: registry.async_get_or_create(
+            key[0],
+            DOMAIN,
+            key[1],
+            config_entry=entry,
+            device_id=device.id,
+            suggested_object_id=f"kept_{key[0]}",
+        )
+        for key in old_ids
+    }
+
+    await _setup_81(hass, repository, entry)
+
+    assert entry.minor_version == 2
+    # What the unit is sent stays as it reported itself.
+    assert entry.data["airco_id"] == "AABBCCDDEEFF"
+    assert repository.get_aircon_stats.await_args.args[0] == "AABBCCDDEEFF"
+    for key, new in old_ids.items():
+        migrated = registry.async_get(created[key].entity_id)
+        assert migrated is not None
+        assert migrated.entity_id == created[key].entity_id
+        assert migrated.unique_id == new
+    updated = device_registry.async_get(device.id)
+    assert updated.identifiers == {(DOMAIN, "aabbccddeeff"), ("other", "keep")}
+
+
+async def test_migration_of_a_lower_case_entry_leaves_ids_alone(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    entry = _entry_81("aabbccddeeff")
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(DOMAIN, "aabbccddeeff")}
+    )
+    other = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        f"{DOMAIN}-aabbccddeeff-problem",
+        config_entry=entry,
+        device_id=device.id,
+    )
+
+    await _setup_81(hass, repository, entry)
+
+    assert entry.minor_version == 2
+    assert entry.data["airco_id"] == "aabbccddeeff"
+    assert registry.async_get(other.entity_id).unique_id == other.unique_id
+    assert device_registry.async_get(device.id).identifiers == {
+        (DOMAIN, "aabbccddeeff")
+    }
+
+
+async def test_migration_leaves_a_colliding_unique_id_alone(
+    hass: HomeAssistant, repository: AsyncMock, caplog: pytest.LogCaptureFixture
+):
+    entry = _entry_81("AABBCCDDEEFF")
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    old = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        f"{DOMAIN}-AABBCCDDEEFF-problem",
+        config_entry=entry,
+        suggested_object_id="old_problem",
+    )
+    taken = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        f"{DOMAIN}-aabbccddeeff-problem",
+        config_entry=entry,
+        suggested_object_id="taken_problem",
+    )
+
+    await _setup_81(hass, repository, entry)
+
+    assert entry.minor_version == 2
+    assert registry.async_get(old.entity_id).unique_id == old.unique_id
+    assert registry.async_get(taken.entity_id).unique_id == taken.unique_id
+    assert "is already in use" in caplog.text
 
 
 async def test_a_current_entry_creates_the_climate_under_the_new_unique_id(

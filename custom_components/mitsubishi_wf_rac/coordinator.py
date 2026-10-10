@@ -1403,7 +1403,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         info: DeviceInfo = {
             "sw_version": self._firmware,
-            "identifiers": {(DOMAIN, self.airco_id)},
+            "identifiers": {(DOMAIN, self.airco_id_lower)},
             "manufacturer": "Mitsubishi Heavy Industries",
             "name": self.device_name,
         }
@@ -1494,6 +1494,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def airco_id(self) -> str:
         """Return Airco ID."""
         return self._airco_id
+
+    @property
+    def airco_id_lower(self) -> str:
+        """Return the identity form of the airco id (registry ids)."""
+        # Sent as reported, identified in lower case: the unit's case-handling
+        # of airconId is unknown, every comparison here ignores it.
+        return self._airco_id.lower()
 
     @property
     def airco(self) -> Aircon:

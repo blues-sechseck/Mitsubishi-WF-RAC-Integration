@@ -15,6 +15,7 @@ from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import (
     config_validation as cv,
+    device_registry as dr,
     entity_registry as er,
     issue_registry as ir,
 )
@@ -198,20 +199,61 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=8)
     if entry.minor_version < 2:
-        # The climate entity is the unit itself and takes its identity from the
-        # airco id, as the entry's own unique id does; entity_id stays.
-        old_unique_id = f"{DOMAIN}-{entry.data[CONF_AIRCO_ID]}-climate"
-        new_unique_id = entry.data[CONF_AIRCO_ID].lower()
+        # Entity and device identities are built from the lower-cased airco id,
+        # as every comparison elsewhere ignores its case; entry.data keeps the
+        # id as reported because that is what the unit is sent. The climate entity is the unit itself and takes that id as its
+        # unique id, as the entry does; entity_ids stay.
+        raw_id: str = entry.data[CONF_AIRCO_ID]
+        lower_id = raw_id.lower()
+        old_climate_id = f"{DOMAIN}-{raw_id}-climate"
+        registry = er.async_get(hass)
 
         @callback
         def _migrate_unique_id(
             entity_entry: er.RegistryEntry,
         ) -> dict[str, str] | None:
-            if entity_entry.unique_id != old_unique_id:
+            if entity_entry.unique_id == old_climate_id:
+                new_unique_id = lower_id
+            elif raw_id != lower_id and raw_id in entity_entry.unique_id:
+                new_unique_id = entity_entry.unique_id.replace(raw_id, lower_id)
+            else:
+                return None
+            if new_unique_id == entity_entry.unique_id:
+                return None
+            # An id that is taken stays as it is: a collision would raise and
+            # abort the whole migration.
+            if registry.async_get_entity_id(
+                entity_entry.domain, entity_entry.platform, new_unique_id
+            ):
+                _LOGGER.warning(
+                    "Not renaming [%s]: unique id [%s] is already in use",
+                    entity_entry.entity_id,
+                    new_unique_id,
+                )
                 return None
             return {"new_unique_id": new_unique_id}
 
         await er.async_migrate_entries(hass, entry.entry_id, _migrate_unique_id)
+
+        if raw_id != lower_id:
+            device_registry = dr.async_get(hass)
+            old_identifier = (DOMAIN, raw_id)
+            new_identifier = (DOMAIN, lower_id)
+            device = device_registry.async_get_device(identifiers={old_identifier})
+            if device is not None and entry.entry_id in device.config_entries:
+                if device_registry.async_get_device(identifiers={new_identifier}):
+                    _LOGGER.warning(
+                        "Not renaming device [%s]: identifier [%s] is already in use",
+                        device.id,
+                        lower_id,
+                    )
+                else:
+                    device_registry.async_update_device(
+                        device.id,
+                        new_identifiers=(device.identifiers - {old_identifier})
+                        | {new_identifier},
+                    )
+
         hass.config_entries.async_update_entry(entry, minor_version=2)
 
     return True
