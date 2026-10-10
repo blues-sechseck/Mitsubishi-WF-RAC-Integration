@@ -62,6 +62,12 @@
     "command_failed": {
       "message": "Nepavyko nusiųsti komandos kondicionieriui adresu {device}: {error}"
     },
+    "command_unencodable": {
+      "message": "Kondicionierius adresu {device} pranešė apie nustatymą, kurio negalima nusiųsti atgal, todėl niekas nebuvo išsiųsta. Pirmiausia nustatykite ventiliatoriaus režimą, tada bandykite dar kartą."
+    },
+    "command_cancelled": {
+      "message": "Komanda kondicionieriui adresu {device} buvo atšaukta, nes integracija išjungiama."
+    },
     "temperature_below_minimum": {
       "message": "{temperature} °C yra žemiau hvac_mode {hvac_mode} minimumo ({min_temp} °C). Nurodykite hvac_mode tame pačiame kvietime, kad būtų tikrinama pagal režimą, į kurį persijungiate."
     },

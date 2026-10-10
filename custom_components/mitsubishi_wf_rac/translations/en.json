@@ -140,6 +140,12 @@
     "command_failed": {
       "message": "Sending the command to the Airco at {device} failed: {error}"
     },
+    "command_unencodable": {
+      "message": "The Airco at {device} reported a setting that cannot be sent back, so nothing was sent. Set the fan mode first, then try again."
+    },
+    "command_cancelled": {
+      "message": "The command to the Airco at {device} was cancelled because the integration is shutting down."
+    },
     "temperature_below_minimum": {
       "message": "{temperature} °C is below the {min_temp} °C minimum for hvac_mode {hvac_mode}. Include hvac_mode in the same action call to check against the mode you are switching to instead."
     },

@@ -62,6 +62,12 @@
     "command_failed": {
       "message": "{device} のエアコンへのコマンド送信に失敗しました: {error}"
     },
+    "command_unencodable": {
+      "message": "{device} のエアコンが報告した設定は送り返せないため、何も送信しませんでした。先にファン設定を変更してから、もう一度お試しください。"
+    },
+    "command_cancelled": {
+      "message": "統合が停止中のため、{device} のエアコンへのコマンドはキャンセルされました。"
+    },
     "temperature_below_minimum": {
       "message": "{temperature}°Cは hvac_mode {hvac_mode} の最低温度{min_temp}°Cを下回っています。同じ呼び出しで hvac_mode を指定すると、切り替え先のモードで判定されます。"
     },

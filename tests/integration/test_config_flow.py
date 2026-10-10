@@ -89,6 +89,8 @@ async def test_user_flow_success_creates_entry(hass: HomeAssistant):
     # airco id tell two units apart without putting the whole id into the
     # device name and every entity id built from it.
     assert result["title"] == "WF-RAC co-1"
+    # A fresh entry starts on the current schema, so no migration runs on it.
+    assert (result["version"], result["minor_version"]) == (8, 2)
     # CONF_HOST moves from data to options (see _async_create_common) - not
     # duplicated across both.
     assert result["data"]["host"] == "192.168.1.50"
@@ -173,6 +175,22 @@ async def test_user_flow_cannot_connect_shows_error(hass: HomeAssistant):
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+async def test_user_flow_stores_the_airco_id_as_reported(hass: HomeAssistant):
+    repo = _mock_repository(airco_id="348E89C5A137", update_result=0)
+    with _patch_repository(repo):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"host": "192.168.1.50", "port": 51443},
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_AIRCO_ID] == "348E89C5A137"
+    assert result["result"].unique_id == "348e89c5a137"
 
 
 async def test_user_flow_empty_airco_id_is_cannot_connect(hass: HomeAssistant):

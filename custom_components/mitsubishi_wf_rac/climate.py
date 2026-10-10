@@ -165,7 +165,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the climate entity."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-climate"
+        self._attr_unique_id = self.coordinator.airco_id_lower
         capabilities = device.airco.Capabilities
         features = SUPPORT_FLAGS
         # HomeLeaveModeSelect in select.py stays: it can name the direction
@@ -568,16 +568,21 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         }
 
         if requested_hvac_mode is not None:
-            opts.update(
-                {
-                    AirconCommands.OperationMode: self.coordinator.airco.OperationMode
-                    if target_hvac_mode == HVACMode.OFF
-                    else HVAC_TRANSLATION[target_hvac_mode],
-                    AirconCommands.Operation: target_hvac_mode != HVACMode.OFF,
-                }
-            )
+            opts.update(self._hvac_mode_params(target_hvac_mode))
 
         await self.coordinator.async_queue_command(opts)
+
+    @staticmethod
+    def _hvac_mode_params(hvac_mode: HVACMode) -> dict[AirconCommands, Any]:
+        """Return the command parameters that put the unit into a mode."""
+        if hvac_mode == HVACMode.OFF:
+            # The block already carries the unit's mode; naming it again would
+            # overwrite one another client set while a write-lock retry waited.
+            return {AirconCommands.Operation: False}
+        return {
+            AirconCommands.OperationMode: HVAC_TRANSLATION[hvac_mode],
+            AirconCommands.Operation: True,
+        }
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new target fan mode."""
@@ -591,14 +596,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target hvac mode."""
-        await self.coordinator.async_queue_command(
-            {
-                AirconCommands.OperationMode: self.coordinator.airco.OperationMode
-                if hvac_mode == HVACMode.OFF
-                else HVAC_TRANSLATION[hvac_mode],
-                AirconCommands.Operation: hvac_mode != HVACMode.OFF,
-            }
-        )
+        await self.coordinator.async_queue_command(self._hvac_mode_params(hvac_mode))
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set new target swing operation."""
@@ -689,6 +687,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         direction through HomeLeaveModeSelect instead.
         """
         if preset_mode == PRESET_NONE:
+            # A scene restoring "none" after its own setpoint must not
+            # overwrite that setpoint when the unit is not in Home Leave.
+            if self._attr_preset_mode != PRESET_AWAY:
+                return
             # Offset-corrected like every other setpoint: NORMAL_TEMP is what
             # the card should read afterwards, not what goes on the wire - sent
             # raw, _update_state() would add the offset back and leave the card

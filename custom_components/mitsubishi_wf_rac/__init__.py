@@ -11,9 +11,14 @@ from homeassistant.const import (
     EVENT_HOMEASSISTANT_STOP,
     Platform,
 )
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
@@ -193,6 +198,63 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 new_options[key] = max(-OVERSHOOT_MAX, min(OVERSHOOT_MAX, shifted))
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=8)
+    if entry.minor_version < 2:
+        # Entity and device identities are built from the lower-cased airco id,
+        # as every comparison elsewhere ignores its case; entry.data keeps the
+        # id as reported because that is what the unit is sent. The climate entity is the unit itself and takes that id as its
+        # unique id, as the entry does; entity_ids stay.
+        raw_id: str = entry.data[CONF_AIRCO_ID]
+        lower_id = raw_id.lower()
+        old_climate_id = f"{DOMAIN}-{raw_id}-climate"
+        registry = er.async_get(hass)
+
+        @callback
+        def _migrate_unique_id(
+            entity_entry: er.RegistryEntry,
+        ) -> dict[str, str] | None:
+            if entity_entry.unique_id == old_climate_id:
+                new_unique_id = lower_id
+            elif raw_id != lower_id and raw_id in entity_entry.unique_id:
+                new_unique_id = entity_entry.unique_id.replace(raw_id, lower_id)
+            else:
+                return None
+            if new_unique_id == entity_entry.unique_id:
+                return None
+            # An id that is taken stays as it is: a collision would raise and
+            # abort the whole migration.
+            if registry.async_get_entity_id(
+                entity_entry.domain, entity_entry.platform, new_unique_id
+            ):
+                _LOGGER.warning(
+                    "Not renaming [%s]: unique id [%s] is already in use",
+                    entity_entry.entity_id,
+                    new_unique_id,
+                )
+                return None
+            return {"new_unique_id": new_unique_id}
+
+        await er.async_migrate_entries(hass, entry.entry_id, _migrate_unique_id)
+
+        if raw_id != lower_id:
+            device_registry = dr.async_get(hass)
+            old_identifier = (DOMAIN, raw_id)
+            new_identifier = (DOMAIN, lower_id)
+            device = device_registry.async_get_device(identifiers={old_identifier})
+            if device is not None and entry.entry_id in device.config_entries:
+                if device_registry.async_get_device(identifiers={new_identifier}):
+                    _LOGGER.warning(
+                        "Not renaming device [%s]: identifier [%s] is already in use",
+                        device.id,
+                        lower_id,
+                    )
+                else:
+                    device_registry.async_update_device(
+                        device.id,
+                        new_identifiers=(device.identifiers - {old_identifier})
+                        | {new_identifier},
+                    )
+
+        hass.config_entries.async_update_entry(entry, minor_version=2)
 
     return True
 
@@ -259,7 +321,8 @@ async def async_setup_entry(
 
 async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> Device:
     """Build the coordinator for a config entry."""
-    device: str = entry.data[CONF_HOST]
+    # A removed entry may never have migrated, leaving its host in options.
+    device: str = entry.data.get(CONF_HOST) or entry.options[CONF_HOST]
     # The entry title, not a stored name: that is what Home Assistant's own
     # rename changes, and a name kept in entry.data would quietly ignore it.
     name: str = entry.title
@@ -340,6 +403,28 @@ async def async_remove_entry(
 ) -> None:
     """Handle removal of an entry."""
 
+    ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
+    ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
+    ir.async_delete_issue(
+        hass, DOMAIN, status_request_unsupported_issue_id(entry.entry_id)
+    )
+    ir.async_delete_issue(
+        hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
+    )
+
+    # Operator and device ids are shared by every entry of one airco, so
+    # releasing the account here would free the survivor's slot.
+    airco_id: str = entry.data[CONF_AIRCO_ID]
+    if any(
+        other.entry_id != entry.entry_id
+        and other.data.get(CONF_AIRCO_ID, "").lower() == airco_id.lower()
+        for other in hass.config_entries.async_entries(DOMAIN)
+    ):
+        _LOGGER.debug(
+            "Keeping the controller slot on airco [%s]: still in use", airco_id
+        )
+        return
+
     temp_device = await create_device_from_entry(entry, hass)
     # delete_account() returns None for everything short of a confirmed
     # release, which is what decides between the two lines.
@@ -352,12 +437,3 @@ async def async_remove_entry(
             "the manufacturer's app if you want it back",
             temp_device.airco_id,
         )
-
-    ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
-    ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
-    ir.async_delete_issue(
-        hass, DOMAIN, status_request_unsupported_issue_id(entry.entry_id)
-    )
-    ir.async_delete_issue(
-        hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
-    )

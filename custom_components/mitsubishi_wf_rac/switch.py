@@ -59,7 +59,7 @@ class SilentOperationSwitch(WfRacEntity, SwitchEntity):
     def __init__(self, device: Device) -> None:
         """Set up the switch and subscribe only while it is enabled."""
         super().__init__(device, context=SERVICE_DATA_CODE_BY_FIELD["SilentOperation"])
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-silent-operation"
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-silent-operation"
         self._apply_state()
 
     @property
@@ -93,7 +93,7 @@ def _async_remove_home_leave_mode_switch(hass: HomeAssistant, device: Device) ->
     """
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
-        "switch", DOMAIN, f"{DOMAIN}-{device.airco_id}-home-leave-mode"
+        "switch", DOMAIN, f"{DOMAIN}-{device.airco_id_lower}-home-leave-mode"
     )
     if entity_id:
         _LOGGER.debug("Removing obsolete home leave mode switch %s", entity_id)
@@ -110,7 +110,7 @@ def _async_remove_self_clean_switch(hass: HomeAssistant, device: Device) -> None
     """
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
-        "switch", DOMAIN, f"{DOMAIN}-{device.airco_id}-self-clean"
+        "switch", DOMAIN, f"{DOMAIN}-{device.airco_id_lower}-self-clean"
     )
     if entity_id:
         _LOGGER.debug("Removing obsolete self clean switch %s", entity_id)

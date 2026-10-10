@@ -57,7 +57,7 @@ class FirmwareUpdateEntity(WfRacEntity, UpdateEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the firmware update entity."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-firmware-update"
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-firmware-update"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:

@@ -164,7 +164,7 @@ def _async_remove_research_data_sensor(hass: HomeAssistant, device: Device) -> N
     """Drop the beta-only sensor when this is a final build."""
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
-        "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id}-research-data"
+        "sensor", DOMAIN, f"{DOMAIN}-{device.airco_id_lower}-research-data"
     )
     if entity_id:
         registry.async_remove(entity_id)
@@ -203,7 +203,7 @@ def _async_remove_home_leave_mode_sensors(hass: HomeAssistant, device: Device) -
             entity_id = registry.async_get_entity_id(
                 "sensor",
                 DOMAIN,
-                f"{DOMAIN}-{device.airco_id}-home-leave-{mode}-{slug}-sensor",
+                f"{DOMAIN}-{device.airco_id_lower}-home-leave-{mode}-{slug}-sensor",
             )
             if entity_id:
                 _LOGGER.debug("Removing obsolete home leave mode sensor %s", entity_id)
@@ -222,7 +222,7 @@ class DiagnosticsSensor(WfRacEntity, SensorEntity):
         self._attr_entity_registry_enabled_default = enable
         self._custom_type = custom_type
         self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-{self._custom_type}-sensor"
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-{self._custom_type}-sensor"
         )
         self._attr_translation_key = custom_type
         if custom_type == ATTR_COOL_HOT_JUDGE:
@@ -285,7 +285,7 @@ class TemperatureSensor(WfRacEntity, SensorEntity):
         self._custom_type = custom_type
         self._attr_entity_registry_enabled_default = enable
         self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-{self._custom_type}-sensor"
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-{self._custom_type}-sensor"
         )
         self._attr_translation_key = self._TRANSLATION_KEYS[custom_type]
         self._apply_state()
@@ -327,7 +327,9 @@ class EnergySensor(WfRacEntity, SensorEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the sensor."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-energy-sensor"
+        self._attr_unique_id = (
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-energy-sensor"
+        )
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:
@@ -391,7 +393,7 @@ class EnergyTotalSensor(WfRacEntity, RestoreSensor):
         """Initialize the sensor."""
         super().__init__(device)
         self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-energy-total-sensor"
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-energy-total-sensor"
         )
         self._total = 0.0
         # Anchored to the current reading so a brand-new sensor starts at 0
@@ -500,7 +502,7 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
             device, context=SERVICE_DATA_CODE_BY_FIELD[self._FIELD_BY_TYPE[custom_type]]
         )
         self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-{custom_type}-sensor"
+            f"{DOMAIN}-{self.coordinator.airco_id_lower}-{custom_type}-sensor"
         )
         self._attr_translation_key = custom_type
         if custom_type == ATTR_COMPRESSOR_FREQUENCY:
@@ -549,7 +551,7 @@ class ResearchDataSensor(WfRacEntity, SensorEntity):
     def __init__(self, device: Device) -> None:
         """Subscribe the beta-only research request cycle."""
         super().__init__(device, context=RESEARCH_CONTEXT)
-        self._attr_unique_id = f"{DOMAIN}-{device.airco_id}-research-data"
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-research-data"
         self._apply_state()
 
     def _mark_state_unknown(self) -> None:

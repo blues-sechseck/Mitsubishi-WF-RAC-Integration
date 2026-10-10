@@ -8,6 +8,7 @@ import re
 from typing import Any, Final
 
 from pywfrac import (
+    AIRFLOW_UNKNOWN,
     Aircon,
     AirconCommands,
     AirconStat,
@@ -453,14 +454,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._record_failed_poll(ex)
             return False
         except (WfRacError, KeyError) as ex:
-            # Not logged here: being dropped from the account table is one
-            # outage, not one per poll, and _record_failed_poll() reports it
-            # on the transition.
+            # Not logged here: _record_failed_poll() reports the outage on the
+            # transition. A poll checks no account, so a failure is never
+            # grounds to re-register; that stays with the write path.
             self._record_failed_poll(ex)
-            # The official app can evict us from the module's small account
-            # table, and polls fail until we register again. An evicted
-            # account still answers - unlike the branch above.
-            await self.add_account()
             return False
 
         try:
@@ -1149,6 +1146,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self._carry_forward_home_leave_mode(new_airco)
                 self.service_data.carry_forward(new_airco)
                 self._airco = new_airco
+                # An accepted write proves the account is registered.
+                self._clear_registration_full_issue()
                 # Our own write is not a foreign one: move the expectation to
                 # what the unit reports back, or the next poll would read this
                 # command as somebody else's (see _note_unexpected_settings).
@@ -1184,13 +1183,33 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             flush = self.hass.async_create_task(self._async_flush_queued_command())
             self._consolidation_task = flush
             self._running_flushes.add(flush)
-            flush.add_done_callback(self._running_flushes.discard)
+            flush.add_done_callback(self._flush_done)
         # Every caller awaits the one flush its parameters ended up in, so a
         # refusal by the unit reaches the action that caused it instead of
-        # being logged into the void. Shielded because the task is shared: a
-        # caller giving up (a cancelled service call) must not take the other
-        # callers' command down with it.
-        await asyncio.shield(flush)
+        # being logged into the void. Not awaited directly because the task is
+        # shared: a caller giving up (a cancelled service call) must not take
+        # the other callers' command down with it.
+        try:
+            await asyncio.wait({flush})
+            flush.result()
+        except asyncio.CancelledError:
+            task = asyncio.current_task()
+            # Our own cancellation must propagate; only the flush being
+            # cancelled at shutdown is turned into an error.
+            if task is not None and task.cancelling():
+                raise
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_cancelled",
+                translation_placeholders={"device": self.device_name},
+            ) from None
+
+    def _flush_done(self, flush: asyncio.Task[None]) -> None:
+        self._running_flushes.discard(flush)
+        # With every caller gone nobody reads the error, which asyncio would
+        # then report as never retrieved.
+        if not flush.cancelled():
+            flush.exception()
 
     def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
         """Carry the last known HomeLeaveMode reading forward.
@@ -1320,24 +1339,39 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._last_command_at = dt_util.utcnow()
         try:
             await self.set_airco(params)
-        except (WfRacError, KeyError, TypeError, ValueError) as ex:
+        except ValueError as ex:
+            if self._airco.AirFlow != AIRFLOW_UNKNOWN:
+                raise self._command_failed(ex) from ex
+            # The fan step the unit reported has no byte to send back; nothing
+            # went out.
+            self.async_update_listeners()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_unencodable",
+                translation_placeholders={"device": self.device_name},
+            ) from ex
+        except (WfRacError, KeyError, TypeError) as ex:
             # Already logged in set_airco(). A failed command says nothing
             # about the poll before it, so the listeners hear the state without
             # the coordinator being declared successful. Wrapped rather than
             # re-raised - a library exception in a service call is a traceback,
             # not something the user can read - and async_queue_command()
             # awaits this task, so it lands on the action that issued it.
-            self.async_update_listeners()
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="command_failed",
-                translation_placeholders={
-                    "device": self.device_name,
-                    "error": str(ex),
-                },
-            ) from ex
+            raise self._command_failed(ex) from ex
         # The unit's answer reaches the entities now, not a poll later.
         self.async_set_updated_data(self._airco)
+
+    def _command_failed(self, error: Exception) -> HomeAssistantError:
+        """Tell the listeners and build the error the action reports."""
+        self.async_update_listeners()
+        return HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="command_failed",
+            translation_placeholders={
+                "device": self.device_name,
+                "error": str(error),
+            },
+        )
 
     def _record_reachable(self) -> None:
         """Start the tolerance over, after the unit has answered."""
@@ -1346,9 +1380,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def _record_failed_poll(self, error: BaseException) -> None:
         """Count one failed poll and keep what went wrong with it.
 
-        Once per poll: the re-registration that follows a rejected answer is
-        a second request under the same deadline. Saturated at the limit, and
-        the error is kept for the poll that crosses it.
+        Once per poll, however many requests report a failure under its
+        deadline. Saturated at the limit, and the error is kept for the poll
+        that crosses it.
         """
         if self._poll_counted:
             return
@@ -1369,7 +1403,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         info: DeviceInfo = {
             "sw_version": self._firmware,
-            "identifiers": {(DOMAIN, self.airco_id)},
+            "identifiers": {(DOMAIN, self.airco_id_lower)},
             "manufacturer": "Mitsubishi Heavy Industries",
             "name": self.device_name,
         }
@@ -1460,6 +1494,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def airco_id(self) -> str:
         """Return Airco ID."""
         return self._airco_id
+
+    @property
+    def airco_id_lower(self) -> str:
+        """Return the identity form of the airco id (registry ids)."""
+        # Sent as reported, identified in lower case: the unit's case-handling
+        # of airconId is unknown, every comparison here ignores it.
+        return self._airco_id.lower()
 
     @property
     def airco(self) -> Aircon:

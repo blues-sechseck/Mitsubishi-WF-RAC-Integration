@@ -81,9 +81,7 @@ class HomeLeaveModeNumber(WfRacEntity, NumberEntity):
         self._attribute = attribute
         slug = "temp_rule" if attribute == "TempRule" else "temp_setting"
         self._attr_translation_key = f"home_leave_{mode}_{slug}"
-        self._attr_unique_id = (
-            f"{DOMAIN}-{self.coordinator.airco_id}-home-leave-{mode}-{slug}-number"
-        )
+        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id_lower}-home-leave-{mode}-{slug}-number"
         self._apply_state()
 
     def _current_setting(self) -> HomeLeaveModeSetting | None:
