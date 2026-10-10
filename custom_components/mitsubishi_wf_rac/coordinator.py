@@ -8,6 +8,7 @@ import re
 from typing import Any, Final
 
 from pywfrac import (
+    AIRFLOW_UNKNOWN,
     Aircon,
     AirconCommands,
     AirconStat,
@@ -1339,8 +1340,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         try:
             await self.set_airco(params)
         except ValueError as ex:
-            # The last read state holds a value the encoder has no byte for;
-            # nothing went out.
+            if self._airco.AirFlow != AIRFLOW_UNKNOWN:
+                raise self._command_failed(ex) from ex
+            # The fan step the unit reported has no byte to send back; nothing
+            # went out.
             self.async_update_listeners()
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -1354,17 +1357,21 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # re-raised - a library exception in a service call is a traceback,
             # not something the user can read - and async_queue_command()
             # awaits this task, so it lands on the action that issued it.
-            self.async_update_listeners()
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="command_failed",
-                translation_placeholders={
-                    "device": self.device_name,
-                    "error": str(ex),
-                },
-            ) from ex
+            raise self._command_failed(ex) from ex
         # The unit's answer reaches the entities now, not a poll later.
         self.async_set_updated_data(self._airco)
+
+    def _command_failed(self, error: Exception) -> HomeAssistantError:
+        """Tell the listeners and build the error the action reports."""
+        self.async_update_listeners()
+        return HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="command_failed",
+            translation_placeholders={
+                "device": self.device_name,
+                "error": str(error),
+            },
+        )
 
     def _record_reachable(self) -> None:
         """Start the tolerance over, after the unit has answered."""

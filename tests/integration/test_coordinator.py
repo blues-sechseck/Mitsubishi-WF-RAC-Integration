@@ -809,6 +809,22 @@ async def test_a_state_that_cannot_be_encoded_fails_translated_and_sends_nothing
     device._api.send_airco_command.assert_not_awaited()
 
 
+async def test_another_encoding_failure_keeps_the_general_error(device, monkeypatch):
+    """Only the unreadable fan step gets the advice to set the fan mode."""
+    monkeypatch.setattr(
+        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+    )
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await device.async_queue_command({AirconCommands.PresetTemp: 300.0})
+
+    assert raised.value.translation_key == "command_failed"
+    device._api.send_airco_command.assert_not_awaited()
+
+
 async def test_a_caller_giving_up_does_not_cancel_the_shared_command(
     device, monkeypatch
 ):
