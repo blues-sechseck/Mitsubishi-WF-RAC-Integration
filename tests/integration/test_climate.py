@@ -806,13 +806,44 @@ async def test_set_preset_away_refuses_a_direction_it_cannot_name(device, hvac_m
 
 async def test_set_preset_none_restores_a_normal_setpoint(device):
     device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
+    device.airco.Vacant = True
     device.async_queue_command = AsyncMock()
     entity = AircoClimate(device)
+    entity._update_state()
 
     await entity.async_set_preset_mode(PRESET_NONE)
 
     sent = device.async_queue_command.call_args.args[0]
     assert sent == {AirconCommands.PresetTemp: NORMAL_TEMP}
+
+
+async def test_turning_off_does_not_name_the_operation_mode(device):
+    """The block carries the unit's mode; naming it could undo another client's."""
+    device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+
+    await entity.async_set_hvac_mode(HVACMode.OFF)
+    assert device.async_queue_command.call_args.args[0] == {
+        AirconCommands.Operation: False
+    }
+
+    await entity.async_set_temperature(temperature=22.0, hvac_mode=HVACMode.OFF)
+    sent = device.async_queue_command.call_args.args[0]
+    assert AirconCommands.OperationMode not in sent
+    assert sent[AirconCommands.Operation] is False
+
+
+async def test_turning_on_names_the_mode(device):
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+
+    await entity.async_set_hvac_mode(HVACMode.HEAT)
+
+    assert device.async_queue_command.call_args.args[0] == {
+        AirconCommands.OperationMode: HVAC_TRANSLATION[HVACMode.HEAT],
+        AirconCommands.Operation: True,
+    }
 
 
 #
@@ -974,10 +1005,13 @@ async def test_leaving_home_leave_lands_on_the_normal_setpoint_the_card_shows(de
     showing NORMAL_TEMP plus it.
     """
     _set_options(device, {CONF_TARGET_OFFSET: 1.0})
+    device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
+    device.airco.Vacant = True
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
     device.async_queue_command = AsyncMock()
     entity = AircoClimate(device)
+    entity._update_state()
 
     await entity.async_set_preset_mode(PRESET_NONE)
 
@@ -1001,6 +1035,7 @@ async def test_leaving_home_leave_never_lands_back_in_it(device, hvac_mode, rang
     device.airco.Capabilities = replace(
         device.airco.Capabilities, vacant_property=True, preset_temp_range_2=range_2
     )
+    device.airco.Vacant = True
     device.airco.Operation = True
     device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
     device.async_queue_command = AsyncMock()
