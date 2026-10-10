@@ -815,7 +815,7 @@ async def test_a_caller_giving_up_does_not_cancel_the_shared_command(
     """The flush is one task shared by everyone in the window.
 
     A caller that goes away - a cancelled service call - must not take the
-    other callers' command down with it, which is what the shield is for.
+    other callers' command down with it.
     """
     monkeypatch.setattr(
         coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=20)
@@ -836,6 +836,72 @@ async def test_a_caller_giving_up_does_not_cancel_the_shared_command(
 
     device._api.send_airco_command.assert_awaited_once()
     assert device.airco.PresetTemp == 25.0
+
+
+async def test_a_caller_whose_flush_is_cancelled_at_shutdown_gets_a_translated_error(
+    device, monkeypatch
+):
+    monkeypatch.setattr(
+        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(seconds=30)
+    )
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    caller = asyncio.ensure_future(
+        device.async_queue_command({AirconCommands.Operation: True})
+    )
+    await asyncio.sleep(0)
+    await device.async_shutdown()
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await caller
+    assert raised.value.translation_key == "command_cancelled"
+    device._api.send_airco_command.assert_not_awaited()
+
+
+async def test_a_cancelled_caller_is_cancelled_not_translated(device, monkeypatch):
+    monkeypatch.setattr(
+        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(seconds=30)
+    )
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+
+    caller = asyncio.ensure_future(
+        device.async_queue_command({AirconCommands.Operation: True})
+    )
+    await asyncio.sleep(0)
+    caller.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await caller
+    await device.async_shutdown()
+
+
+async def test_a_failure_nobody_awaits_any_more_is_not_reported_as_unretrieved(
+    device, monkeypatch
+):
+    monkeypatch.setattr(
+        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+    )
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._api.send_airco_command = AsyncMock(
+        side_effect=WfRacConnectionError("offline")
+    )
+
+    leaving = asyncio.ensure_future(
+        device.async_queue_command({AirconCommands.Operation: True})
+    )
+    await asyncio.sleep(0)
+    (flush,) = device._running_flushes
+    leaving.cancel()
+    await asyncio.wait({flush})
+
+    # asyncio logs "exception was never retrieved" for a failed task that still
+    # has this flag set when it is collected.
+    assert not flush._log_traceback
+    assert isinstance(flush.exception(), HomeAssistantError)
 
 
 async def test_async_queue_command_notifies_listeners(device, monkeypatch):

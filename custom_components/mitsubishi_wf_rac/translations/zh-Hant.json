@@ -65,6 +65,9 @@
     "command_unencodable": {
       "message": "{device} 上的空調回報了一項無法回傳的設定，因此未傳送任何內容。請先設定風量，然後重試。"
     },
+    "command_cancelled": {
+      "message": "由於整合正在關閉，傳送給 {device} 上空調的命令已被取消。"
+    },
     "temperature_below_minimum": {
       "message": "{temperature}°C 低於 hvac_mode {hvac_mode} 的最低溫度 {min_temp}°C。在同一次呼叫中一併給出 hvac_mode，即可依你要切換到的模式來判斷。"
     },

@@ -65,6 +65,9 @@
     "command_unencodable": {
       "message": "De airco op {device} meldde een instelling die niet teruggestuurd kan worden, dus er is niets verzonden. Stel eerst de ventilatorstand in en probeer het daarna opnieuw."
     },
+    "command_cancelled": {
+      "message": "De opdracht aan de airco op {device} is geannuleerd omdat de integratie wordt afgesloten."
+    },
     "temperature_below_minimum": {
       "message": "{temperature} °C is lager dan het minimum van {min_temp} °C voor hvac_mode {hvac_mode}. Geef hvac_mode mee in dezelfde aanroep om te toetsen aan de modus waarnaar je overschakelt."
     },

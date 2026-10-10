@@ -65,6 +65,9 @@
     "command_unencodable": {
       "message": "{device} 上的空调报告了一项无法回传的设置，因此未发送任何内容。请先设置风速，然后重试。"
     },
+    "command_cancelled": {
+      "message": "由于集成正在关闭，发送给 {device} 上空调的命令已被取消。"
+    },
     "temperature_below_minimum": {
       "message": "{temperature}°C 低于 hvac_mode {hvac_mode} 的最低温度 {min_temp}°C。在同一次调用中一并给出 hvac_mode，即可按你要切换到的模式来判断。"
     },

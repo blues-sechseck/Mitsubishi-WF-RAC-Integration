@@ -1182,13 +1182,33 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             flush = self.hass.async_create_task(self._async_flush_queued_command())
             self._consolidation_task = flush
             self._running_flushes.add(flush)
-            flush.add_done_callback(self._running_flushes.discard)
+            flush.add_done_callback(self._flush_done)
         # Every caller awaits the one flush its parameters ended up in, so a
         # refusal by the unit reaches the action that caused it instead of
-        # being logged into the void. Shielded because the task is shared: a
-        # caller giving up (a cancelled service call) must not take the other
-        # callers' command down with it.
-        await asyncio.shield(flush)
+        # being logged into the void. Not awaited directly because the task is
+        # shared: a caller giving up (a cancelled service call) must not take
+        # the other callers' command down with it.
+        try:
+            await asyncio.wait({flush})
+            flush.result()
+        except asyncio.CancelledError:
+            task = asyncio.current_task()
+            # Our own cancellation must propagate; only the flush being
+            # cancelled at shutdown is turned into an error.
+            if task is not None and task.cancelling():
+                raise
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_cancelled",
+                translation_placeholders={"device": self.device_name},
+            ) from None
+
+    def _flush_done(self, flush: asyncio.Task[None]) -> None:
+        self._running_flushes.discard(flush)
+        # With every caller gone nobody reads the error, which asyncio would
+        # then report as never retrieved.
+        if not flush.cancelled():
+            flush.exception()
 
     def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
         """Carry the last known HomeLeaveMode reading forward.

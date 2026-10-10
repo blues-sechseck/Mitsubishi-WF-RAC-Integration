@@ -65,6 +65,9 @@
     "command_unencodable": {
       "message": "Das Klimagerät unter {device} hat eine Einstellung gemeldet, die sich nicht zurücksenden lässt. Es wurde nichts gesendet. Zuerst die Lüfterstufe einstellen, dann erneut versuchen."
     },
+    "command_cancelled": {
+      "message": "Der Befehl an das Klimagerät unter {device} wurde abgebrochen, weil die Integration beendet wird."
+    },
     "temperature_below_minimum": {
       "message": "{temperature} °C liegt unter dem Minimum von {min_temp} °C für hvac_mode {hvac_mode}. Geben Sie hvac_mode im selben Aufruf mit an, damit gegen den Modus geprüft wird, in den Sie wechseln."
     },
