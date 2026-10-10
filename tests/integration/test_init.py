@@ -190,6 +190,23 @@ async def test_remove_entry_releases_the_account_of_a_lone_entry(
     api.del_account_info.assert_awaited_once_with("airco-1")
 
 
+async def test_remove_entry_releases_the_account_of_a_never_migrated_entry(
+    hass: HomeAssistant,
+):
+    """A version 5 entry still keeps its host in options."""
+    entry = _entry(hass, 5, dict(_DATA), {CONF_HOST: "192.168.1.50"})
+    api = AsyncMock()
+    api.del_account_info.return_value = {"result": 0}
+
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository", return_value=api
+    ) as repository:
+        await async_remove_entry(hass, entry)
+
+    assert "192.168.1.50" in repository.call_args.args
+    api.del_account_info.assert_awaited_once_with("airco-1")
+
+
 async def test_remove_entry_keeps_the_account_another_entry_still_uses(
     hass: HomeAssistant,
 ):

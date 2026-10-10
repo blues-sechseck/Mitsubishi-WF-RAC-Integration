@@ -279,7 +279,8 @@ async def async_setup_entry(
 
 async def create_device_from_entry(entry: ConfigEntry, hass: HomeAssistant) -> Device:
     """Build the coordinator for a config entry."""
-    device: str = entry.data[CONF_HOST]
+    # A removed entry may never have migrated, leaving its host in options.
+    device: str = entry.data.get(CONF_HOST) or entry.options[CONF_HOST]
     # The entry title, not a stored name: that is what Home Assistant's own
     # rename changes, and a name kept in entry.data would quietly ignore it.
     name: str = entry.title

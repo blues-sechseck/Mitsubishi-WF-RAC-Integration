@@ -68,10 +68,6 @@ DIVERGENCES = {
         "The older library methods take the time zone per call, so the "
         "client is built without one; the method is passed as in core."
     ),
-    "mitsubishi_wf_rac/test_init.py::test_removal_of_an_entry_that_was_never_migrated": (
-        "Removal builds its client from entry.data, which an entry that never "
-        "migrated lacks the host in; core falls back to the options."
-    ),
     "mitsubishi_wf_rac/test_init.py::test_migration_drops_the_retired_retry_options": (
         "Core's migration writes no availability_retry_limit because no form "
         "there can change one. This integration has that form, so the option "
