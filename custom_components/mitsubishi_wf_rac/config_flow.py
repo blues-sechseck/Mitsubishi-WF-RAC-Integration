@@ -69,6 +69,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # Assistant skips migration entirely once entry.version equals this, so a
     # new step that is not reflected here never runs.
     VERSION = 8
+    MINOR_VERSION = 2
     DOMAIN = DOMAIN
 
     def __init__(self) -> None:

@@ -89,6 +89,8 @@ async def test_user_flow_success_creates_entry(hass: HomeAssistant):
     # airco id tell two units apart without putting the whole id into the
     # device name and every entity id built from it.
     assert result["title"] == "WF-RAC co-1"
+    # A fresh entry starts on the current schema, so no migration runs on it.
+    assert (result["version"], result["minor_version"]) == (8, 2)
     # CONF_HOST moves from data to options (see _async_create_common) - not
     # duplicated across both.
     assert result["data"]["host"] == "192.168.1.50"

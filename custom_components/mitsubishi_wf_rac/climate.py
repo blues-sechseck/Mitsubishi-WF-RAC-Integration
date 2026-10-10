@@ -165,7 +165,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     def __init__(self, device: Device) -> None:
         """Initialize the climate entity."""
         super().__init__(device)
-        self._attr_unique_id = f"{DOMAIN}-{self.coordinator.airco_id}-climate"
+        self._attr_unique_id = self.coordinator.airco_id.lower()
         capabilities = device.airco.Capabilities
         features = SUPPORT_FLAGS
         # HomeLeaveModeSelect in select.py stays: it can name the direction

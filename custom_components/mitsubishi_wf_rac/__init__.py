@@ -11,9 +11,13 @@ from homeassistant.const import (
     EVENT_HOMEASSISTANT_STOP,
     Platform,
 )
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers import (
+    config_validation as cv,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
@@ -193,6 +197,22 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 new_options[key] = max(-OVERSHOOT_MAX, min(OVERSHOOT_MAX, shifted))
 
         hass.config_entries.async_update_entry(entry, options=new_options, version=8)
+    if entry.minor_version < 2:
+        # The climate entity is the unit itself and takes its identity from the
+        # airco id, as the entry's own unique id does; entity_id stays.
+        old_unique_id = f"{DOMAIN}-{entry.data[CONF_AIRCO_ID]}-climate"
+        new_unique_id = entry.data[CONF_AIRCO_ID].lower()
+
+        @callback
+        def _migrate_unique_id(
+            entity_entry: er.RegistryEntry,
+        ) -> dict[str, str] | None:
+            if entity_entry.unique_id != old_unique_id:
+                return None
+            return {"new_unique_id": new_unique_id}
+
+        await er.async_migrate_entries(hass, entry.entry_id, _migrate_unique_id)
+        hass.config_entries.async_update_entry(entry, minor_version=2)
 
     return True
 
