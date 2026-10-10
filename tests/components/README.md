@@ -2,7 +2,12 @@
 
 The files under `mitsubishi_wf_rac/` are the tests from
 [home-assistant/core#181403](https://github.com/home-assistant/core/pull/181403),
-carried over unchanged apart from the imports. They are not a replacement for
+carried over unchanged apart from the imports. Core's tests drive the library
+through `async_get_status`, `async_send_command`, `async_register` and
+`async_unregister`; this integration still calls the older methods, so the
+`mock_repository` fixture in their `conftest.py` answers those by delegating to
+the mock core's tests configure (see the block marked as not part of core's
+suite). The test files themselves are not edited. They are not a replacement for
 `tests/unit` and `tests/integration` — those reach into the coordinator and
 cover protocol paths core's bronze cut does not contain at all. These are a
 second layer, from the outside: `Repository` is patched, the entry is set up
@@ -20,7 +25,9 @@ which is right there and wrong here.
 Three steps, and nothing else should be needed:
 
 1. Copy `tests/components/mitsubishi_wf_rac/` out of the core tree.
-2. Rewrite the imports:
+2. Rewrite the imports. `conftest.py` is core's too; what this repository
+   adds there (the adapter block, and the patch targets and the adapter call
+   in `repository_class`) has to be carried across by hand:
    ```
    homeassistant.components.mitsubishi_wf_rac -> custom_components.mitsubishi_wf_rac
    from tests.common import                   -> from pytest_homeassistant_custom_component.common import
@@ -37,7 +44,8 @@ resolution to work.
 If a test fails after a re-sync, it is a finding, not a porting error. Where
 the two trees genuinely disagree, the divergence is named in `conftest.py` and
 marked `xfail(strict=True)` — a divergence that closes shows up as XPASS and
-fails the run, which is how it gets noticed.
+fails the run, which is how it gets noticed. A parametrized test is matched
+without its parameters, so one entry covers all of its cases.
 
 ## Why this does not run on the floor
 
