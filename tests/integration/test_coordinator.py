@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pywfrac import Aircon, AirconCommands, AirconStat
+from pywfrac import AIRFLOW_UNKNOWN, Aircon, AirconCommands, AirconStat
 from pywfrac.parser import (
     EXTERNAL_TEMPERATURE_MAX,
     EXTERNAL_TEMPERATURE_MIN,
@@ -789,6 +789,24 @@ async def test_async_queue_command_reports_a_refusal_to_its_caller(device, monke
         await device.async_queue_command({AirconCommands.Operation: True})
 
     assert raised.value.translation_key == "command_failed"
+
+
+async def test_a_state_that_cannot_be_encoded_fails_translated_and_sends_nothing(
+    device, monkeypatch
+):
+    monkeypatch.setattr(
+        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+    )
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._airco.AirFlow = AIRFLOW_UNKNOWN
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await device.async_queue_command({AirconCommands.Operation: True})
+
+    assert raised.value.translation_key == "command_unencodable"
+    device._api.send_airco_command.assert_not_awaited()
 
 
 async def test_a_caller_giving_up_does_not_cancel_the_shared_command(

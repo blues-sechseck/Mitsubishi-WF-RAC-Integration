@@ -1318,7 +1318,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._last_command_at = dt_util.utcnow()
         try:
             await self.set_airco(params)
-        except (WfRacError, KeyError, TypeError, ValueError) as ex:
+        except ValueError as ex:
+            # The last read state holds a value the encoder has no byte for;
+            # nothing went out.
+            self.async_update_listeners()
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_unencodable",
+                translation_placeholders={"device": self.device_name},
+            ) from ex
+        except (WfRacError, KeyError, TypeError) as ex:
             # Already logged in set_airco(). A failed command says nothing
             # about the poll before it, so the listeners hear the state without
             # the coordinator being declared successful. Wrapped rather than
