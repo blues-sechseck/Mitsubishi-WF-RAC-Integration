@@ -175,6 +175,42 @@ async def test_remove_entry_clears_the_registration_full_repair_issue(
     )
 
 
+async def test_remove_entry_releases_the_account_of_a_lone_entry(
+    hass: HomeAssistant,
+):
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    api = AsyncMock()
+    api.del_account_info.return_value = {"result": 0}
+
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository", return_value=api
+    ):
+        await async_remove_entry(hass, entry)
+
+    api.del_account_info.assert_awaited_once_with("airco-1")
+
+
+async def test_remove_entry_keeps_the_account_another_entry_still_uses(
+    hass: HomeAssistant,
+):
+    """Operator and device ids are shared, so releasing would cut off the survivor."""
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    _entry(
+        hass,
+        _CURRENT_VERSION,
+        {**_DATA, CONF_HOST: "192.168.1.51", "airco_id": "AIRCO-1"},
+        {},
+    )
+    api = AsyncMock()
+
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository", return_value=api
+    ):
+        await async_remove_entry(hass, entry)
+
+    api.del_account_info.assert_not_awaited()
+
+
 def test_the_config_flow_declares_the_version_the_migration_ends_at():
     """Home Assistant stops migrating as soon as entry.version reaches this.
 

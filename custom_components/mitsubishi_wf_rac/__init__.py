@@ -340,6 +340,28 @@ async def async_remove_entry(
 ) -> None:
     """Handle removal of an entry."""
 
+    ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
+    ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
+    ir.async_delete_issue(
+        hass, DOMAIN, status_request_unsupported_issue_id(entry.entry_id)
+    )
+    ir.async_delete_issue(
+        hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
+    )
+
+    # Operator and device ids are shared by every entry of one airco, so
+    # releasing the account here would free the survivor's slot.
+    airco_id: str = entry.data[CONF_AIRCO_ID]
+    if any(
+        other.entry_id != entry.entry_id
+        and other.data.get(CONF_AIRCO_ID, "").lower() == airco_id.lower()
+        for other in hass.config_entries.async_entries(DOMAIN)
+    ):
+        _LOGGER.debug(
+            "Keeping the controller slot on airco [%s]: still in use", airco_id
+        )
+        return
+
     temp_device = await create_device_from_entry(entry, hass)
     # delete_account() returns None for everything short of a confirmed
     # release, which is what decides between the two lines.
@@ -352,12 +374,3 @@ async def async_remove_entry(
             "the manufacturer's app if you want it back",
             temp_device.airco_id,
         )
-
-    ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
-    ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
-    ir.async_delete_issue(
-        hass, DOMAIN, status_request_unsupported_issue_id(entry.entry_id)
-    )
-    ir.async_delete_issue(
-        hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
-    )
