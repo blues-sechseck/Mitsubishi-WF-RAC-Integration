@@ -687,6 +687,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         direction through HomeLeaveModeSelect instead.
         """
         if preset_mode == PRESET_NONE:
+            # A scene restoring "none" after its own setpoint must not
+            # overwrite that setpoint when the unit is not in Home Leave.
+            if self._attr_preset_mode != PRESET_AWAY:
+                return
             # Offset-corrected like every other setpoint: NORMAL_TEMP is what
             # the card should read afterwards, not what goes on the wire - sent
             # raw, _update_state() would add the offset back and leave the card

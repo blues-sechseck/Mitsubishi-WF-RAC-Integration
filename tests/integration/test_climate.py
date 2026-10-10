@@ -817,6 +817,19 @@ async def test_set_preset_none_restores_a_normal_setpoint(device):
     assert sent == {AirconCommands.PresetTemp: NORMAL_TEMP}
 
 
+async def test_set_preset_none_outside_home_leave_sends_nothing(device):
+    """A scene restores preset none after its own setpoint; that setpoint stays."""
+    device.airco.Capabilities = replace(device.airco.Capabilities, vacant_property=True)
+    device.airco.Vacant = False
+    device.async_queue_command = AsyncMock()
+    entity = AircoClimate(device)
+    entity._update_state()
+
+    await entity.async_set_preset_mode(PRESET_NONE)
+
+    device.async_queue_command.assert_not_called()
+
+
 async def test_turning_off_does_not_name_the_operation_mode(device):
     """The block carries the unit's mode; naming it could undo another client's."""
     device.airco.OperationMode = HVAC_TRANSLATION[HVACMode.COOL]
