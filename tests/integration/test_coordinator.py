@@ -186,18 +186,16 @@ async def test_update_none_response_is_a_failed_poll(device):
     assert await device.update() is False
 
 
-async def test_update_api_error_reregisters(device):
+async def test_update_api_error_does_not_reregister(device):
+    """A poll checks no account, so a failed one says nothing about eviction."""
     device._api.get_aircon_stats.side_effect = WfRacError("boom")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     assert await device.update() is False
-    device._api.update_account_info.assert_awaited_once()
+    device._api.update_account_info.assert_not_awaited()
 
 
 async def test_update_transient_unreachable_is_debug_only(device, caplog):
-    """An account can only have been evicted by a unit that answered - after a
-    bare connection failure there is nothing to re-register against, and the
-    hourly WiFi restart these modules do would make it a recurring no-op.
-    """
+    """The hourly WiFi restart these modules do must not cost a warning."""
     caplog.set_level("DEBUG", logger=coordinator_module.__name__)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
@@ -276,14 +274,11 @@ async def test_update_recovery_starts_the_tolerance_over(device, caplog):
     ]
 
 
-async def test_update_refused_command_reregisters(device):
-    """An evicted account answers (HTTP 400 / result:2) rather than timing
-    out, so this path keeps the re-registration attempt.
-    """
+async def test_update_refused_command_does_not_reregister(device):
     device._api.get_aircon_stats.side_effect = WfRacCommandError("refused")
     device._api.update_account_info = AsyncMock(return_value={"result": 0})
     assert await device.update() is False
-    device._api.update_account_info.assert_awaited_once()
+    device._api.update_account_info.assert_not_awaited()
 
 
 async def test_update_malformed_stat_is_a_failed_poll(device):
@@ -648,8 +643,8 @@ async def test_set_airco_raises_and_logs_on_send_failure(device):
 
 async def test_set_airco_reregisters_and_retries_once_on_registration_error(device):
     """A write refused with result 2 - our operator id is not in the airco's
-    account table - should self-heal like the read path already does, instead
-    of losing the command outright.
+    account table - should self-heal by registering again, instead of losing
+    the command outright.
     """
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1784,11 +1779,40 @@ async def test_add_account_does_not_report_an_issue_on_ordinary_success(device):
     assert _issue(device) is None
 
 
-async def test_update_reregister_reports_repair_issue_when_table_stays_full(device):
-    device._api.get_aircon_stats.side_effect = WfRacError("evicted")
-    device._api.update_account_info.return_value = {"result": 2}
+async def test_a_failed_poll_neither_raises_nor_clears_the_repair_issue(device):
+    device._report_registration_full()
+    device._api.get_aircon_stats.side_effect = WfRacError("boom")
 
     await device.update()
+    assert _issue(device) is not None
+
+    device._api.get_aircon_stats.side_effect = None
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    assert _issue(device) is not None
+
+
+async def test_an_accepted_write_clears_the_repair_issue(device):
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._report_registration_full()
+    device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
+
+    await device.set_airco({AirconCommands.Operation: True})
+
+    assert _issue(device) is None
+
+
+async def test_a_write_that_finds_the_table_full_reports_the_repair_issue(device):
+    device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
+    await device.update()
+    device._api.update_account_info = AsyncMock(return_value={"result": 2})
+    device._api.send_airco_command = AsyncMock(
+        side_effect=WfRacRegistrationError("result 2")
+    )
+
+    with pytest.raises(WfRacRegistrationError):
+        await device.set_airco({AirconCommands.Operation: True})
 
     assert _issue(device) is not None
 

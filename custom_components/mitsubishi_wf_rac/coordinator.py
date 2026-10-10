@@ -453,14 +453,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._record_failed_poll(ex)
             return False
         except (WfRacError, KeyError) as ex:
-            # Not logged here: being dropped from the account table is one
-            # outage, not one per poll, and _record_failed_poll() reports it
-            # on the transition.
+            # Not logged here: _record_failed_poll() reports the outage on the
+            # transition. A poll checks no account, so a failure is never
+            # grounds to re-register; that stays with the write path.
             self._record_failed_poll(ex)
-            # The official app can evict us from the module's small account
-            # table, and polls fail until we register again. An evicted
-            # account still answers - unlike the branch above.
-            await self.add_account()
             return False
 
         try:
@@ -1149,6 +1145,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 self._carry_forward_home_leave_mode(new_airco)
                 self.service_data.carry_forward(new_airco)
                 self._airco = new_airco
+                # An accepted write proves the account is registered.
+                self._clear_registration_full_issue()
                 # Our own write is not a foreign one: move the expectation to
                 # what the unit reports back, or the next poll would read this
                 # command as somebody else's (see _note_unexpected_settings).
@@ -1346,9 +1344,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def _record_failed_poll(self, error: BaseException) -> None:
         """Count one failed poll and keep what went wrong with it.
 
-        Once per poll: the re-registration that follows a rejected answer is
-        a second request under the same deadline. Saturated at the limit, and
-        the error is kept for the poll that crosses it.
+        Once per poll, however many requests report a failure under its
+        deadline. Saturated at the limit, and the error is kept for the poll
+        that crosses it.
         """
         if self._poll_counted:
             return
