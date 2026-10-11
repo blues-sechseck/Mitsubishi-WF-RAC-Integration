@@ -282,6 +282,9 @@
       "protection_raw": {
         "name": "Protection number (raw)"
       },
+      "indoor_humidity": {
+        "name": "Humidity"
+      },
       "research_data": {
         "name": "Research data"
       }

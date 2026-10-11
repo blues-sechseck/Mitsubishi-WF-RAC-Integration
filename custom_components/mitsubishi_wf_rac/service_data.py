@@ -108,6 +108,8 @@ SERVICE_DATA_MAX_AGE = 3 * SERVICE_DATA_REQUEST_INTERVAL
 # Fields fed exclusively by those segments.
 SERVICE_DATA_FIELDS = (
     "SilentOperation",
+    "IndoorHumidity",
+    "IndoorHumidityRaw",
     "CompressorFrequency",
     "CompressorFrequencyRaw",
     "OperatingCurrent",
@@ -148,7 +150,6 @@ RESEARCH_SERVICE_DATA_CODES: Final = (
     0xA3,
     0xA4,
     0xA5,
-    0xAD,
     0xB0,
     0xD2,
     0xD5,
@@ -223,8 +224,11 @@ class ResearchData:
 # temperature on screen for as long as the unit stays out of range. Which is a
 # whole heating season, and it is exactly what a frozen reading must never look
 # like. So when the raw field arrived, its temperature is not carried: no value
-# is the honest answer.
+# is the honest answer. The same holds for humidity, where the sensorless
+# answer 30 converts to no value, and for counting a segment as an answer at
+# all: the raw field is set whenever the segment arrived.
 SERVICE_DATA_DERIVED_FROM = {
+    "IndoorHumidity": "IndoorHumidityRaw",
     "IndoorCoilTemp": "IndoorCoilRaw",
     "IndoorCoilOutletTemp": "IndoorCoilOutletRaw",
 }

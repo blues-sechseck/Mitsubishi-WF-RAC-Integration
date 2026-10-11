@@ -24,6 +24,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     ATTR_HOT_GAS_TEMP_RAW,
     ATTR_INDOOR_COIL_OUTLET_RAW,
     ATTR_INDOOR_COIL_RAW,
+    ATTR_INDOOR_HUMIDITY,
     ATTR_OPERATING_CURRENT_RAW,
     ATTR_OUTDOOR_COIL_RAW,
     ATTR_PROTECTION_RAW,
@@ -36,7 +37,8 @@ from custom_components.mitsubishi_wf_rac.const import (
     SWING_MODE_TRANSLATION,
 )
 from homeassistant.components.climate.const import HVACAction, HVACMode
-from homeassistant.const import EntityCategory
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -131,8 +133,19 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device):
         False,
         None,
     )
+    humidity = next(
+        entity
+        for entity in entities
+        if entity.unique_id == f"{DOMAIN}-airco-id-{ATTR_INDOOR_HUMIDITY}-sensor"
+    )
+    assert details[humidity.unique_id] == (False, None)
+    assert humidity.device_class is SensorDeviceClass.HUMIDITY
+    assert humidity.native_unit_of_measurement == PERCENTAGE
+    assert humidity.state_class is SensorStateClass.MEASUREMENT
     operation_data_sensors = [
-        entity for entity in entities if isinstance(entity, sensor.ServiceDataSensor)
+        entity
+        for entity in entities
+        if isinstance(entity, sensor.ServiceDataSensor) and entity is not humidity
     ]
     assert len(operation_data_sensors) == 15
     assert all(

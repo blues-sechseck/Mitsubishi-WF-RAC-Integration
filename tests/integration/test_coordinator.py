@@ -24,6 +24,7 @@ from pywfrac.parser import (
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
     SERVICE_DATA_HOT_GAS_TEMP,
+    SERVICE_DATA_HUMIDITY,
     SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
     SERVICE_DATA_INDOOR_COIL_RAW,
     SERVICE_DATA_OPERATING_CURRENT,
@@ -1340,6 +1341,7 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
         ("OutdoorCoilRaw", SERVICE_DATA_OUTDOOR_COIL_RAW),
         ("DischargeSuperheatRaw", SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW),
         ("ProtectionRaw", SERVICE_DATA_PROTECTION_RAW),
+        ("IndoorHumidity", SERVICE_DATA_HUMIDITY),
     ],
 )
 async def test_raw_service_data_sensor_requests_its_segment_code(
@@ -2281,6 +2283,65 @@ async def test_missing_coil_segment_is_still_carried_forward(device):
 
     assert new_airco.IndoorCoilTemp == 21.5
     assert new_airco.IndoorCoilRaw == 88
+
+
+async def test_humidity_of_a_unit_without_sensor_is_not_carried_forward(device):
+    """Answer 30 converts to no value, but the segment did arrive: the last
+    real reading must not be frozen in its place.
+    """
+    device._airco.IndoorHumidity = 47
+    device._airco.IndoorHumidityRaw = 47
+    device.service_data._last_response = dt_util.utcnow()
+    new_airco = Aircon()
+    new_airco.IndoorHumidityRaw = 30
+    new_airco.IndoorHumidity = None
+
+    device.service_data.carry_forward(new_airco)
+
+    assert new_airco.IndoorHumidity is None
+    assert new_airco.IndoorHumidityRaw == 30
+
+
+async def test_a_sensorless_humidity_answer_keeps_the_channel_alive(device, caplog):
+    """Only the humidity sensor enabled on a unit without the sensor: every
+    answer is 30, which is an answer and not silence.
+    """
+    caplog.set_level("DEBUG", logger=coordinator_module.__name__)
+    device.service_data._last_response = dt_util.utcnow() - (
+        service_data_module.SERVICE_DATA_MAX_AGE + timedelta(seconds=1)
+    )
+    answer = Aircon()
+    answer.IndoorHumidityRaw = 30
+
+    device.service_data.carry_forward(answer)
+
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert device.service_data.last_response is not None
+    assert dt_util.utcnow() - device.service_data.last_response < timedelta(seconds=5)
+
+
+async def test_sensorless_humidity_answers_do_not_end_the_channel(device, monkeypatch):
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    sensorless = _build_stat_response_with_segments(
+        _content_of(ON_COOL_PAYLOAD), [(SERVICE_DATA_HUMIDITY, 0x10, 30, 0xFF)]
+    )
+    device._api.send_airco_command = AsyncMock(return_value=sensorless)
+    for _ in range(service_data_module.SERVICE_DATA_UNANSWERED_LIMIT * 2):
+        await _run_service_data_request(device, monkeypatch)
+
+    assert device.airco.IndoorHumidityRaw == 30
+    assert device.airco.IndoorHumidity is None
+    assert device.service_data_supported is True
+    assert (
+        ir.async_get(device.hass).async_get_issue(
+            DOMAIN,
+            service_data_module.service_data_unanswered_issue_id(device.entry_id),
+        )
+        is None
+    )
 
 
 async def test_service_data_expires_when_nothing_fresh_arrives(device):

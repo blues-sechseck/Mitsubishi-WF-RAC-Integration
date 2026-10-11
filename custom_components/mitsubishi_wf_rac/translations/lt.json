@@ -399,6 +399,9 @@
       "protection_raw": {
         "name": "Apsaugos numeris (neapdorota)"
       },
+      "indoor_humidity": {
+        "name": "Drėgmė"
+      },
       "research_data": {
         "name": "Tyrimo duomenys"
       }

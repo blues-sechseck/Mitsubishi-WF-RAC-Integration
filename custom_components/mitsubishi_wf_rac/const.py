@@ -85,6 +85,7 @@ ATTR_INDOOR_COIL_OUTLET_RAW = "indoor_coil_outlet_raw"
 ATTR_OUTDOOR_COIL_RAW = "outdoor_coil_raw"
 ATTR_DISCHARGE_SUPERHEAT_RAW = "discharge_superheat_raw"
 ATTR_PROTECTION_RAW = "protection_raw"
+ATTR_INDOOR_HUMIDITY = "indoor_humidity"
 
 # New offset constants
 CONF_INDOOR_OFFSET = "indoor_offset"

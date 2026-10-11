@@ -776,6 +776,7 @@ This table is the decoded subset. The whole code space has since been swept and
 | --- | --- | --- | --- |
 | `0x11` | Compressor frequency [Hz] | `(sel − 0x10) × 25.6 + 0.1 × OP2` | idle `00` ⇒ 0.0 Hz · load `e6` ⇒ **23.0 Hz** |
 | `0x90` | Current [A] | `OP2 × 14 / 51` | idle `00` ⇒ 0.0 A · load `04` ⇒ **1.10 A** (≈250 W) |
+| `0xAD` | Relative humidity [%] | `OP2`; `30` ⇒ no sensor (or range floor), `0` ⇒ broken sensor wire, `0xFF` ⇒ no value | `10 1e ff` ⇒ 30 on an SRK20ZS-WF, which has no humidity sensor |
 | `0xB1` | TDSH [°C] | `OP2 / 2` | `00` in both — never moved |
 | `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32`, **only for `OP2 >= 0x12`** | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
 | `0x13` | Outdoor EEV [pulses] | `OP2` | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
@@ -949,13 +950,13 @@ the sentinel and cannot be asked for (see below). SRK20ZS-WF on
 **switched off** throughout, two confirmation passes that returned the same 49
 codes with the same bytes. `[HW]`
 
-**49 codes answer in total, and 29 of them have no known meaning** — neither in
+**49 codes answer in total, and 28 of them have no known meaning** — neither in
 the table above nor anywhere else in this section. Grouped by what they did at
 rest:
 
 | Behaviour | Codes |
 | --- | --- |
-| carries a value at rest | `0xAE` (`10 9c ff`), `0xAD` (`10 1e ff`), `0xD2` (`10 01 ff`) |
+| carries a value at rest | `0xAE` (`10 9c ff`), `0xAD` (`10 1e ff`, humidity), `0xD2` (`10 01 ff`) |
 | reports `0` while the unit is off | `0x10` `0x15` `0x22` `0x2A` `0x3E` `0x7B` `0x84` `0x86` `0x88` `0x8D` `0xA0` `0xA1` `0xA3` `0xA4` `0xA5` `0xB0` `0xD5` |
 | answers with no value (`OP2 = 0xFF`) | `0x02` (selector `0x12`), `0x0C` `0x14` `0x1C` `0x1D` `0x23` `0x45` |
 | answers all-`0xFF` | `0x44` `0xF1` |
@@ -974,9 +975,18 @@ the ones worth chasing first, and one of them has a visible lead:
   same sensor is the obvious reading, but it has only been seen on a still
   room — confirm it on a room whose temperature is actually moving before
   relying on it.
-- **`0xAD` sat at `0x1E` (30) and `0xD2` at `0x01`** through every pass.
-  Nothing distinguishes a constant from a parameter that simply did not change
-  while the unit was off.
+- **`0xAD` is the relative humidity** in percent (`OP2`), read at the indoor
+  unit's return-air sensor. Whether a unit has the sensor depends on the
+  series: MHI's service manuals show it only on the SRK35 and SRK50 in the
+  ZS-WF series, but on every size in the ZSX and ZT-WF series. A unit without
+  it answers a constant `0x1E` (30), as the SRK20ZS-WF here did through every
+  pass. No value below 30 has been seen, so 30 means either "no sensor" or the
+  bottom of the range, and the integration reports it as unknown; so is 0,
+  which the manuals give for a broken sensor wire. The sensor sits in the
+  return air, so while heating the reading is lower than a sensor in the room
+  would show.
+- **`0xD2` sat at `0x01`** through every pass. Nothing distinguishes a
+  constant from a parameter that simply did not change while the unit was off.
 - **`0xDD` is silent operation.** It answers with selector `0x80`, a value
   that appears nowhere else in any reply, and carries the state in bit `0x20`
   of `OP2`: `80 20 00` on, `80 00 00` off. The same layout the CNS projects
