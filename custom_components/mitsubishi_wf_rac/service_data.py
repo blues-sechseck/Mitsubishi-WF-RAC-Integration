@@ -701,7 +701,9 @@ class ServiceDataChannel:
         if self._expired:
             return
         self._expired = True
-        _LOGGER.warning(
+        # Info, like its recovery: Home Assistant's rule for an outage is one
+        # line when it starts and one when it ends, both at info.
+        _LOGGER.info(
             "No operation data from [%s] for over %.0fs; its compressor, "
             "current, temperature and EEV sensors now report unknown. A "
             "network interruption is the usual cause - check whether other "
