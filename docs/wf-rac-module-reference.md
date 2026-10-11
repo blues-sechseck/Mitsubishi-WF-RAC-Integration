@@ -19,7 +19,7 @@ silently upgrade them.
 
 | Tag | Meaning |
 | --- | --- |
-| `[HW]` | Observed on real hardware (SRK35ZS-WF, firmware `WF-RAC-HTTPS 025/200`) |
+| `[HW]` | Observed on real hardware (SRK20ZS-WF and SRK35ZS-WF on one multi-split, firmware `WF-RAC-HTTPS 025/200`) |
 | `[FW]` | Read out of a firmware image (module or bridge MCU), static analysis |
 | `[APP]` | Read out of the official Smart M-Air app (version 1.4.009) |
 | `[EXT]` | External project documentation, chiefly [MHI-AC-Trace](https://github.com/absalom-muc/MHI-AC-Trace) / [MHI-AC-Ctrl](https://github.com/absalom-muc/MHI-AC-Ctrl) |
@@ -390,7 +390,7 @@ MHI-AC-Ctrl reaches part of the same area as its `DB16`/`DB17`. `[EXT]`
 
 ```python
 Operation      = (state[2] & 0x03) == 1              # power on
-OperationMode  = {0x08:'auto', 0x10:'cool', 0x0C:'dry', 0x04:'fan', 0x00:'heat'}[state[2] & 0x3C]
+OperationMode  = {0x00:'auto', 0x04:'dry', 0x08:'cool', 0x0C:'fan', 0x10:'heat'}[state[2] & 0x3C]
 SwingUD_on     = (state[2] & 0xC0) == 0x40
 AirFlow        = {0x07:'auto', 0x00:1, 0x01:2, 0x02:3, 0x06:4}[state[3] & 0x0F]
 VaneUD         = (state[3] & 0xF0) >> 4              # 0..3 -> position 1..4, ignored if swinging
@@ -405,6 +405,9 @@ Entrust3D      = (state[12] & 0x0C) == 0x04
 
 Mode bit layout is `DB0[4:2]` and the fan bits are `DB1[1:0]`, exactly as in the
 SPI documentation `[EXT]`; the tables above are the WF-RAC-observed values `[HW]`.
+The mode values are also the digits MHI's service mode blinks out for the
+operation mode — AUTO 0, DRY 1, COOL 2, FAN 3, HEAT 4 — and the value of
+operation-data code `0x02` (§5.4) `[EXT]`.
 
 ### 4.3 Building the COMMAND block (write path) — and the set-bit trap
 
@@ -763,7 +766,7 @@ your own poll interval, not the device.
 
 The bridge firmware contains per-code plausibility rules for these codes `[FW]`.
 **All fifteen were requested over the WF-RAC HTTP path and all fifteen
-answered** (SRK35ZS-WF, `WF-RAC-HTTPS 025/200`) `[HW]`. Measured twice:
+answered** (SRK20ZS-WF, `WF-RAC-HTTPS 025/200`) `[HW]`. Measured twice:
 once with the compressor idle, once under load (setpoint forced 6 K below room
 temperature). Where a value moved sensibly between the two, that is noted —
 those readings are consistent with the MHI-AC-Ctrl formulas `[EXT]`, but two
@@ -783,11 +786,11 @@ This table is the decoded subset. The whole code space has since been swept and
 | `0x05` | Internal setpoint [°C] | `OP2 / 2`, `sel` = `0x13` | `2e` ⇒ **23.0 °C** while 22.5 °C was the value sent |
 | `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
 | `0x81` | THI-R1 [°C] | thermistor curve, see §5.4 | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
-| `0x87` | THI-R3 [°C] | thermistor curve, see §5.4 | `10 5a ff` ⇒ raw 90 |
+| `0x87` | THI-R3 [°C], gas header | thermistor curve, see §5.4 | `10 5a ff` ⇒ raw 90 |
 | `0x1E` | Total run hours [h] | `OP2 × 100` | `ff ff ff` ⇒ **no value** |
 | `0x1F` | Indoor fan speed | `OP1 & 0x0f`, **not `OP2`** `[EXT]` | `ff ff ff` ⇒ **no value** |
 | `0x0D` | *unknown* | — | `00 ff ff`, `sel` = `0x00` |
-| `0x21` | *unknown* as a read; as a write, silent operation (see below) | — | `10 ff ff` ⇒ no value |
+| `0x21` | silent operation — the write code (see below); read, the state is likely `OP1 & 0x0f` `[INF]` | — | `10 ff ff` ⇒ 0 |
 | `0x32` | *unknown* | — | `2e 04 ff`, unusual `sel` |
 | `0x34` | *unknown* | — | `11 01 04`, **uses `OP3`** — multi-byte value |
 | `0x35` | *unknown* | — | `10 00 ff` |
@@ -917,6 +920,10 @@ Notes on the shape of the answers `[HW]`:
   OP2 = 0`, so a decoded zero cannot be told apart from a genuine one — keep
   the raw bytes if you need to distinguish "no data" from "not running".
 
+- `0x87` is the sensor on the indoor coil's gas header: the coil outlet while
+  cooling, but the inlet of the hot gas while heating. Name it by position, not
+  by flow direction. `[EXT]`
+
 Two codes MHI-AC-Ctrl uses are **absent** from the bridge's list: `0x7C`
 (protection number) and `0x0C` (defrost). That absence says nothing about
 whether they work here. The list is the classifier for the bridge's *own* poll,
@@ -929,17 +936,29 @@ confirmed to answer, not because a miss would be harmless: a code the unit does
 not serve voids the whole request it rode in on (§5.3). It does answer,
 confirmed on three units across single- and multi-split `[HW]`, but it only
 ever reads `0`: a controlled test that reproduced a real overload clamp (see
-§5.7) left it unmoved. Read together with the stop-code table
-(`error_codes.py`), which describes its non-zero values as escalated faults or
-stops rather than the speed-limit clamps in §5.7, the code appears to track
-protective *stops* only — it is not a general-purpose "unit is protecting
-itself" flag.
+§5.7) left it unmoved.
 
-**`0x0C` does answer**, tried on an SRK20ZS-WF `[HW]`: the segment comes back as
-`10 ff ff` — the unit accepts the code, but reports no value. The unit was
-switched off at the time, which is exactly when a defrost flag has nothing to
-say, so this neither confirms nor rules out a usable flag. It needs re-reading
-during a heating run that goes through a defrost cycle.
+Its values are not the stop codes. MHI's service manuals list it as
+operation-data item 33, the protection state of the compressor, with a table of
+its own `[EXT]`: `0` normal, `1`/`2` discharge temperature control/anomaly,
+`3`/`15` current safe on the inverter's primary/secondary current, `4`/`5`
+high-pressure control/anomaly, `6`/`7` low-pressure control/anomaly, `8`
+anti-frost control, `9` current cut, `10`/`11` power transistor control/overheat,
+`12` compression-ratio control, `14` dew prevention, `16`/`17` stop by rotor
+lock/start-up failure, `18` active-filter anomaly. The lowest number wins while
+several are active, and a frequency reduction requested by the indoor unit shows
+as `4` in heating and `8` in cooling. So the number covers frequency-reducing
+controls, not just stops — the raised speed floor of §5.7 is not on the list,
+though. On our units it read `0` even through a probable anti-frost stop, where
+the table says `8` `[HW]`: either these units do not fill it, or it needs the
+outdoor selector the bridge cannot send (§5.3).
+
+**`0x0C` answers, and the answer is the defrost flag.** The segment comes back
+as `10 ff ff` `[HW]`, and that is not an empty answer: the flag is
+`OP1 & 0x01`, the bit MHI-AC-Ctrl reads it from, and a CNS capture of an idle
+unit shows the same `10 ff` `[EXT]`. So `10` means "not defrosting". It held
+through cooling, standstill and six heating runs on two units. A defrost cycle
+should read `11 ff ff`; we have not caught one yet.
 
 #### The rest of the code space
 
@@ -958,7 +977,7 @@ rest:
 | --- | --- |
 | carries a value at rest | `0xAE` (`10 9c ff`), `0xAD` (`10 1e ff`, humidity), `0xD2` (`10 01 ff`) |
 | reports `0` while the unit is off | `0x10` `0x15` `0x22` `0x2A` `0x3E` `0x7B` `0x84` `0x86` `0x88` `0x8D` `0xA0` `0xA1` `0xA3` `0xA4` `0xA5` `0xB0` `0xD5` |
-| answers with no value (`OP2 = 0xFF`) | `0x02` (selector `0x12`), `0x0C` `0x14` `0x1C` `0x1D` `0x23` `0x45` |
+| value in `OP1`'s low nibble, `OP2` unused | `0x02` (`12` = cool), `0x0C` `0x14` `0x1C` `0x1D` `0x23` `0x45` (each `0`) |
 | answers all-`0xFF` | `0x44` `0xF1` |
 | answers with selector `0x80` | `0xDD` (`80 00 00`) — silent operation, see below |
 
@@ -1016,11 +1035,17 @@ not damage. The request is lost, and it can disturb the one that follows it
 (§5.3).
 
 **A refused code and an empty answer are different things.** A refusal returns
-nothing at all in the trailer; a code the unit knows but has no reading for
-comes back as a segment with `OP2 = 0xFF`. Seven of the codes above are in that
-second group. So "no value" is itself information — it says the unit accepts the
-code — and it is only visible if you look at whether the segment arrived, not at
-its contents.
+nothing at all in the trailer; a code the unit knows but has nothing for comes
+back as `ff ff ff` (`0x1E`, `0x1F`, `0x44`, `0xF1`). So "no value" is itself
+information — it says the unit accepts the code — and it is only visible if you
+look at whether the segment arrived, not at its contents.
+
+**`OP2 = 0xFF` alone does not mean empty.** For the seven nibble codes above the
+value is the low nibble of `OP1`: MHI-AC-Ctrl decodes mode, defrost and both fan
+speeds exactly there `[EXT]`, and the bridge's own plausibility rules check only
+the high nibble of `OP1` for `0x11` and `0x21`, leaving the low one as payload
+`[FW]`. `0x02` reads `12`, which is COOL in the mode coding of §4.2. The others
+read `0` in every state seen so far.
 
 `0xFF` is the one value you cannot probe: as a trailer code it is the
 "nothing to send" sentinel (§3.3), and the bridge discards it without queueing
@@ -1380,7 +1405,7 @@ Static analysis only.
 | `WF-RAC-HTTPS_C_200.bin` (64 KiB RL78 image) | everything in §4, §5, §6.1, §6.2, Appendix A |
 | Smart M-Air Android app 1.4.009 | blob layout, CRC, code `248`, capabilities, thermistor tables |
 | [MHI-AC-Trace `SPI.md`](https://github.com/absalom-muc/MHI-AC-Trace/blob/main/SPI.md), [MHI-AC-Ctrl](https://github.com/absalom-muc/MHI-AC-Ctrl) | SPI frame layout, set-bit semantics, operation-data codes and formulas |
-| Live captures against SRK35ZS-WF units on `WF-RAC-HTTPS 025/200` | every `[HW]` claim |
+| Live captures against an SRK20ZS-WF and an SRK35ZS-WF on `WF-RAC-HTTPS 025/200` | every `[HW]` claim |
 
 **On the reach of the `[FW]` claims about the module.** They all come from that
 one `WCBN4612L` image, because it is the only module firmware published in the
