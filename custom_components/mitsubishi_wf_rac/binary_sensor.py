@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from pywfrac import describe_error_code
+from pywfrac import SERVICE_DATA_DEFROST, defrost_possible, describe_error_code
 
 # HA 2026.10 keeps BinarySensorDeviceClass in binary_sensor.const without an
 # explicit re-export; that module does not exist on the floor in hacs.json.
@@ -39,6 +39,7 @@ async def async_setup_entry(
         CompressorBinarySensor(device),
         ExternalControlBinarySensor(device),
         ExternalTemperatureActiveBinarySensor(device),
+        DefrostBinarySensor(device),
     ]
     # Occupancy ("vacant") detection is only reported by units whose capability
     # table has VacantProperty=true - includes ZT-2025 (raw=3), which the
@@ -177,3 +178,43 @@ class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
     def _update_state(self) -> None:
         # Vacant == True means nobody is present.
         self._attr_is_on = not self.coordinator.airco.Vacant
+
+
+class DefrostBinarySensor(WfRacEntity, BinarySensorEntity):
+    """Whether the outdoor unit is defrosting its coil.
+
+    An outdoor-unit value, so on a multi-split an idle indoor unit shows it
+    too. The unit is only asked while a defrost is possible (see
+    defrost_possible()); outside that the answer is known without asking and
+    the sensor says off - including when an "on" reading is still being carried
+    from before the condition ended. Unknown means the compressor reading is
+    missing, or it is possible and the unit's answer is missing or expired.
+    """
+
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "defrost"
+
+    def __init__(self, device: Device) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(device, context=SERVICE_DATA_DEFROST)
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-defrost"
+        self._apply_state()
+
+    @property
+    def available(self) -> bool:
+        """Unavailable on a unit that does not answer operation data at all."""
+        return super().available and self.coordinator.service_data_supported
+
+    def _mark_state_unknown(self) -> None:
+        self._attr_is_on = None
+
+    def _update_state(self) -> None:
+        airco = self.coordinator.airco
+        if airco.CompressorFrequency is None:
+            self._attr_is_on = None
+        elif not defrost_possible(airco):
+            self._attr_is_on = False
+        else:
+            self._attr_is_on = airco.Defrosting

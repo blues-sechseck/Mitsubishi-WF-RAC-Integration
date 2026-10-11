@@ -421,6 +421,9 @@
       },
       "external_temperature_active": {
         "name": "Nurodyta vidaus temperatūra"
+      },
+      "defrost": {
+        "name": "Atitirpinimas"
       }
     },
     "update": {

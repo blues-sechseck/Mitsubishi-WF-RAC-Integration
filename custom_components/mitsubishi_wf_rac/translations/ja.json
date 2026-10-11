@@ -421,6 +421,9 @@
       },
       "external_temperature_active": {
         "name": "室内温度の指定"
+      },
+      "defrost": {
+        "name": "霜取り"
       }
     },
     "update": {

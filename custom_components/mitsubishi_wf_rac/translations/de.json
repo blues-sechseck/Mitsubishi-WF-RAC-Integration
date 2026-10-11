@@ -421,6 +421,9 @@
       },
       "external_temperature_active": {
         "name": "Innentemperatur-Vorgabe"
+      },
+      "defrost": {
+        "name": "Abtauen"
       }
     },
     "update": {
