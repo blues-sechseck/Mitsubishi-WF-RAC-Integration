@@ -20,8 +20,8 @@ from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Final
 
-from pywfrac import Aircon
-from pywfrac.parser import (
+from pywfrac import (
+    SERVICE_DATA_BUDGET,
     SERVICE_DATA_CODE_BY_FIELD,
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
@@ -35,6 +35,8 @@ from pywfrac.parser import (
     SERVICE_DATA_OUTDOOR_COIL_RAW,
     SERVICE_DATA_PROTECTION_RAW,
     SERVICE_DATA_SILENT_OPERATION,
+    Aircon,
+    ServiceDataRefusals,
 )
 
 from homeassistant.helpers import issue_registry as ir
@@ -124,11 +126,6 @@ SERVICE_DATA_UNANSWERED_LIMIT: Final = 10
 SERVICE_DATA_EXPIRY_FACTOR: Final = 3
 SERVICE_DATA_MAX_AGE = SERVICE_DATA_EXPIRY_FACTOR * SERVICE_DATA_REQUEST_INTERVAL
 
-# More than ten segments in one request is where the module starts to lose
-# answers (13 flutter, 14 never work), and a second request per poll would
-# double the write lock, so the codes share this many slots instead.
-SERVICE_DATA_BUDGET: Final = 10
-
 # How often each code is worth reading. Fast-moving values and those feeding
 # energy or efficiency figures every poll; slow ones less often, so the slots
 # they leave free go to research codes. Adding a code is one line here.
@@ -158,11 +155,6 @@ SERVICE_DATA_DUE_TOLERANCE: Final = MIN_TIME_BETWEEN_UPDATES / 2
 # Codes that are only worth asking while a condition holds, as a predicate on
 # the last reading. Codes without an entry are always eligible.
 SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {}
-
-# A code is suspended after this many refusals while it was the only code in
-# the request the module had not answered before: result 11 is also what a
-# request gets while another client holds the write lock.
-SERVICE_DATA_REFUSALS_TO_SUSPEND: Final = 2
 
 
 def service_data_interval(code: int) -> timedelta:
@@ -335,13 +327,10 @@ class ServiceDataChannel:
         # single source of truth.
         self._offset: timedelta | None = None
         self._good_cycles = 0
-        # Per code: when its segment last arrived, whether the module has ever
-        # answered it ("untested" -> "ok", or "suspect"/"suspended" once a
-        # request holding it was refused), and the refusals it took alone.
-        # Memory only - a reload starts over.
+        # Per code: when its segment last arrived, and whether the module has
+        # ever answered it. Memory only - a reload starts over.
         self._read: dict[int, datetime] = {}
-        self._states: dict[int, str] = {}
-        self._refusals: dict[int, int] = {}
+        self._refusals = ServiceDataRefusals()
         self._overdue: set[int] = set()
 
     @property
@@ -436,28 +425,15 @@ class ServiceDataChannel:
         candidates = [
             code
             for code in subscribed
-            if self._states.get(code) != "suspended"
+            if not self._refusals.is_suspended(code)
             and (
                 (only_when := SERVICE_DATA_ONLY_WHEN.get(code)) is None
                 or only_when(airco)
             )
         ]
         by_overdue = sorted(candidates, key=lambda c: (-self._ratio(c, now), c))
-        chosen: list[int] = []
-        untested = suspects = 0
-        for code in by_overdue:
-            if len(chosen) >= SERVICE_DATA_BUDGET:
-                break
-            if not self._is_due(code, now):
-                continue
-            state = self._states.get(code, "untested")
-            if state == "untested" and not suspects:
-                untested += 1
-            elif state == "suspect" and not untested and not suspects:
-                suspects += 1
-            elif state != "ok":
-                continue
-            chosen.append(code)
+        due = (code for code in by_overdue if self._is_due(code, now))
+        chosen = list(self._refusals.admit(due, SERVICE_DATA_BUDGET))
         if not chosen and need_frame:
             fallback = by_overdue or sorted(subscribed)
             chosen = fallback[:1]
@@ -465,7 +441,7 @@ class ServiceDataChannel:
 
     def has_unproven(self, codes: Iterable[int]) -> bool:
         """Whether a request with these codes holds one the module never answered."""
-        return any(self._states.get(c, "untested") != "ok" for c in codes)
+        return self._refusals.has_unproven(codes)
 
     def note_refused(self, requested: Iterable[int]) -> None:
         """Pin a refused request on its unproven codes, if it had any.
@@ -475,36 +451,20 @@ class ServiceDataChannel:
         not answered before. Several unproven codes become suspects instead and
         are then asked one at a time. Refused alone twice, a code is suspended.
         """
-        unproven = [c for c in requested if self._states.get(c, "untested") != "ok"]
-        if len(unproven) > 1:
-            for code in unproven:
-                if self._states.get(code) != "suspended":
-                    self._states[code] = "suspect"
-            return
-        if not unproven:
-            return
-        code = unproven[0]
-        if self._states.get(code) == "suspended":
-            return
-        self._states[code] = "suspect"
-        self._refusals[code] = self._refusals.get(code, 0) + 1
-        if self._refusals[code] < SERVICE_DATA_REFUSALS_TO_SUSPEND:
-            return
-        self._states[code] = "suspended"
-        # Debug: a unit without the code is normal, not a fault - the sensor
-        # staying unknown is the visible part.
-        _LOGGER.debug(
-            "[%s] refused operation-data code 0x%02X on its own twice; not "
-            "asking for it again until the integration reloads",
-            self._device.device_name,
-            code,
-        )
+        for code in self._refusals.note_refused(requested):
+            # Debug: a unit without the code is normal, not a fault - the
+            # sensor staying unknown is the visible part.
+            _LOGGER.debug(
+                "[%s] refused operation-data code 0x%02X on its own twice; not "
+                "asking for it again until the integration reloads",
+                self._device.device_name,
+                code,
+            )
 
     def _note_read(self, code: int, now: datetime) -> None:
         """Record that a code's segment arrived."""
         self._read[code] = now
-        self._states[code] = "ok"
-        self._refusals.pop(code, None)
+        self._refusals.note_answered(code)
         self._overdue.discard(code)
 
     def _age_of(self, code: int, now: datetime) -> timedelta | None:

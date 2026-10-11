@@ -209,7 +209,7 @@ async def test_research_codes_ride_along_with_the_regular_ones(
         "async_contexts",
         lambda: {SERVICE_DATA_COMPRESSOR_FREQ, RESEARCH_CONTEXT},
     )
-    platform_device.service_data._states[SERVICE_DATA_COMPRESSOR_FREQ] = "ok"
+    platform_device.service_data._refusals.note_answered(SERVICE_DATA_COMPRESSOR_FREQ)
 
     sent = await _cycles(platform_device, 5)
 

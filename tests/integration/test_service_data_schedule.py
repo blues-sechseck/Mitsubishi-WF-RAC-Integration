@@ -11,8 +11,13 @@ import logging
 from unittest.mock import AsyncMock
 
 import pytest
-from pywfrac import Aircon, AirconCommands
-from pywfrac.parser import (
+from pywfrac import (
+    SERVICE_DATA_BUDGET,
+    SERVICE_DATA_REFUSALS_TO_SUSPEND,
+    Aircon,
+    AirconCommands,
+    WfRacWriteRefusedError,
+
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
@@ -22,7 +27,6 @@ from pywfrac.parser import (
     SERVICE_DATA_OUTDOOR_COIL_RAW,
     SERVICE_DATA_SILENT_OPERATION,
 )
-from pywfrac.repository import WfRacWriteRefusedError
 
 from custom_components.mitsubishi_wf_rac import (
     coordinator as coordinator_module,
@@ -31,7 +35,6 @@ from custom_components.mitsubishi_wf_rac import (
 from custom_components.mitsubishi_wf_rac.service_data import (
     RESEARCH_CONTEXT,
     RESEARCH_SERVICE_DATA_CODES,
-    SERVICE_DATA_BUDGET,
     SERVICE_DATA_INTERVALS,
     service_data_expiry,
 )
@@ -54,7 +57,12 @@ def _read_before_send(channel, code: int, seconds: float) -> None:
 
 def _prove(channel, *codes: int) -> None:
     for code in codes:
-        channel._states[code] = "ok"
+        channel._refusals.note_answered(code)
+
+
+def _suspend(channel, code: int) -> None:
+    for _ in range(SERVICE_DATA_REFUSALS_TO_SUSPEND):
+        channel.note_refused((code,))
 
 
 # --- selection ---------------------------------------------------------------
@@ -227,7 +235,7 @@ def test_a_suspended_carrier_still_rides_when_the_override_needs_a_frame(
     platform_device,
 ):
     channel = platform_device.service_data
-    channel._states[SERVICE_DATA_INDOOR_COIL_RAW] = "suspended"
+    _suspend(channel, SERVICE_DATA_INDOOR_COIL_RAW)
 
     assert channel.select([SERVICE_DATA_INDOOR_COIL_RAW], None) == ()
     assert channel.select([SERVICE_DATA_INDOOR_COIL_RAW], None, need_frame=True) == (
@@ -334,11 +342,11 @@ async def test_a_code_the_unit_refuses_no_longer_takes_the_request_down(
     # Both are suspects after the shared refusal and go one at a time.
     assert sent[1] == (SERVICE_DATA_COMPRESSOR_FREQ,)
     assert sent[-1] == (SERVICE_DATA_COMPRESSOR_FREQ,)
-    assert platform_device.service_data._states[SERVICE_DATA_HUMIDITY] == "suspended"
+    assert platform_device.service_data._refusals.is_suspended(SERVICE_DATA_HUMIDITY)
     assert not [r for r in caplog.records if r.levelno >= logging.INFO]
     assert any("0xAD" in r.message for r in caplog.records)
     # The readable sensor kept reading throughout.
-    assert platform_device.service_data._states[SERVICE_DATA_COMPRESSOR_FREQ] == "ok"
+    assert not platform_device.service_data.has_unproven([SERVICE_DATA_COMPRESSOR_FREQ])
 
 
 async def test_an_armed_override_keeps_a_code_in_every_poll(
@@ -381,51 +389,33 @@ async def test_without_an_override_nothing_due_sends_nothing(
 
 
 # --- refusal bookkeeping -----------------------------------------------------
+# The rules themselves are pywfrac's (ServiceDataRefusals); what is left here
+# is that the channel feeds it and honours what it says.
 
 
-def test_a_refusal_with_only_proven_codes_blames_nobody(platform_device):
-    channel = platform_device.service_data
-    _prove(channel, FAST, MEDIUM)
-
-    channel.note_refused((FAST, MEDIUM))
-
-    assert channel._states == {FAST: "ok", MEDIUM: "ok"}
-
-
-def test_one_unproven_code_among_proven_ones_is_the_suspect(platform_device):
+def test_a_code_refused_alone_twice_is_no_longer_selected(platform_device, caplog):
+    caplog.set_level(logging.DEBUG, logger=service_data_module.__name__)
     channel = platform_device.service_data
     _prove(channel, FAST)
 
     channel.note_refused((FAST, MEDIUM))
-    assert channel._states[MEDIUM] == "suspect"
     channel.note_refused((FAST, MEDIUM))
 
-    assert channel._states[MEDIUM] == "suspended"
-    assert channel._states[FAST] == "ok"
     assert channel.select([FAST, MEDIUM], None) == (FAST,)
+    assert not [r for r in caplog.records if r.levelno >= logging.INFO]
+    assert any("0x82" in r.message for r in caplog.records)
 
 
 def test_an_answer_lifts_a_suspension(platform_device):
     channel = platform_device.service_data
-    channel._states[MEDIUM] = "suspended"
+    _suspend(channel, MEDIUM)
 
     answer = Aircon()
     answer.ServiceDataRaw[MEDIUM] = (0x10, 0x01, 0xFF)
     channel.carry_forward(answer)
 
-    assert channel._states[MEDIUM] == "ok"
-
-
-def test_one_suspect_rides_at_a_time(platform_device):
-    channel = platform_device.service_data
-    _prove(channel, FAST)
-    channel._states[MEDIUM] = "suspect"
-    channel._states[SLOW] = "suspect"
-
-    chosen = channel.select([FAST, MEDIUM, SLOW], None)
-
-    assert FAST in chosen
-    assert len({MEDIUM, SLOW} & set(chosen)) == 1
+    assert not channel._refusals.is_suspended(MEDIUM)
+    assert not channel.has_unproven([MEDIUM])
 
 
 # --- per-code expiry ---------------------------------------------------------
