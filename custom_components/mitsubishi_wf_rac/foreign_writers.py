@@ -44,9 +44,9 @@ _LOGGER = logging.getLogger(__name__)
 # unit right now, and the free window SERVICE_DATA_REQUEST_INTERVAL leaves is
 # only wide enough for one write - not for a session of them. Three minutes
 # covers a typical app session. The operation-data sensors hold their last
-# values throughout - a pause we chose is not the stale-data case
-# SERVICE_DATA_MAX_AGE guards against, and External Control says plainly that
-# it is happening. See pause_to_settle().
+# values throughout - a pause we chose is not the stale-data case the
+# readings' expiry guards against, and External Control says plainly that it
+# is happening. See pause_to_settle().
 FOREIGN_ACTIVITY_BACKOFF = timedelta(minutes=3)
 
 # What the settings look like on a unit that applied an all-zero command block.
@@ -168,7 +168,7 @@ class ForeignWriterWatch:
 
         None while one is running or when there is nothing to settle. The
         caller moves the operation-data age anchor by it: the gap is one we
-        chose, so counting it against SERVICE_DATA_MAX_AGE would throw away
+        chose, so counting it against the readings' expiry would throw away
         values that are perfectly good and about to be refreshed anyway.
 
         Kept out of _report() on purpose - that one only logs, and runs after

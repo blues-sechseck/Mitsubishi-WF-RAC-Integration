@@ -15,11 +15,27 @@ is everything around it that only concerns this one channel.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Final
 
 from pywfrac import Aircon
+from pywfrac.parser import (
+    SERVICE_DATA_CODE_BY_FIELD,
+    SERVICE_DATA_CODES,
+    SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
+    SERVICE_DATA_EEV_PULSES,
+    SERVICE_DATA_HOT_GAS_TEMP,
+    SERVICE_DATA_HUMIDITY,
+    SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
+    SERVICE_DATA_INDOOR_COIL_RAW,
+    SERVICE_DATA_OPERATING_CURRENT,
+    SERVICE_DATA_OUTDOOR_COIL_RAW,
+    SERVICE_DATA_PROTECTION_RAW,
+    SERVICE_DATA_SILENT_OPERATION,
+)
 
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
@@ -102,8 +118,62 @@ SERVICE_DATA_UNANSWERED_LIMIT: Final = 10
 # the polls in between (see carry_forward() below) - but not
 # indefinitely. A unit that keeps refusing the request would otherwise leave
 # entities reporting a frozen number indistinguishable from a live one, which
-# is worse for automations built on them than an honest gap.
-SERVICE_DATA_MAX_AGE = 3 * SERVICE_DATA_REQUEST_INTERVAL
+# is worse for automations built on them than an honest gap. A code keeps its
+# value for SERVICE_DATA_EXPIRY_FACTOR of its own intervals (see
+# service_data_expiry()); this is that span for a code the table does not know.
+SERVICE_DATA_EXPIRY_FACTOR: Final = 3
+SERVICE_DATA_MAX_AGE = SERVICE_DATA_EXPIRY_FACTOR * SERVICE_DATA_REQUEST_INTERVAL
+
+# More than ten segments in one request is where the module starts to lose
+# answers (13 flutter, 14 never work), and a second request per poll would
+# double the write lock, so the codes share this many slots instead.
+SERVICE_DATA_BUDGET: Final = 10
+
+# How often each code is worth reading. Fast-moving values and those feeding
+# energy or efficiency figures every poll; slow ones less often, so the slots
+# they leave free go to research codes. Adding a code is one line here.
+SERVICE_DATA_INTERVAL_FAST: Final = timedelta(seconds=60)
+SERVICE_DATA_INTERVAL_MEDIUM: Final = timedelta(seconds=120)
+SERVICE_DATA_INTERVAL_SLOW: Final = timedelta(seconds=300)
+SERVICE_DATA_INTERVALS: Final[dict[int, timedelta]] = {
+    SERVICE_DATA_COMPRESSOR_FREQ: SERVICE_DATA_INTERVAL_FAST,
+    SERVICE_DATA_OPERATING_CURRENT: SERVICE_DATA_INTERVAL_FAST,
+    SERVICE_DATA_EEV_PULSES: SERVICE_DATA_INTERVAL_FAST,
+    SERVICE_DATA_INDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_FAST,
+    SERVICE_DATA_INDOOR_COIL_OUTLET_RAW: SERVICE_DATA_INTERVAL_FAST,
+    SERVICE_DATA_HOT_GAS_TEMP: SERVICE_DATA_INTERVAL_FAST,
+    SERVICE_DATA_OUTDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_MEDIUM,
+    SERVICE_DATA_HUMIDITY: SERVICE_DATA_INTERVAL_MEDIUM,
+    SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW: SERVICE_DATA_INTERVAL_SLOW,
+    SERVICE_DATA_PROTECTION_RAW: SERVICE_DATA_INTERVAL_SLOW,
+    SERVICE_DATA_SILENT_OPERATION: SERVICE_DATA_INTERVAL_SLOW,
+}
+
+# A code is due once it is within this much of its interval. Polls are stamped
+# when they finish and the answer lands some seconds into the cycle, so a code
+# read every 60s is a few seconds younger than 60s at the next poll as often as
+# not; demanding the full interval would skip every second poll for it.
+SERVICE_DATA_DUE_TOLERANCE: Final = MIN_TIME_BETWEEN_UPDATES / 2
+
+# Codes that are only worth asking while a condition holds, as a predicate on
+# the last reading. Codes without an entry are always eligible.
+SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {}
+
+# A code is suspended after this many refusals while it was the only code in
+# the request the module had not answered before: result 11 is also what a
+# request gets while another client holds the write lock.
+SERVICE_DATA_REFUSALS_TO_SUSPEND: Final = 2
+
+
+def service_data_interval(code: int) -> timedelta:
+    """How often a code is read; the poll interval for one the table lacks."""
+    return SERVICE_DATA_INTERVALS.get(code, SERVICE_DATA_REQUEST_INTERVAL)
+
+
+def service_data_expiry(code: int) -> timedelta:
+    """How long a code's last value may be carried before it reads unknown."""
+    return SERVICE_DATA_EXPIRY_FACTOR * service_data_interval(code)
+
 
 # Fields fed exclusively by those segments.
 SERVICE_DATA_FIELDS = (
@@ -160,7 +230,7 @@ RESEARCH_CONTEXT: Final = "research_data"
 # A single code is written off only after this many refusals: result 11 is
 # also what a request gets while another client holds the write lock.
 RESEARCH_REFUSALS_TO_DROP: Final = 2
-RESEARCH_BATCH_SIZE: Final = 10
+RESEARCH_BATCH_SIZE: Final = SERVICE_DATA_BUDGET
 
 
 class ResearchData:
@@ -182,17 +252,27 @@ class ResearchData:
         self._refusals: dict[int, int] = {}
         self._rotation = 0
 
-    def request_codes(self) -> tuple[int, ...]:
-        """One untested code alone, or else a rotating batch of answering ones."""
+    def request_codes(
+        self, slots: int = RESEARCH_BATCH_SIZE, *, allow_untested: bool = True
+    ) -> tuple[int, ...]:
+        """One untested code alone, or else a rotating batch of answering ones.
+
+        At most `slots` codes, the room the regular codes leave in the
+        request. An untested code is only tried when nothing else in the
+        request is unproven (`allow_untested`), so a refusal has one suspect.
+        """
+        if slots <= 0:
+            return ()
         untested = [code for code, state in self.states.items() if state == "untested"]
-        if untested:
+        if untested and allow_untested:
             return (untested[0],)
         ok = [code for code, state in self.states.items() if state == "ok"]
         if not ok:
             return ()
+        count = min(slots, len(ok))
         start = self._rotation % len(ok)
-        self._rotation += RESEARCH_BATCH_SIZE
-        return tuple((ok + ok)[start : start + min(RESEARCH_BATCH_SIZE, len(ok))])
+        self._rotation += count
+        return tuple((ok + ok)[start : start + count])
 
     def note_answer(self, airco: Aircon) -> None:
         """Keep every research segment the frame carried."""
@@ -255,6 +335,14 @@ class ServiceDataChannel:
         # single source of truth.
         self._offset: timedelta | None = None
         self._good_cycles = 0
+        # Per code: when its segment last arrived, whether the module has ever
+        # answered it ("untested" -> "ok", or "suspect"/"suspended" once a
+        # request holding it was refused), and the refusals it took alone.
+        # Memory only - a reload starts over.
+        self._read: dict[int, datetime] = {}
+        self._states: dict[int, str] = {}
+        self._refusals: dict[int, int] = {}
+        self._overdue: set[int] = set()
 
     @property
     def supported(self) -> bool:
@@ -304,6 +392,125 @@ class ServiceDataChannel:
             return False
         self._last_request = now
         return True
+
+    def mark_overdue(self, code: int) -> None:
+        """Ask for this code at the next poll, whatever its interval says."""
+        self._overdue.add(code)
+
+    def _ratio(self, code: int, now: datetime) -> float:
+        """How many of its intervals the code has waited; infinite if never read."""
+        if code in self._overdue or code not in self._read:
+            return float("inf")
+        return (now - self._read[code]) / service_data_interval(code)
+
+    def _is_due(self, code: int, now: datetime) -> bool:
+        if code in self._overdue or code not in self._read:
+            return True
+        return now - self._read[code] >= (
+            service_data_interval(code) - SERVICE_DATA_DUE_TOLERANCE
+        )
+
+    def select(
+        self,
+        subscribed: Iterable[int],
+        airco: Aircon | None,
+        *,
+        need_frame: bool = False,
+    ) -> tuple[int, ...]:
+        """The codes this poll's request carries, sorted, at most the budget.
+
+        The due codes with the largest ratio of age to interval go first. A
+        code the module has never answered rides only if the request holds no
+        other unproven code, and a suspect only if it holds none at all, so a
+        refusal can be pinned on one code. `need_frame` is for an armed
+        external temperature override, which rides on the request: with
+        nothing due it still takes the most overdue code rather than leaving
+        the poll without one.
+        """
+        # Ages are taken at the moment the request goes out, not now: it waits
+        # out the offset after the poll, and the previous answer arrived that
+        # same offset after the previous poll. Measured from the poll, a 60 s
+        # code read at the last request is only 60 s minus the offset old and
+        # falls out of every second request once the offset reaches half a poll.
+        now = dt_util.utcnow() + self.offset
+        candidates = [
+            code
+            for code in subscribed
+            if self._states.get(code) != "suspended"
+            and (
+                (only_when := SERVICE_DATA_ONLY_WHEN.get(code)) is None
+                or only_when(airco)
+            )
+        ]
+        by_overdue = sorted(candidates, key=lambda c: (-self._ratio(c, now), c))
+        chosen: list[int] = []
+        untested = suspects = 0
+        for code in by_overdue:
+            if len(chosen) >= SERVICE_DATA_BUDGET:
+                break
+            if not self._is_due(code, now):
+                continue
+            state = self._states.get(code, "untested")
+            if state == "untested" and not suspects:
+                untested += 1
+            elif state == "suspect" and not untested and not suspects:
+                suspects += 1
+            elif state != "ok":
+                continue
+            chosen.append(code)
+        if not chosen and need_frame:
+            fallback = by_overdue or sorted(subscribed)
+            chosen = fallback[:1]
+        return tuple(sorted(chosen))
+
+    def has_unproven(self, codes: Iterable[int]) -> bool:
+        """Whether a request with these codes holds one the module never answered."""
+        return any(self._states.get(c, "untested") != "ok" for c in codes)
+
+    def note_refused(self, requested: Iterable[int]) -> None:
+        """Pin a refused request on its unproven codes, if it had any.
+
+        A unit that does not know one requested code refuses the whole request,
+        so a code only counts against itself when it was the one the module had
+        not answered before. Several unproven codes become suspects instead and
+        are then asked one at a time. Refused alone twice, a code is suspended.
+        """
+        unproven = [c for c in requested if self._states.get(c, "untested") != "ok"]
+        if len(unproven) > 1:
+            for code in unproven:
+                if self._states.get(code) != "suspended":
+                    self._states[code] = "suspect"
+            return
+        if not unproven:
+            return
+        code = unproven[0]
+        if self._states.get(code) == "suspended":
+            return
+        self._states[code] = "suspect"
+        self._refusals[code] = self._refusals.get(code, 0) + 1
+        if self._refusals[code] < SERVICE_DATA_REFUSALS_TO_SUSPEND:
+            return
+        self._states[code] = "suspended"
+        # Debug: a unit without the code is normal, not a fault - the sensor
+        # staying unknown is the visible part.
+        _LOGGER.debug(
+            "[%s] refused operation-data code 0x%02X on its own twice; not "
+            "asking for it again until the integration reloads",
+            self._device.device_name,
+            code,
+        )
+
+    def _note_read(self, code: int, now: datetime) -> None:
+        """Record that a code's segment arrived."""
+        self._read[code] = now
+        self._states[code] = "ok"
+        self._refusals.pop(code, None)
+        self._overdue.discard(code)
+
+    def _age_of(self, code: int, now: datetime) -> timedelta | None:
+        """How old a code's value is; None if nothing has ever arrived."""
+        stamp = self._read.get(code, self._last_response)
+        return None if stamp is None else now - stamp
 
     @property
     def offset(self) -> timedelta:
@@ -359,12 +566,14 @@ class ServiceDataChannel:
         """Move the age anchor forward past a stand-down we chose ourselves.
 
         Without this the readings would expire on the very first poll after
-        resuming: the gap is one we chose, so counting it against
-        SERVICE_DATA_MAX_AGE would throw away values that are perfectly good
-        and about to be refreshed anyway.
+        resuming: the gap is one we chose, so counting it against the expiry
+        would throw away values that are perfectly good and about to be
+        refreshed anyway.
         """
         if self._last_response is not None:
             self._last_response += by
+        for code in self._read:
+            self._read[code] += by
 
     def note_whether_anything_answered(self, answered_before: datetime | None) -> None:
         """Give up on a unit that takes the request and answers nothing.
@@ -411,38 +620,39 @@ class ServiceDataChannel:
         sensors would flash the real value for one update cycle and then
         revert to unknown.
 
-        Unlike home/leave mode this expires: see SERVICE_DATA_MAX_AGE. Time
-        spent standing down for another client is not counted against that
-        age, though - see Device.foreign_activity. SERVICE_DATA_MAX_AGE guards
-        against a value frozen by a unit that stopped answering, which is
-        indistinguishable from a live one; a pause we chose ourselves is
-        neither indistinguishable nor a fault, and External Control says so
-        while it lasts. Dropping perfectly good readings for it would be a
-        worse answer than carrying them a few minutes longer.
+        Unlike home/leave mode this expires, per code: see
+        service_data_expiry(). Time spent standing down for another client is
+        not counted against that age, though - see Device.foreign_activity.
+        The expiry guards against a value frozen by a unit that stopped
+        answering, which is indistinguishable from a live one; a pause we
+        chose ourselves is neither indistinguishable nor a fault, and External
+        Control says so while it lasts. Dropping perfectly good readings for it
+        would be a worse answer than carrying them a few minutes longer.
         """
         current = self._device.airco
         if current is None:
             return
         self._device.settle_service_data_pause()
         now = dt_util.utcnow()
-        if any(getattr(new_airco, name) is not None for name in SERVICE_DATA_FIELDS):
+        arrived = {
+            code for code in new_airco.ServiceDataRaw if code in SERVICE_DATA_CODES
+        }
+        arrived.update(
+            SERVICE_DATA_CODE_BY_FIELD[name]
+            for name in SERVICE_DATA_FIELDS
+            if getattr(new_airco, name) is not None
+        )
+        if arrived:
             self._last_response = now
+            for code in arrived:
+                self._note_read(code, now)
             if self._expired:
                 self._expired = False
                 _LOGGER.info(
                     "Operation data from [%s] is being reported again",
                     self._device.device_name,
                 )
-        elif self._device.foreign_activity:
-            pass  # Not stale, just paused - carry the values below.
-        elif (
-            self._last_response is None
-            or now - self._last_response > SERVICE_DATA_MAX_AGE
-        ):
-            # Nothing fresh for too long - leave the fields unset so entities
-            # report unknown rather than a value that stopped being true.
-            self._note_expired(now)
-            return
+        dropped: list[timedelta] = []
         for name in SERVICE_DATA_FIELDS:
             if getattr(new_airco, name) is not None:
                 continue
@@ -450,9 +660,31 @@ class ServiceDataChannel:
             if source is not None and getattr(new_airco, source) is not None:
                 # Segment arrived, value unusable - see SERVICE_DATA_DERIVED_FROM.
                 continue
+            code = SERVICE_DATA_CODE_BY_FIELD[name]
+            if not self._device.foreign_activity:
+                age = self._age_of(code, now)
+                if age is None or age > service_data_expiry(code):
+                    # Nothing fresh for too long - leave the field unset so
+                    # the entity reports unknown rather than a value that
+                    # stopped being true.
+                    if getattr(current, name) is not None:
+                        dropped.append(service_data_expiry(code))
+                    continue
             setattr(new_airco, name, getattr(current, name))
+        if dropped:
+            self._note_expired(min(dropped))
+        elif (
+            self._last_response is None
+            and self._last_request is not None
+            and now - self._last_request > SERVICE_DATA_MAX_AGE
+        ):
+            # Before the first response there is nothing to lose yet; the
+            # first request is the anchor then, so a module that never answers
+            # is still reported, once, rather than silently leaving the sensors
+            # unknown.
+            self._note_expired(SERVICE_DATA_MAX_AGE)
 
-    def _note_expired(self, now: datetime) -> None:
+    def _note_expired(self, limit: timedelta) -> None:
         """Warn once, when the operation-data sensors actually go unknown.
 
         A refused request costs a cycle and nothing else, so it stays on debug:
@@ -468,12 +700,6 @@ class ServiceDataChannel:
         """
         if self._expired:
             return
-        # Before the first response there is nothing to lose yet; anchor on the
-        # first request instead so a module that never answers is still
-        # reported, once, rather than silently leaving the sensors unknown.
-        anchor = self._last_response or self._last_request
-        if anchor is None or now - anchor <= SERVICE_DATA_MAX_AGE:
-            return
         self._expired = True
         _LOGGER.warning(
             "No operation data from [%s] for over %.0fs; its compressor, "
@@ -481,5 +707,5 @@ class ServiceDataChannel:
             "network interruption is the usual cause - check whether other "
             "devices dropped out at the same time",
             self._device.device_name,
-            SERVICE_DATA_MAX_AGE.total_seconds(),
+            limit.total_seconds(),
         )
