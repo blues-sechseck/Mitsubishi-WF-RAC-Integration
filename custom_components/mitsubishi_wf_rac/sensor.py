@@ -52,6 +52,7 @@ from .const import (
     ATTR_INDOOR_COIL_OUTLET_TEMP,
     ATTR_INDOOR_COIL_RAW,
     ATTR_INDOOR_COIL_TEMP,
+    ATTR_INDOOR_HUMIDITY,
     ATTR_INSIDE_TEMPERATURE,
     ATTR_LED_STATUS,
     ATTR_MODEL_NR,
@@ -138,6 +139,7 @@ async def async_setup_entry(
         ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
         ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
         ServiceDataSensor(device, ATTR_PROTECTION_RAW),
+        ServiceDataSensor(device, ATTR_INDOOR_HUMIDITY),
     ]
 
     if await is_prerelease_build(hass):
@@ -474,7 +476,7 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
     """
 
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
 
     _FIELD_BY_TYPE = {
@@ -493,6 +495,7 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         ATTR_OUTDOOR_COIL_RAW: "OutdoorCoilRaw",
         ATTR_DISCHARGE_SUPERHEAT_RAW: "DischargeSuperheatRaw",
         ATTR_PROTECTION_RAW: "ProtectionRaw",
+        ATTR_INDOOR_HUMIDITY: "IndoorHumidity",
     }
 
     def __init__(self, device: Device, custom_type: str) -> None:
@@ -521,6 +524,13 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         elif custom_type in (ATTR_INDOOR_COIL_TEMP, ATTR_INDOOR_COIL_OUTLET_TEMP):
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        elif custom_type == ATTR_INDOOR_HUMIDITY:
+            # A reading for the room, not plumbing, so it is not diagnostic.
+            # Off by default because only some indoor units have the sensor
+            # and a unit that does not know the code refuses the request.
+            self._attr_device_class = SensorDeviceClass.HUMIDITY
+            self._attr_native_unit_of_measurement = PERCENTAGE
+            self._attr_entity_category = None
         self._apply_state()
 
     @property

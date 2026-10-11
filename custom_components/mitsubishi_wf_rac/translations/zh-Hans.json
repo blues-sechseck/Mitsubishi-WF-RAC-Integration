@@ -399,6 +399,9 @@
       "protection_raw": {
         "name": "保护编号（原始）"
       },
+      "indoor_humidity": {
+        "name": "湿度"
+      },
       "research_data": {
         "name": "研究数据"
       }

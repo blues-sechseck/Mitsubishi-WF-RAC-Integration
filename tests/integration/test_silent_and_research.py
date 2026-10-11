@@ -13,7 +13,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pywfrac import AirconCommands
-from pywfrac.parser import SERVICE_DATA_COMPRESSOR_FREQ, SERVICE_DATA_SILENT_OPERATION
+from pywfrac.parser import (
+    SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_HUMIDITY,
+    SERVICE_DATA_SILENT_OPERATION,
+)
 from pywfrac.repository import WfRacWriteRefusedError
 
 from custom_components.mitsubishi_wf_rac import (
@@ -343,3 +347,37 @@ async def test_final_build_offers_no_research_sensor(
     )
 
     assert not [e for e in added if e.unique_id == f"{DOMAIN}-airco-id-research-data"]
+
+
+# --- humidity sensor -----------------------------------------------------------
+
+
+def _humidity_sensor(device) -> sensor.ServiceDataSensor:
+    return sensor.ServiceDataSensor(device, sensor.ATTR_INDOOR_HUMIDITY)
+
+
+def test_humidity_code_is_decoded_not_researched():
+    assert SERVICE_DATA_HUMIDITY not in RESEARCH_SERVICE_DATA_CODES
+    assert "IndoorHumidity" in service_data_module.SERVICE_DATA_FIELDS
+
+
+async def test_humidity_sensor_subscribes_its_code_only_through_its_context(
+    platform_device,
+):
+    entity = _humidity_sensor(platform_device)
+
+    assert entity.entity_registry_enabled_default is False
+    assert entity.entity_category is None
+    # Nothing is requested until the entity is added, i.e. enabled.
+    assert SERVICE_DATA_HUMIDITY not in platform_device.async_contexts()
+    assert entity.coordinator is platform_device
+
+
+@pytest.mark.parametrize(("raw", "expected"), [(47, 47), (30, None), (0xFF, None)])
+async def test_humidity_sensor_reports_the_parsed_value(platform_device, raw, expected):
+    platform_device._airco.IndoorHumidity = None if raw in (30, 0xFF) else raw
+    entity = _humidity_sensor(platform_device)
+
+    entity._update_state()
+
+    assert entity.native_value == expected
