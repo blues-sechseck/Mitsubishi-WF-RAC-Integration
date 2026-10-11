@@ -61,7 +61,10 @@ def _prove(channel, *codes: int) -> None:
 
 
 def test_the_table_only_names_codes_the_parser_decodes():
-    assert set(SERVICE_DATA_INTERVALS) == set(SERVICE_DATA_CODES)
+    assert set(SERVICE_DATA_INTERVALS) <= set(SERVICE_DATA_CODES)
+    # The library decodes 0x0C, but no entity reads it here yet: it is only a
+    # research code.
+    assert set(SERVICE_DATA_CODES) - set(SERVICE_DATA_INTERVALS) == {0x0C}
 
 
 def test_most_overdue_ratio_goes_first_and_never_read_codes_lead(
@@ -96,7 +99,7 @@ def test_the_request_never_exceeds_the_budget(platform_device):
 
 def test_the_codes_left_out_of_a_full_request_lead_the_next(platform_device):
     channel = platform_device.service_data
-    codes = list(SERVICE_DATA_CODES)  # none read yet
+    codes = list(SERVICE_DATA_INTERVALS)  # none read yet
     assert len(codes) == SERVICE_DATA_BUDGET + 1
     _prove(channel, *codes)
 
