@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pywfrac import AIRFLOW_UNKNOWN, Aircon, AirconCommands, AirconStat
-from pywfrac.parser import (
+from pywfrac import (
+    AIRFLOW_UNKNOWN,
     EXTERNAL_TEMPERATURE_MAX,
     EXTERNAL_TEMPERATURE_MIN,
     SERVICE_DATA_CODE_BY_FIELD,
@@ -30,9 +30,10 @@ from pywfrac.parser import (
     SERVICE_DATA_OPERATING_CURRENT,
     SERVICE_DATA_OUTDOOR_COIL_RAW,
     SERVICE_DATA_PROTECTION_RAW,
+    Aircon,
+    AirconCommands,
+    AirconStat,
     RacParser,
-)
-from pywfrac.repository import (
     WfRacCommandError,
     WfRacConnectionError,
     WfRacError,

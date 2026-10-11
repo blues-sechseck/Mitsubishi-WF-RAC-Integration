@@ -13,11 +13,6 @@ from unittest.mock import AsyncMock
 import pytest
 from pywfrac import (
     SERVICE_DATA_BUDGET,
-    SERVICE_DATA_REFUSALS_TO_SUSPEND,
-    Aircon,
-    AirconCommands,
-    WfRacWriteRefusedError,
-
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
@@ -25,7 +20,11 @@ from pywfrac import (
     SERVICE_DATA_HUMIDITY,
     SERVICE_DATA_INDOOR_COIL_RAW,
     SERVICE_DATA_OUTDOOR_COIL_RAW,
+    SERVICE_DATA_REFUSALS_TO_SUSPEND,
     SERVICE_DATA_SILENT_OPERATION,
+    Aircon,
+    AirconCommands,
+    WfRacWriteRefusedError,
 )
 
 from custom_components.mitsubishi_wf_rac import (

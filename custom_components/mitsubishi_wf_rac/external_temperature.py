@@ -18,7 +18,7 @@ from collections import deque
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from pywfrac.parser import (
+from pywfrac import (
     EXTERNAL_TEMPERATURE_MAX,
     EXTERNAL_TEMPERATURE_MIN,
     SERVICE_DATA_INDOOR_COIL_RAW,
