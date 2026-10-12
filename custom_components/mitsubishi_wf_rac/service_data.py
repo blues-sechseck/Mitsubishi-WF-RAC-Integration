@@ -204,14 +204,19 @@ SERVICE_DATA_FIELDS = (
 
 # These codes answer on at least one tested unit, meaning unknown.
 RESEARCH_SERVICE_DATA_CODES: Final = (
+    0x0D,
     0x10,
     0x14,
     0x15,
     0x1C,
     0x1D,
+    0x21,
     0x22,
     0x23,
     0x2A,
+    0x32,
+    0x34,
+    0x35,
     0x3E,
     0x45,
     0x7B,
