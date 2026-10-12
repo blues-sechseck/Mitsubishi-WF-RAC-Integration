@@ -55,7 +55,12 @@ from .const import (
 from .external_temperature import ExternalTemperatureFeed
 from .firmware_check import fetch_latest_firmware
 from .foreign_writers import ForeignWriterWatch
-from .service_data import RESEARCH_CONTEXT, ResearchData, ServiceDataChannel
+from .service_data import (
+    RESEARCH_CONTEXT,
+    SERVICE_DATA_DEPENDS_ON,
+    ResearchData,
+    ServiceDataChannel,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -427,9 +432,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         One per enabled diagnostic sensor, plus the carrier an armed external
         temperature override holds (see _sync_external_temperature_carrier).
         """
-        return tuple(
-            sorted(set(self.async_contexts()).intersection(SERVICE_DATA_CODES))
-        )
+        codes = set(self.async_contexts()).intersection(SERVICE_DATA_CODES)
+        for code in tuple(codes):
+            codes.update(SERVICE_DATA_DEPENDS_ON.get(code, ()))
+        return tuple(sorted(codes))
 
     async def update(self) -> bool:
         """Fetch one status block, and say whether the unit answered.

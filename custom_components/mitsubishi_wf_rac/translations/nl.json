@@ -421,6 +421,9 @@
       },
       "external_temperature_active": {
         "name": "Opgegeven binnentemperatuur"
+      },
+      "defrost": {
+        "name": "Ontdooien"
       }
     },
     "update": {

@@ -426,6 +426,9 @@
       },
       "external_temperature_active": {
         "name": "Indoor temperature override"
+      },
+      "defrost": {
+        "name": "Defrosting"
       }
     },
     "button": {

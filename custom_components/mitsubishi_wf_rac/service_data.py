@@ -25,6 +25,7 @@ from pywfrac import (
     SERVICE_DATA_CODE_BY_FIELD,
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_DEFROST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
     SERVICE_DATA_HOT_GAS_TEMP,
@@ -37,6 +38,7 @@ from pywfrac import (
     SERVICE_DATA_SILENT_OPERATION,
     Aircon,
     ServiceDataRefusals,
+    defrost_possible,
 )
 
 from homeassistant.helpers import issue_registry as ir
@@ -141,6 +143,7 @@ SERVICE_DATA_INTERVALS: Final[dict[int, timedelta]] = {
     SERVICE_DATA_HOT_GAS_TEMP: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_OUTDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_MEDIUM,
     SERVICE_DATA_HUMIDITY: SERVICE_DATA_INTERVAL_MEDIUM,
+    SERVICE_DATA_DEFROST: SERVICE_DATA_INTERVAL_MEDIUM,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW: SERVICE_DATA_INTERVAL_SLOW,
     SERVICE_DATA_PROTECTION_RAW: SERVICE_DATA_INTERVAL_SLOW,
     SERVICE_DATA_SILENT_OPERATION: SERVICE_DATA_INTERVAL_SLOW,
@@ -154,7 +157,15 @@ SERVICE_DATA_DUE_TOLERANCE: Final = MIN_TIME_BETWEEN_UPDATES / 2
 
 # Codes that are only worth asking while a condition holds, as a predicate on
 # the last reading. Codes without an entry are always eligible.
-SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {}
+SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {
+    SERVICE_DATA_DEFROST: defrost_possible,
+}
+
+# Codes whose condition above reads another code, which therefore has to be
+# requested whenever the first one is subscribed, enabled sensor or not.
+SERVICE_DATA_DEPENDS_ON: Final[dict[int, tuple[int, ...]]] = {
+    SERVICE_DATA_DEFROST: (SERVICE_DATA_COMPRESSOR_FREQ,),
+}
 
 
 def service_data_interval(code: int) -> timedelta:
@@ -169,6 +180,8 @@ def service_data_expiry(code: int) -> timedelta:
 
 # Fields fed exclusively by those segments.
 SERVICE_DATA_FIELDS = (
+    "Defrosting",
+    "DefrostingRaw",
     "SilentOperation",
     "IndoorHumidity",
     "IndoorHumidityRaw",
@@ -191,7 +204,6 @@ SERVICE_DATA_FIELDS = (
 
 # These codes answer on at least one tested unit, meaning unknown.
 RESEARCH_SERVICE_DATA_CODES: Final = (
-    0x0C,
     0x10,
     0x14,
     0x15,
@@ -300,6 +312,7 @@ class ResearchData:
 # answer 30 converts to no value, and for counting a segment as an answer at
 # all: the raw field is set whenever the segment arrived.
 SERVICE_DATA_DERIVED_FROM = {
+    "Defrosting": "DefrostingRaw",
     "IndoorHumidity": "IndoorHumidityRaw",
     "IndoorCoilTemp": "IndoorCoilRaw",
     "IndoorCoilOutletTemp": "IndoorCoilOutletRaw",

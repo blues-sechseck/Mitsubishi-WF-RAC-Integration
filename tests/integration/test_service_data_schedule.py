@@ -15,6 +15,7 @@ from pywfrac import (
     SERVICE_DATA_BUDGET,
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
+    SERVICE_DATA_DEFROST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
     SERVICE_DATA_HUMIDITY,
@@ -68,10 +69,7 @@ def _suspend(channel, code: int) -> None:
 
 
 def test_the_table_only_names_codes_the_parser_decodes():
-    assert set(SERVICE_DATA_INTERVALS) <= set(SERVICE_DATA_CODES)
-    # The library decodes 0x0C, but no entity reads it here yet: it is only a
-    # research code.
-    assert set(SERVICE_DATA_CODES) - set(SERVICE_DATA_INTERVALS) == {0x0C}
+    assert set(SERVICE_DATA_INTERVALS) == set(SERVICE_DATA_CODES)
 
 
 def test_most_overdue_ratio_goes_first_and_never_read_codes_lead(
@@ -106,7 +104,9 @@ def test_the_request_never_exceeds_the_budget(platform_device):
 
 def test_the_codes_left_out_of_a_full_request_lead_the_next(platform_device):
     channel = platform_device.service_data
-    codes = list(SERVICE_DATA_INTERVALS)  # none read yet
+    # None read yet. Defrost is held back by its condition, so it is not one
+    # of the codes competing for the slots here.
+    codes = [c for c in SERVICE_DATA_INTERVALS if c != SERVICE_DATA_DEFROST]
     assert len(codes) == SERVICE_DATA_BUDGET + 1
     _prove(channel, *codes)
 
@@ -121,7 +121,9 @@ def test_the_codes_left_out_of_a_full_request_lead_the_next(platform_device):
 
 def test_with_ten_or_fewer_due_codes_everything_goes_sorted(platform_device):
     channel = platform_device.service_data
-    codes = sorted(SERVICE_DATA_CODES)[:SERVICE_DATA_BUDGET]
+    codes = sorted(c for c in SERVICE_DATA_CODES if c != SERVICE_DATA_DEFROST)[
+        :SERVICE_DATA_BUDGET
+    ]
 
     assert channel.select(reversed(codes), platform_device.airco) == tuple(codes)
 

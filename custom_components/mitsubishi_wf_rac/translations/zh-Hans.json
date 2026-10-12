@@ -421,6 +421,9 @@
       },
       "external_temperature_active": {
         "name": "室内温度指定"
+      },
+      "defrost": {
+        "name": "除霜"
       }
     },
     "update": {
