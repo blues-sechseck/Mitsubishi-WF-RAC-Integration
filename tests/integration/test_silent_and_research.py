@@ -2,8 +2,8 @@
 
 Silent operation is written with a trailer segment the module refuses although
 the unit applies it, so these tests pin the read-back that decides success.
-The research request replaces a regular operation-data request now and then
-and must never let an empty request turn into a full command.
+The research codes fill the slots a regular operation-data request leaves free
+and an empty request must never turn into a full command.
 """
 
 import asyncio
@@ -12,13 +12,13 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pywfrac import AirconCommands
-from pywfrac.parser import (
+from pywfrac import (
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_HUMIDITY,
     SERVICE_DATA_SILENT_OPERATION,
+    AirconCommands,
+    WfRacWriteRefusedError,
 )
-from pywfrac.repository import WfRacWriteRefusedError
 
 from custom_components.mitsubishi_wf_rac import (
     coordinator as coordinator_module,
@@ -201,7 +201,7 @@ async def _cycles(device, count: int) -> list[tuple[int, ...]]:
     return sent
 
 
-async def test_every_fifth_request_carries_research_codes(
+async def test_research_codes_ride_along_with_the_regular_ones(
     platform_device, monkeypatch, due_every_time
 ):
     monkeypatch.setattr(
@@ -209,11 +209,12 @@ async def test_every_fifth_request_carries_research_codes(
         "async_contexts",
         lambda: {SERVICE_DATA_COMPRESSOR_FREQ, RESEARCH_CONTEXT},
     )
+    platform_device.service_data._refusals.note_answered(SERVICE_DATA_COMPRESSOR_FREQ)
 
     sent = await _cycles(platform_device, 5)
 
-    assert sent[:4] == [(SERVICE_DATA_COMPRESSOR_FREQ,)] * 4
-    assert sent[4] == (RESEARCH_SERVICE_DATA_CODES[0],)
+    # No cycle is taken from the regular code any more.
+    assert sent == [(SERVICE_DATA_COMPRESSOR_FREQ, RESEARCH_SERVICE_DATA_CODES[0])] * 5
 
 
 async def test_research_alone_asks_every_cycle(

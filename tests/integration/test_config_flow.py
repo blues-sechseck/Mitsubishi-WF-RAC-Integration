@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pywfrac.repository import WfRacError
+from pywfrac import WfRacError
 
 from custom_components import mitsubishi_wf_rac
 from custom_components.mitsubishi_wf_rac.config_flow import (

@@ -8,7 +8,7 @@ never does. Calls still resolve only to this integration's entities.
 
 from __future__ import annotations
 
-from pywfrac.parser import EXTERNAL_TEMPERATURE_MAX, EXTERNAL_TEMPERATURE_MIN
+from pywfrac import EXTERNAL_TEMPERATURE_MAX, EXTERNAL_TEMPERATURE_MIN
 
 # HA 2026.10 types flow and service schemas against probatio. voluptuous
 # stays until the floor in hacs.json reaches that release, so the call

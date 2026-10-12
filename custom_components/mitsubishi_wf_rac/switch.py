@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from pywfrac.parser import SERVICE_DATA_CODE_BY_FIELD
+from pywfrac import SERVICE_DATA_CODE_BY_FIELD
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant

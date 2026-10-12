@@ -8,7 +8,7 @@ from decimal import Decimal
 import logging
 from typing import Any, Self
 
-from pywfrac.parser import SERVICE_DATA_CODE_BY_FIELD
+from pywfrac import SERVICE_DATA_CODE_BY_FIELD
 
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.components.sensor import (

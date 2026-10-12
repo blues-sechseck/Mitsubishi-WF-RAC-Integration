@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pywfrac import AIRFLOW_UNKNOWN, Aircon, AirconCommands, AirconStat
-from pywfrac.parser import (
+from pywfrac import (
+    AIRFLOW_UNKNOWN,
     EXTERNAL_TEMPERATURE_MAX,
     EXTERNAL_TEMPERATURE_MIN,
     SERVICE_DATA_CODE_BY_FIELD,
@@ -30,9 +30,10 @@ from pywfrac.parser import (
     SERVICE_DATA_OPERATING_CURRENT,
     SERVICE_DATA_OUTDOOR_COIL_RAW,
     SERVICE_DATA_PROTECTION_RAW,
+    Aircon,
+    AirconCommands,
+    AirconStat,
     RacParser,
-)
-from pywfrac.repository import (
     WfRacCommandError,
     WfRacConnectionError,
     WfRacError,
@@ -2375,7 +2376,7 @@ async def test_fresh_service_data_restarts_the_clock(device):
     assert new_airco.HotGasTemp == 50.0
 
 
-async def test_expiring_service_data_warns_once_and_reports_the_recovery(
+async def test_expiring_service_data_is_logged_once_and_so_is_the_recovery(
     device, caplog
 ):
     """The refusals themselves are routine; running out of values is not."""
@@ -2388,9 +2389,9 @@ async def test_expiring_service_data_warns_once_and_reports_the_recovery(
     for _ in range(3):
         device.service_data.carry_forward(Aircon())
 
-    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
-    assert len(warnings) == 1
-    assert "now report unknown" in warnings[0].message
+    notes = [r for r in caplog.records if r.levelno >= logging.INFO]
+    assert [r.levelname for r in notes] == ["INFO"]
+    assert "now report unknown" in notes[0].message
 
     caplog.clear()
     recovered = Aircon()

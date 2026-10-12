@@ -18,7 +18,7 @@ from collections import deque
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from pywfrac.parser import (
+from pywfrac import (
     EXTERNAL_TEMPERATURE_MAX,
     EXTERNAL_TEMPERATURE_MIN,
     SERVICE_DATA_INDOOR_COIL_RAW,
@@ -75,6 +75,15 @@ class ExternalTemperatureFeed:
         value originated from an external override.
         """
         return self._override
+
+    @property
+    def needs_frame(self) -> bool:
+        """Whether an operation-data frame has to go out every poll.
+
+        True while a value is armed and while a release is still owed: both
+        ride on that frame (see _sync_carrier).
+        """
+        return self._override is not None or self._release_pending
 
     def set_override(self, value: float | None) -> None:
         """Set the integration-side override state.

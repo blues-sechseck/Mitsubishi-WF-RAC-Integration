@@ -9,6 +9,12 @@ from typing import Any, Final
 
 from pywfrac import (
     AIRFLOW_UNKNOWN,
+    MIN_TIME_BETWEEN_REQUESTS,
+    REQUEST_TIMEOUT,
+    SERVICE_DATA_BUDGET,
+    SERVICE_DATA_CODES,
+    SERVICE_DATA_INDOOR_COIL_RAW,
+    SERVICE_DATA_SILENT_OPERATION,
     Aircon,
     AirconCommands,
     AirconStat,
@@ -21,12 +27,6 @@ from pywfrac import (
     WfRacRegistrationError,
     WfRacWriteRefusedError,
 )
-from pywfrac.parser import (
-    SERVICE_DATA_CODES,
-    SERVICE_DATA_INDOOR_COIL_RAW,
-    SERVICE_DATA_SILENT_OPERATION,
-)
-from pywfrac.repository import MIN_TIME_BETWEEN_REQUESTS, REQUEST_TIMEOUT
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -59,10 +59,6 @@ from .service_data import RESEARCH_CONTEXT, ResearchData, ServiceDataChannel
 
 _LOGGER = logging.getLogger(__name__)
 
-# Every how many operation-data requests one carries research codes instead
-# (beta builds with the research sensor enabled). The regular sensors skip
-# that cycle, which SERVICE_DATA_MAX_AGE covers.
-RESEARCH_REQUEST_EVERY: Final = 5
 # The silent write reaches the indoor unit after the module has answered; on
 # hardware the new state read back reliably three seconds later.
 SILENT_OPERATION_READBACK_DELAY: Final = 2.0
@@ -256,7 +252,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self.foreign_writers = ForeignWriterWatch(self)
         self.service_data = ServiceDataChannel(self)
         self.research_data = ResearchData()
-        self._service_data_cycles = 0
         self._silent_operation_lock = asyncio.Lock()
         self.external_temperature = ExternalTemperatureFeed(self)
         self._consecutive_failures = 0
@@ -601,7 +596,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """Move the operation-data age anchor past a stand-down we chose.
 
         See ForeignWriterWatch.pause_to_settle for why the gap is not counted
-        against SERVICE_DATA_MAX_AGE.
+        against the readings' expiry.
         """
         span = self.foreign_writers.pause_to_settle()
         if span is not None:
@@ -667,15 +662,21 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             return
         if not self.service_data.due():
             return
-        self._service_data_cycles += 1
+        regular_codes = self.service_data.select(
+            service_data_codes,
+            self._airco,
+            need_frame=self.external_temperature.needs_frame,
+        )
+        # Research fills the slots the regular codes leave free. Its untested
+        # codes go out only when nothing else in the request is unproven, so a
+        # refusal has one suspect.
         research_codes: tuple[int, ...] = ()
-        if research and (
-            not service_data_codes
-            or self._service_data_cycles % RESEARCH_REQUEST_EVERY == 0
-        ):
-            research_codes = self.research_data.request_codes()
-        if research_codes:
-            service_data_codes = research_codes
+        if research:
+            research_codes = self.research_data.request_codes(
+                SERVICE_DATA_BUDGET - len(regular_codes),
+                allow_untested=not self.service_data.has_unproven(regular_codes),
+            )
+        service_data_codes = (*regular_codes, *research_codes)
         if not service_data_codes:
             # Never send an empty request: without codes the frame is no
             # longer a status request, and the parser builds a full command
@@ -791,6 +792,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # - which the state itself cannot, the previous reading being carried
         # forward into it.
         answered_before = self.service_data.last_response
+        regular_codes = tuple(c for c in service_data_codes if c not in research_codes)
         for attempt in (1, 2):
             try:
                 await self.set_airco(
@@ -803,9 +805,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
                 self.foreign_writers.check_request_was_applied(before)
-                if not research_codes:
+                if regular_codes:
                     self.service_data.note_whether_anything_answered(answered_before)
-                elif self._airco is not None:
+                if research_codes and self._airco is not None:
                     self.research_data.note_answer(self._airco)
                 self.service_data.note_offset_survived()
                 # Notify, but deliberately not through async_set_updated_data():
@@ -821,11 +823,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # away from them would put that decision in two places.
                 return  # noqa: TRY300
             except WfRacWriteRefusedError as ex:  # noqa: PERF203
+                # The unit's answer to a code it does not know - or a foreign
+                # write lock, which the refusal limits allow for.
                 if research_codes:
-                    # The unit's answer to a code it does not know - or a
-                    # foreign write lock, which RESEARCH_REFUSALS_TO_DROP
-                    # allows for.
                     self.research_data.note_refused(research_codes)
+                self.service_data.note_refused(regular_codes)
                 # Someone else may hold the write lock. Unlike a user command
                 # this is not worth contesting: give the cycle up immediately
                 # rather than retrying into a lock we would only be renewing
@@ -850,7 +852,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     continue
                 # Debug, not a warning: the module refuses these requests
                 # transiently and a single skipped cycle changes nothing the
-                # user can see - the values survive SERVICE_DATA_MAX_AGE. The
+                # user can see - the values survive their expiry. The
                 # warning belongs where they actually expire, see
                 # _note_service_data_expired().
                 _LOGGER.debug(
@@ -914,6 +916,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self.device_name,
                     ex,
                 )
+            # 0xDD is a slow code; a read-back that arrives clears this, and if
+            # none does the next poll asks again instead of waiting out its
+            # interval.
+            self.service_data.mark_overdue(SERVICE_DATA_SILENT_OPERATION)
             for attempt in range(SILENT_OPERATION_READBACK_ATTEMPTS):
                 await asyncio.sleep(SILENT_OPERATION_READBACK_DELAY)
                 try:
@@ -938,6 +944,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 if self._airco is not None and self._airco.SilentOperation is state:
                     self.async_update_listeners()
                     return
+            self.service_data.mark_overdue(SERVICE_DATA_SILENT_OPERATION)
             self.async_update_listeners()
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
