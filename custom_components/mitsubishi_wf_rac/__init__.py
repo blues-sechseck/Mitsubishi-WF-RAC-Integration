@@ -37,6 +37,8 @@ from .const import (
     DOMAIN,
     OVERSHOOT_MAX,
     STATUS_REQUEST_ECHO,
+    STATUS_REQUEST_STOPPED,
+    STATUS_REQUEST_STOPPED_LEGACY,
     STATUS_REQUEST_STRICT,
 )
 from .coordinator import (
@@ -45,6 +47,7 @@ from .coordinator import (
     registration_full_issue_id,
 )
 from .foreign_writers import (
+    report_status_request_unsupported,
     request_stops_unit_issue_id,
     status_request_unsupported_issue_id,
 )
@@ -264,6 +267,13 @@ async def async_setup_entry(
 ) -> bool:
     """Establish connection with mitsubishi-wf-rac."""
     device: str = entry.data[CONF_HOST]
+    if entry.data.get(CONF_STATUS_REQUEST_MODE) == STATUS_REQUEST_STOPPED_LEGACY:
+        # Learned state, not configuration, so no entry version for it -
+        # rewritten here so the diagnostics stop saying "silent".
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED},
+        )
     _device = await create_device_from_entry(entry, hass)
 
     # update() reports a failure in its return value rather than raising, so
@@ -295,20 +305,36 @@ async def async_setup_entry(
     async def _handle_stop(_event: Event) -> None:
         """Hand an armed external temperature override back on the way down.
 
-        Only on Home Assistant stopping, deliberately not in
-        async_unload_entry(): an unload is also what a reload is, and saving
-        the options reloads the entry - clearing the override there would put
-        the unit back on its own sensor for a moment on every settings change.
-        A stop is the case where nothing of ours writes again, which is the
-        one that leaves the value standing at the unit.
+        Only on Home Assistant stopping and on the entry being disabled or
+        removed, deliberately not on every unload: an unload is also what a
+        reload is, and saving the options reloads the entry - clearing the
+        override there would put the unit back on its own sensor for a moment
+        on every settings change. These are the cases where nothing of ours
+        writes again, which is what leaves the value standing at the unit.
         """
-        await _device.async_release_external_temperature()
+        await _device.async_hand_back_room_sensor()
 
     entry.async_on_unload(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _handle_stop)
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    if _device.status_request_mode == STATUS_REQUEST_STOPPED:
+        # Raised again here because the repair was not persistent when it was
+        # first raised, and an entry that learned this before the change has
+        # none to show after its restart (#416).
+        report_status_request_unsupported(hass, entry.entry_id, _device.device_name)
+        if _device.external_temperature.source_configured:
+            # The previous run may have left the source's last value standing
+            # at the unit, and a blocked feed never sends it again. Once per
+            # setup, after the first poll above has given the command its
+            # state; the source keeps its value on our side.
+            entry.async_create_background_task(
+                hass,
+                _device.async_hand_back_room_sensor(clear=False),
+                f"{DOMAIN} hand back room sensor {entry.entry_id}",
+            )
 
     entry.async_create_background_task(
         hass,
@@ -388,6 +414,10 @@ async def async_unload_entry(
     # again. An entry whose setup never stored its runtime data has no
     # coordinator to shut down at all.
     if unload_ok and (data := getattr(entry, "runtime_data", None)) is not None:
+        if entry.disabled_by is not None:
+            # Disabling is the one unload that is not followed by a setup: see
+            # _handle_stop() for why a reload must not do this.
+            await data.device.async_hand_back_room_sensor()
         await data.device.async_shutdown()
 
     if unload_ok:
@@ -403,6 +433,23 @@ async def async_remove_entry(
 ) -> None:
     """Handle removal of an entry."""
 
+    # Operator and device ids are shared by every entry of one airco, so
+    # releasing the account here would free the survivor's slot.
+    airco_id: str = entry.data[CONF_AIRCO_ID]
+    slot_in_use = any(
+        other.entry_id != entry.entry_id
+        and other.data.get(CONF_AIRCO_ID, "").lower() == airco_id.lower()
+        for other in hass.config_entries.async_entries(DOMAIN)
+    )
+    temp_device = None if slot_in_use else await create_device_from_entry(entry, hass)
+    # Before the account goes, and before the issues are cleared: the frame is
+    # sent under that account, and a send that finds it missing registers
+    # again and may raise the account-table issue anew. The entry is gone with
+    # its state, so there is nothing to tell whether the unit holds a value of
+    # ours - the frame is sent whenever it answers.
+    if temp_device is not None and await temp_device.update():
+        await temp_device.async_hand_back_room_sensor(force=True)
+
     ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
     ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
     ir.async_delete_issue(
@@ -412,20 +459,12 @@ async def async_remove_entry(
         hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
     )
 
-    # Operator and device ids are shared by every entry of one airco, so
-    # releasing the account here would free the survivor's slot.
-    airco_id: str = entry.data[CONF_AIRCO_ID]
-    if any(
-        other.entry_id != entry.entry_id
-        and other.data.get(CONF_AIRCO_ID, "").lower() == airco_id.lower()
-        for other in hass.config_entries.async_entries(DOMAIN)
-    ):
+    if temp_device is None:
         _LOGGER.debug(
             "Keeping the controller slot on airco [%s]: still in use", airco_id
         )
         return
 
-    temp_device = await create_device_from_entry(entry, hass)
     # delete_account() returns None for everything short of a confirmed
     # release, which is what decides between the two lines.
     result = await temp_device.delete_account()

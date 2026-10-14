@@ -113,7 +113,14 @@
     },
     "status_request_unsupported": {
       "title": "Veikimo duomenų iš {device_name} nuskaityti nepavyksta",
-      "description": "Šis įrenginys pakeičia savo nuostatas kaskart, kai užklausiami veikimo duomenys, ir daro tai net tada, kai užklausa grąžina jam jo paties dabartines nuostatas. Nebeliko nieko, ką būtų galima įdėti į tą užklausą ir ko šis įrenginys neliestų, todėl Home Assistant nustojo ją siųsti.\n\nKo tai kainuoja: iš jos maitinami diagnostiniai jutikliai (kompresoriaus dažnis, darbinė srovė, karštų dujų temperatūra, EEV padėtis ir šilumokaičio temperatūros) nebeatsinaujina, o integracijos parinktyse nustatytas vidaus temperatūros šaltinis nebegali būti perduotas įrenginiui — abu dalykai keliauja ta pačia užklausa. Visa kita nepaliesta: įjungimas, režimas, temperatūra, ventiliatorius ir mentės siunčiami kaip įprastos komandos ir to nejaučia.\n\nPraneškite apie tai, nurodydami savo modulio programinės įrangos versiją. Tokiu būdu elgiasi tik du žinomi įrenginiai, ir pranešimas yra vienintelis kelias tai spręsti."
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Dar kartą užklausti {device_name} veikimo duomenų?",
+            "description": "Šis įrenginys keisdavo savo nuostatas kaskart, kai buvo užklausiami veikimo duomenys, net kai užklausa grąžindavo jam jo paties dabartines nuostatas, todėl Home Assistant nustojo tą užklausą siųsti. Įrenginys grąžintas prie savo paties kambario jutiklio: integracijos parinktyse nustatytas vidaus temperatūros šaltinis jam nebeperduodamas, o klimato kortelė rodo temperatūrą, kurią matuoja pats įrenginys.\n\nKo tai kainuoja: iš tos užklausos maitinami diagnostiniai jutikliai (kompresoriaus dažnis, darbinė srovė, karštų dujų temperatūra, EEV padėtis ir šilumokaičio temperatūros) nebeatsinaujina. Visa kita nepaliesta: įjungimas, režimas, temperatūra, ventiliatorius ir mentės siunčiami kaip įprastos komandos.\n\nAptikimą gali sukelti ir tuo pat metu naudojamas nuotolinio valdymo pultas. Norėdami pabandyti dar kartą, patvirtinkite šį pataisymą: integracija persikraus ir vėl stebės. Jei įrenginys vėl išsijungs arba pakeis nuostatas, šis pranešimas pasirodys iš naujo — tada praneškite apie tai, nurodydami savo modulio programinės įrangos versiją."
+          }
+        }
+      }
     },
     "service_data_unanswered": {
       "title": "Veikimo duomenys iš {device_name} neprieinami",

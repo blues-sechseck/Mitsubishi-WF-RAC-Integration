@@ -44,14 +44,16 @@ CONF_CONNECTION_METHOD = "connection_method"
 # echo    the block carries the unit's own settings, every set-bit set, read a
 #         moment before it goes out - so the frame confirms the settings a
 #         strict block would clear. What the manufacturer's app sends.
-# silent  no request at all. The last resort for a unit that changes its
+# stopped no request at all. The last resort for a unit that changes its
 #         settings even when the frame confirms them: the operation-data
 #         sensors and the external-temperature override are given up so the
-#         unit stays usable.
+#         unit stays usable. Not "silent", which it was stored as until
+#         2026.10.1-beta6: that reads as the unit's silent operation.
 CONF_STATUS_REQUEST_MODE = "status_request_mode"
 STATUS_REQUEST_STRICT = "strict"
 STATUS_REQUEST_ECHO = "echo"
-STATUS_REQUEST_SILENT = "silent"
+STATUS_REQUEST_STOPPED = "stopped"
+STATUS_REQUEST_STOPPED_LEGACY = "silent"
 
 # Superseded by CONF_STATUS_REQUEST_MODE and read only to carry entries written
 # by 2026.9.9-beta2..beta6 forward. True there means what "echo" means now.

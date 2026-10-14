@@ -32,6 +32,7 @@ from .const import (
     OPERATION_MODE_COOL,
     OPERATION_MODE_DRY,
     OPERATION_MODE_HEAT,
+    STATUS_REQUEST_STOPPED,
 )
 
 if TYPE_CHECKING:
@@ -77,13 +78,68 @@ class ExternalTemperatureFeed:
         return self._override
 
     @property
+    def blocked(self) -> bool:
+        """Whether no value may reach the unit, only the sentinel.
+
+        True on a unit we have stopped sending the operation-data request to
+        (#329, #416). The value has no frame of its own and rides on that
+        request, and on such a unit a value that went out once would stand for
+        good: nothing refreshes it, nothing can release it, and the room
+        temperature would stay wherever the source last was. So every frame
+        hands the unit back to its own sensor instead. Read from the
+        coordinator rather than kept here, because the mode is its to decide
+        and this must never disagree with it.
+        """
+        return self._device.status_request_mode == STATUS_REQUEST_STOPPED
+
+    @property
+    def source_configured(self) -> bool:
+        """Whether an indoor temperature source is set in the options.
+
+        A legacy blank counts as unset.
+        """
+        source = self._device.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
+        return isinstance(source, str) and bool(source)
+
+    @property
+    def may_hold_unit(self) -> bool:
+        """Whether the unit could be regulating on a value we handed it.
+
+        Armed, owed a release, or fed by a source: the last covers a value
+        restored after a restart that has not gone out yet, where the unit
+        still holds the one from the previous run.
+        """
+        return (
+            self._override is not None
+            or self._release_pending
+            or self.source_configured
+        )
+
+    @property
     def needs_frame(self) -> bool:
         """Whether an operation-data frame has to go out every poll.
 
         True while a value is armed and while a release is still owed: both
-        ride on that frame (see _sync_carrier).
+        ride on that frame (see _sync_carrier). Never while blocked - no such
+        frame is sent then, and the release goes out as a command instead.
         """
+        if self.blocked:
+            return False
         return self._override is not None or self._release_pending
+
+    @property
+    def wire_value(self) -> float | None:
+        """The value the next frame carries before the overshoot is applied.
+
+        The armed override, or None - the sentinel - while blocked. The
+        armed value is still remembered for as long as it is set, so that the
+        diagnostics show what a source asked for.
+        """
+        return None if self.blocked else self._override
+
+    def mode_changed(self) -> None:
+        """Re-evaluate the carrier after the coordinator changed the mode."""
+        self._sync_carrier()
 
     def set_override(self, value: float | None) -> None:
         """Set the integration-side override state.
@@ -155,6 +211,9 @@ class ExternalTemperatureFeed:
         Costs what an enabled operation-data sensor costs: one extra request
         per poll cycle, holding the unit's write lock for part of it.
         """
+        if self.blocked:
+            self.release_carrier()
+            return
         if self._override is not None or self._release_pending:
             needs_request = self._release_pending
             if self._carrier is None:
@@ -253,7 +312,9 @@ class ExternalTemperatureFeed:
     def room_value(self) -> float | None:
         """The room temperature we handed the unit, or None while it regulates.
 
-        Regulating here means on its own sensor.
+        Regulating here means on its own sensor - which is also where a unit
+        sits that we no longer feed (see blocked): there the card shows what
+        the unit measures, since nothing we hold is reaching it.
 
         Whoever supplies a room temperature has said what "the room" means for
         this unit, so that is what the climate entity shows for as long as the
@@ -282,10 +343,9 @@ class ExternalTemperatureFeed:
         once, and showing it as the room while the unit is not even using it
         would be showing an intention rather than a measurement.
         """
-        if self._override is None or self._device.airco is None:
+        if self._override is None or self._device.airco is None or self.blocked:
             return None
-        source = self._device.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
-        if isinstance(source, str) and source:
+        if self.source_configured:
             return self._override
         if not self.applied:
             return None
@@ -309,7 +369,7 @@ class ExternalTemperatureFeed:
         that far from being right anyway.
         """
         airco = self._device.airco
-        if self._override is None or airco is None:
+        if self._override is None or airco is None or self.blocked:
             return False
         raw = airco.ControllerRoomTempRaw
         return raw is not None and raw in self._written
