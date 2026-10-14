@@ -352,6 +352,7 @@ class ServiceDataChannel:
         self._read: dict[int, datetime] = {}
         self._refusals = ServiceDataRefusals()
         self._overdue: set[int] = set()
+        self._humidity_sensor_seen = False
 
     @property
     def supported(self) -> bool:
@@ -613,6 +614,7 @@ class ServiceDataChannel:
         if current is None:
             return
         self._device.settle_service_data_pause()
+        self._accept_real_humidity_30(new_airco)
         now = dt_util.utcnow()
         arrived = {
             code for code in new_airco.ServiceDataRaw if code in SERVICE_DATA_CODES
@@ -663,6 +665,19 @@ class ServiceDataChannel:
             # is still reported, once, rather than silently leaving the sensors
             # unknown.
             self._note_expired(SERVICE_DATA_MAX_AGE)
+
+    def _accept_real_humidity_30(self, new_airco: Aircon) -> None:
+        """Show 30 % once the unit has proved it has a humidity sensor.
+
+        A unit without the sensor answers a constant 30, so the parser turns
+        30 into no value. A unit with one reads 30 too, in dry heating air,
+        and that reading is real. Any other valid value tells the two apart;
+        until one has arrived since setup, 30 stays unknown.
+        """
+        if new_airco.IndoorHumidity is not None:
+            self._humidity_sensor_seen = True
+        elif self._humidity_sensor_seen and new_airco.IndoorHumidityRaw == 30:
+            new_airco.IndoorHumidity = 30
 
     def _note_expired(self, limit: timedelta) -> None:
         """Warn once, when the operation-data sensors actually go unknown.
