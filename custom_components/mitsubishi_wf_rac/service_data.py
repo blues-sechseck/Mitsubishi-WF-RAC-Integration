@@ -307,8 +307,9 @@ class ResearchData:
 
 
 # Converted fields, and the raw field each is derived from. A conversion can
-# fail while its segment arrives perfectly well - the coil temperatures are
-# only calibrated over part of the byte range (see RacParser._coil_temp) - and
+# fail while its segment arrives perfectly well - the coil and hot-gas
+# temperatures are only calibrated over part of the byte range (see
+# RacParser._coil_temp and RacParser._hot_gas_temp) - and
 # carrying the last convertible value forward would then freeze a stale
 # temperature on screen for as long as the unit stays out of range. Which is a
 # whole heating season, and it is exactly what a frozen reading must never look
@@ -321,6 +322,7 @@ SERVICE_DATA_DERIVED_FROM = {
     "IndoorHumidity": "IndoorHumidityRaw",
     "IndoorCoilTemp": "IndoorCoilRaw",
     "IndoorCoilOutletTemp": "IndoorCoilOutletRaw",
+    "HotGasTemp": "HotGasTempRaw",
 }
 
 
