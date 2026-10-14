@@ -2303,6 +2303,40 @@ async def test_humidity_of_a_unit_without_sensor_is_not_carried_forward(device):
     assert new_airco.IndoorHumidityRaw == 30
 
 
+async def test_humidity_30_is_shown_once_the_unit_has_a_sensor(device):
+    """30 is also a real reading on a unit with the sensor. Any other value
+    proves the sensor exists, and from then on 30 is shown.
+    """
+    device._airco.IndoorHumidity = 32
+    device._airco.IndoorHumidityRaw = 32
+    device.service_data._last_response = dt_util.utcnow()
+    before = Aircon()
+    before.IndoorHumidityRaw = 32
+    before.IndoorHumidity = 32
+    device.service_data.carry_forward(before)
+
+    new_airco = Aircon()
+    new_airco.IndoorHumidityRaw = 30
+    device.service_data.carry_forward(new_airco)
+
+    assert new_airco.IndoorHumidity == 30
+
+
+async def test_humidity_0_stays_unknown_on_a_unit_with_sensor(device):
+    device._airco.IndoorHumidity = 32
+    device.service_data._last_response = dt_util.utcnow()
+    before = Aircon()
+    before.IndoorHumidityRaw = 32
+    before.IndoorHumidity = 32
+    device.service_data.carry_forward(before)
+
+    new_airco = Aircon()
+    new_airco.IndoorHumidityRaw = 0
+    device.service_data.carry_forward(new_airco)
+
+    assert new_airco.IndoorHumidity is None
+
+
 async def test_a_sensorless_humidity_answer_keeps_the_channel_alive(device, caplog):
     """Only the humidity sensor enabled on a unit without the sensor: every
     answer is 30, which is an answer and not silence.
