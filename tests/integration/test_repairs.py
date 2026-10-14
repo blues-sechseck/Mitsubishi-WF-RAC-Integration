@@ -27,6 +27,8 @@ async def _start_fix(hass: HomeAssistant, entry: MockConfigEntry):
     # The repairs platform of an integration is only looked up once the
     # integration counts as loaded.
     hass.config.components.add(DOMAIN)
+    # Older cores pick the platform up from that in a task of its own.
+    await hass.async_block_till_done()
     report_status_request_unsupported(hass, entry.entry_id, "Living room")
     issue_id = status_request_unsupported_issue_id(entry.entry_id)
     manager: RepairsFlowManager = hass.data["repairs"]["flow_manager"]
