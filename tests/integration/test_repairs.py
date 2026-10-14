@@ -9,7 +9,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_CARRY_POWER_STATE,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
-    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STOPPED,
 )
 from custom_components.mitsubishi_wf_rac.foreign_writers import (
     report_status_request_unsupported,
@@ -52,7 +52,7 @@ async def test_the_fix_forgets_the_learned_mode_and_reloads(hass: HomeAssistant)
         domain=DOMAIN,
         data={
             "airco_id": "a",
-            CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_SILENT,
+            CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED,
             CONF_CARRY_POWER_STATE: True,
         },
     )

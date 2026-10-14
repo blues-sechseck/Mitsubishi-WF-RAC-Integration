@@ -37,7 +37,8 @@ from .const import (
     DOMAIN,
     OVERSHOOT_MAX,
     STATUS_REQUEST_ECHO,
-    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STOPPED,
+    STATUS_REQUEST_STOPPED_LEGACY,
     STATUS_REQUEST_STRICT,
 )
 from .coordinator import (
@@ -266,6 +267,13 @@ async def async_setup_entry(
 ) -> bool:
     """Establish connection with mitsubishi-wf-rac."""
     device: str = entry.data[CONF_HOST]
+    if entry.data.get(CONF_STATUS_REQUEST_MODE) == STATUS_REQUEST_STOPPED_LEGACY:
+        # Learned state, not configuration, so no entry version for it -
+        # rewritten here so the diagnostics stop saying "silent".
+        hass.config_entries.async_update_entry(
+            entry,
+            data={**entry.data, CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED},
+        )
     _device = await create_device_from_entry(entry, hass)
 
     # update() reports a failure in its return value rather than raising, so
@@ -312,7 +320,7 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    if _device.status_request_mode == STATUS_REQUEST_SILENT:
+    if _device.status_request_mode == STATUS_REQUEST_STOPPED:
         # Raised again here because the repair was not persistent when it was
         # first raised, and an entry that learned this before the change has
         # none to show after its restart (#416).

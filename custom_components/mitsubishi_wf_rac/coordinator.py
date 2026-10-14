@@ -49,7 +49,7 @@ from .const import (
     HOME_LEAVE_TEMP_HEAT,
     MIN_TIME_BETWEEN_UPDATES,
     STATUS_REQUEST_ECHO,
-    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STOPPED,
     STATUS_REQUEST_STRICT,
 )
 from .external_temperature import ExternalTemperatureFeed
@@ -652,7 +652,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         unit on in between. A reading taken while the unit is off is worth
         little anyway, so it waits for a poll that finds it running.
         """
-        if self._status_request_mode == STATUS_REQUEST_SILENT:
+        if self._status_request_mode == STATUS_REQUEST_STOPPED:
             return False
         return not self._parser.status_request_carries_state or bool(
             self._airco is not None and self._airco.Operation
@@ -903,7 +903,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             task = self.service_data.task
             if task is not None and not task.done():
                 await task
-            if self._status_request_mode == STATUS_REQUEST_SILENT:
+            if self._status_request_mode == STATUS_REQUEST_STOPPED:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="status_request_not_sent",
@@ -1298,7 +1298,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         a setting up to a poll old and undo whatever was done at the unit since
         - including switching a unit off that somebody just turned on.
         """
-        if self._status_request_mode == STATUS_REQUEST_SILENT:
+        if self._status_request_mode == STATUS_REQUEST_STOPPED:
             # This unit changes its settings whatever we put in the frame, so
             # the frame is not sent at all any more (#329).
             raise HomeAssistantError(
@@ -1333,7 +1333,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         if (
             not self._airco.Capabilities.home_leave_mode
-            or self._status_request_mode == STATUS_REQUEST_SILENT
+            or self._status_request_mode == STATUS_REQUEST_STOPPED
             or self._parser.status_request_carries_state
         ):
             return

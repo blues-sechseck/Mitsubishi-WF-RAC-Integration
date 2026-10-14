@@ -53,7 +53,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     STATUS_REQUEST_ECHO,
-    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STOPPED,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import (
     AVAILABILITY_FAILURE_LIMIT_MIN,
@@ -630,7 +630,7 @@ def _echo_mode(device) -> None:
 
 
 def _silent_mode(device) -> None:
-    device._status_request_mode = STATUS_REQUEST_SILENT
+    device._status_request_mode = STATUS_REQUEST_STOPPED
 
 
 @pytest.mark.parametrize(
@@ -732,7 +732,7 @@ async def test_a_release_can_leave_the_armed_value_in_place(device):
     assert sent[0][5] == 0xFF
 
 
-async def test_a_silent_unit_gets_the_sentinel_whatever_is_armed(device):
+async def test_a_stopped_unit_gets_the_sentinel_whatever_is_armed(device):
     """Nothing refreshes or releases a value on such a unit, so one that went
     out once would stand for good (#416)."""
     _silent_mode(device)
@@ -751,7 +751,7 @@ async def test_a_silent_unit_gets_the_sentinel_whatever_is_armed(device):
     assert device.external_temperature.needs_frame is False
 
 
-async def test_a_silent_unit_holds_no_carrier(device):
+async def test_a_stopped_unit_holds_no_carrier(device):
     _silent_mode(device)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
@@ -2934,8 +2934,8 @@ async def test_an_echo_that_still_moves_the_unit_stops_the_request(device, monke
     device._api.send_airco_command = AsyncMock(return_value=CLEARED_PAYLOAD)
     await _run_service_data_request(device, monkeypatch)
 
-    assert device._status_request_mode == STATUS_REQUEST_SILENT
-    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_SILENT
+    assert device._status_request_mode == STATUS_REQUEST_STOPPED
+    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_STOPPED
 
     # And nothing is asked of it again.
     device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
@@ -3075,7 +3075,7 @@ async def test_a_failed_poll_drops_the_state_the_request_was_built_from(
     assert device._parser.status_request_carries_state is False
 
 
-async def test_going_silent_blocks_the_feed_before_the_settings_are_restored(
+async def test_stopping_blocks_the_feed_before_the_settings_are_restored(
     device, monkeypatch
 ):
     """The frame that puts the settings back goes out after the unit stopped
@@ -3100,7 +3100,7 @@ async def test_going_silent_blocks_the_feed_before_the_settings_are_restored(
     device.set_external_temperature_override(18.7)
     await asyncio.sleep(0.1)
 
-    assert device._status_request_mode == STATUS_REQUEST_SILENT
+    assert device._status_request_mode == STATUS_REQUEST_STOPPED
     assert sent[0][5] != 0xFF
     assert _is_command(sent[-1]) is True
     assert sent[-1][5] == 0xFF
@@ -3487,7 +3487,7 @@ async def test_home_leave_mode_is_not_read_where_the_request_writes(device, skip
         device.airco.Capabilities, home_leave_mode=skip != "no_capability"
     )
     if skip == "silent":
-        device._status_request_mode = STATUS_REQUEST_SILENT
+        device._status_request_mode = STATUS_REQUEST_STOPPED
     if skip == "carries_state":
         device._parser.status_request_carries_state = True
     device.async_request_home_leave_mode_status = AsyncMock()

@@ -31,7 +31,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DOMAIN,
     STATUS_REQUEST_ECHO,
-    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STOPPED,
     STATUS_REQUEST_STRICT,
 )
 
@@ -105,9 +105,9 @@ def report_status_request_unsupported(
 
     Persistent, so that it outlives a restart - the mode it reports is stored,
     and a repair that vanished with the restart left an entry that is still
-    silent without anything pointing at it (#416). Fixable because the
+    stopped without anything pointing at it (#416). Fixable because the
     detection can be wrong, and the way back is to ask again; see repairs.py.
-    Also called at setup for an entry that is silent, to bring back what an
+    Also called at setup for an entry that is stopped, to bring back what an
     earlier version never persisted.
     """
     ir.async_create_issue(
@@ -423,7 +423,7 @@ class ForeignWriterWatch:
         second occurrence in that shape means the frame is not what the unit
         objects to, and then the only honest answer is to stop sending it.
         """
-        if before is None or self._device.status_request_mode == STATUS_REQUEST_SILENT:
+        if before is None or self._device.status_request_mode == STATUS_REQUEST_STOPPED:
             return
         matched = self._empty_block_matches(before)
         if len(matched) < EMPTY_BLOCK_MATCH_MIN:
@@ -451,7 +451,7 @@ class ForeignWriterWatch:
                 changed,
             )
         else:
-            self._device.adopt_status_request_mode(STATUS_REQUEST_SILENT)
+            self._device.adopt_status_request_mode(STATUS_REQUEST_STOPPED)
             _LOGGER.warning(
                 "[%s] changed its settings during an operation-data request "
                 "that carried its own state: %s. Nothing this integration can "
@@ -466,7 +466,7 @@ class ForeignWriterWatch:
         # and escalate a step that has just been taken.
         self._request_baseline = None
         self._device.hass.async_create_task(self._async_restore_settings(before))
-        if self._device.status_request_mode == STATUS_REQUEST_SILENT:
+        if self._device.status_request_mode == STATUS_REQUEST_STOPPED:
             # The advice in the first issue - watch it for a few minutes - has
             # been overtaken by what just happened.
             ir.async_delete_issue(

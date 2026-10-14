@@ -28,7 +28,8 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_OVERSHOOT_HEAT,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
-    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STOPPED,
+    STATUS_REQUEST_STOPPED_LEGACY,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import registration_full_issue_id
 from custom_components.mitsubishi_wf_rac.foreign_writers import (
@@ -694,12 +695,16 @@ async def _set_up(
 @pytest.mark.parametrize(
     ("data", "options", "expected"),
     [
-        ({CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_SILENT}, {SOURCE: "sensor.room"}, 1),
-        ({CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_SILENT}, {}, 0),
+        (
+            {CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED},
+            {SOURCE: "sensor.room"},
+            1,
+        ),
+        ({CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED}, {}, 0),
         ({}, {SOURCE: "sensor.room"}, 0),
     ],
 )
-async def test_a_silent_entry_with_a_source_hands_back_once_at_setup(
+async def test_a_stopped_entry_with_a_source_hands_back_once_at_setup(
     hass: HomeAssistant, repository: AsyncMock, data, options, expected
 ):
     """The previous run may have left the source's last value standing, and a
@@ -718,13 +723,13 @@ async def test_a_silent_entry_with_a_source_hands_back_once_at_setup(
     await entry.runtime_data.device.async_shutdown()
 
 
-async def test_a_silent_entry_gets_its_repair_back_at_setup(
+async def test_a_stopped_entry_gets_its_repair_back_at_setup(
     hass: HomeAssistant, repository: AsyncMock
 ):
     """The repair was not persistent when the mode was learned (#416): after a
-    restart the entry was silent with nothing to say so."""
+    restart the entry was stopped with nothing to say so."""
     entry = await _set_up(
-        hass, repository, {CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_SILENT}, {}
+        hass, repository, {CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED}, {}
     )
 
     issue = ir.async_get(hass).async_get_issue(
@@ -873,3 +878,21 @@ async def test_the_device_name_follows_the_entry_title(hass: HomeAssistant):
     device = await create_device_from_entry(entry, hass)
 
     assert device.device_name == "Bedroom AC"
+
+
+async def test_a_mode_stored_as_silent_is_read_as_stopped(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    """Until 2026.10.1-beta6 the stopped request was stored as "silent", the
+    word the unit's silent operation goes by. Read as stopped and rewritten."""
+    entry = await _set_up(
+        hass,
+        repository,
+        {CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED_LEGACY},
+        {},
+    )
+
+    assert entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_STOPPED
+    assert entry.runtime_data.device.status_request_mode == STATUS_REQUEST_STOPPED
+
+    await entry.runtime_data.device.async_shutdown()

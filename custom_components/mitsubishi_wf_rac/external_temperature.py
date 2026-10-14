@@ -32,7 +32,7 @@ from .const import (
     OPERATION_MODE_COOL,
     OPERATION_MODE_DRY,
     OPERATION_MODE_HEAT,
-    STATUS_REQUEST_SILENT,
+    STATUS_REQUEST_STOPPED,
 )
 
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ class ExternalTemperatureFeed:
         coordinator rather than kept here, because the mode is its to decide
         and this must never disagree with it.
         """
-        return self._device.status_request_mode == STATUS_REQUEST_SILENT
+        return self._device.status_request_mode == STATUS_REQUEST_STOPPED
 
     @property
     def source_configured(self) -> bool:

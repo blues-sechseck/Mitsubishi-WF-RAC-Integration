@@ -26,7 +26,7 @@ from custom_components.mitsubishi_wf_rac import (
     service_data as service_data_module,
     switch,
 )
-from custom_components.mitsubishi_wf_rac.const import DOMAIN, STATUS_REQUEST_SILENT
+from custom_components.mitsubishi_wf_rac.const import DOMAIN, STATUS_REQUEST_STOPPED
 from custom_components.mitsubishi_wf_rac.service_data import (
     RESEARCH_BATCH_SIZE,
     RESEARCH_CONTEXT,
@@ -142,7 +142,7 @@ async def test_silent_write_is_never_merged_with_a_queued_command(
 
 
 async def test_silent_write_refused_when_requests_are_off(platform_device):
-    platform_device._status_request_mode = STATUS_REQUEST_SILENT
+    platform_device._status_request_mode = STATUS_REQUEST_STOPPED
     platform_device._api.send_airco_command = AsyncMock()
 
     with pytest.raises(HomeAssistantError) as err:
