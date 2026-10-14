@@ -191,7 +191,7 @@ async def test_options_flow_reloads_itself(hass: HomeAssistant):
         connection_method=None,
         update=AsyncMock(),
         # Awaited when hass stops at the end of the test.
-        async_release_external_temperature=AsyncMock(),
+        async_hand_back_room_sensor=AsyncMock(),
         async_read_home_leave_mode_once=AsyncMock(),
     )
     with (

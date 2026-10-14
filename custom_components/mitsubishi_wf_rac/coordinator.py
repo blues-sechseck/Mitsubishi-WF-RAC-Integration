@@ -305,79 +305,95 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         self.external_temperature.set_override(value)
 
-    async def async_release_external_temperature(self) -> None:
-        """Hand the unit back to its own sensor before we stop writing.
+    async def async_hand_back_room_sensor(
+        self, *, clear: bool = True, force: bool = False
+    ) -> bool:
+        """Hand the unit back to its own room sensor, whatever mode it is in.
 
         The injected value has no expiry at the unit: whatever byte 5 last
         carried is what it regulates on, until another frame replaces it or it
         loses power. While the entry runs, the carrier frame refreshes it every
-        cycle and a source that stops reporting clears it - but once Home
-        Assistant stops, nothing writes at all and the value would simply
-        stand. So an orderly stop spends one last frame on clearing it, and the
-        unit measures for itself again until the entry comes back and re-arms
-        the override.
+        cycle and a source that stops reporting clears it - but once nothing of
+        ours writes any more (Home Assistant stopping, the entry being
+        disabled or removed), the value would simply stand. So those paths
+        spend one last frame on clearing it, and the unit measures for itself
+        again until the entry comes back and re-arms the override.
 
-        Only an orderly stop: a reload is not one (saving the options reloads
-        the entry, and the override is re-armed seconds later), and a crash or
-        a lost network cannot send anything at all. That residue is the
-        unit's, not ours to fix.
+        Not on a reload: saving the options reloads the entry, and the
+        override is re-armed seconds later. A crash or a lost network cannot
+        send anything at all; that residue is the unit's, not ours to fix.
+
+        The frame depends on what this unit tolerates. Where the operation-data
+        request is allowed and carries no state, that request is the release: it
+        has no set-bits, so it cannot touch anything else. Anywhere else - a
+        unit that applies what that frame carries (#329), or one we have given
+        up asking - only a command carries byte 5, so the unit's state is read
+        first and sent back unchanged with the sentinel in it.
+
+        clear=False keeps the armed value on our side, for the one caller that
+        stays loaded: a blocked feed puts the sentinel on every frame anyway.
+
+        Sends nothing unless the unit could be holding a value of ours (see
+        ExternalTemperatureFeed.may_hold_unit), or force says the caller
+        cannot know - a removed entry has lost the state that would tell.
+        Never raises; the return value says whether a frame went out.
         """
-        if self.external_temperature.override is None:
-            return
-        applied = self.external_temperature.applied
-        self.external_temperature.set_override(None)
-        if not applied:
-            # Nothing on the unit to undo: it is on its own sensor already,
-            # because it is off, in fan_only, or no frame ever carried the
-            # value (see external_temperature_applied).
-            return
-        if not self._status_request_is_allowed():
-            # The guard the periodic request answers to as well - a unit we
-            # have given up asking, or one that applies the state a carrying
-            # frame echoes while we believe it is off (#329). Handing control
-            # back is not worth a frame that might switch the unit.
-            return
-        if (
-            self._parser.status_request_carries_state
-            and not await self._async_read_before_echo()
-        ):
-            return
+        feed = self.external_temperature
+        if not (force or feed.may_hold_unit):
+            return False
+        if clear:
+            feed.set_override(None)
         try:
-            await self.set_airco(
-                {
-                    AirconCommands.ServiceDataStatusRequest: (
-                        SERVICE_DATA_INDOOR_COIL_RAW,
-                    )
-                },
-                log_failure=False,
-                timestamp_offset=-round(
-                    self._service_data_stamp_backdate().total_seconds()
-                ),
-                is_status_request=True,
-                retry_when_locked=False,
-            )
+            if (
+                self._status_request_is_allowed()
+                and not self._parser.status_request_carries_state
+            ):
+                await self.set_airco(
+                    {
+                        AirconCommands.ServiceDataStatusRequest: (
+                            SERVICE_DATA_INDOOR_COIL_RAW,
+                        )
+                    },
+                    log_failure=False,
+                    timestamp_offset=-round(
+                        self._service_data_stamp_backdate().total_seconds()
+                    ),
+                    is_status_request=True,
+                    retry_when_locked=False,
+                )
+            else:
+                if not await self._async_read_before_echo():
+                    return False
+                await self.set_airco({}, log_failure=False, retry_when_locked=False)
         except (WfRacError, KeyError, TypeError, ValueError) as ex:
-            # Debug, not a warning: this runs while Home Assistant is going
-            # down, there is nobody to act on it, and the next start re-arms
-            # the override anyway.
+            # Debug, not a warning: this runs while the entry is going away,
+            # there is nobody to act on it, and the next start re-arms the
+            # override anyway.
             _LOGGER.debug(
-                "Could not hand [%s] back to its own sensor before stopping: %s",
+                "Could not hand [%s] back to its own room sensor: %s",
                 self.device_name,
                 ex,
             )
-        else:
-            _LOGGER.debug(
-                "Handed [%s] back to its own room sensor before stopping",
-                self.device_name,
-            )
+            return False
+        _LOGGER.debug("Handed [%s] back to its own room sensor", self.device_name)
+        return True
 
     def request_external_temperature_release(self) -> None:
         """Ask for a frame that hands the unit back to its own sensor.
 
         For the case this coordinator cannot see for itself - see
-        ExternalTemperatureFeed.request_release.
+        ExternalTemperatureFeed.request_release. A blocked feed has no carrier
+        frame to deliver that, so the release goes out as a command - unless a
+        source is configured, where setup already does it once.
         """
-        self.external_temperature.request_release()
+        feed = self.external_temperature
+        feed.request_release()
+        if feed.blocked and not feed.source_configured:
+            self.config_entry.async_create_background_task(
+                self.hass,
+                self.async_hand_back_room_sensor(clear=False),
+                f"{DOMAIN} hand back room sensor {self.entry_id}",
+            )
 
     async def async_shutdown(self) -> None:
         """Shut the coordinator down.
@@ -653,11 +669,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             return
         if (
             not self.service_data.supported
-            and self.external_temperature.override is None
+            and not self.external_temperature.needs_frame
         ):
             # Nothing to read here. The frame still goes out for an armed
-            # temperature override, which rides on it without needing an
-            # answer.
+            # temperature override or a release still owed, which ride on it
+            # without needing an answer.
             return
         if not self._status_request_is_allowed():
             return
@@ -1006,6 +1022,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         self._status_request_mode = mode
         self._parser.status_request_carries_state = mode == STATUS_REQUEST_ECHO
+        # Before anything is built from the new mode: a blocked feed puts the
+        # sentinel on every frame, which makes the frame that restores the
+        # settings after the detection the release as well.
+        self.external_temperature.mode_changed()
         entry = self.config_entry
         self.hass.config_entries.async_update_entry(
             entry, data={**entry.data, CONF_STATUS_REQUEST_MODE: mode}
@@ -1044,7 +1064,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # frames that were going out anyway (see AircoClimate.
         # async_set_external_temperature). Applied to every frame, since
         # one that leaves byte 5 alone reverts the unit to its own sensor.
-        airco_stat.ExternalTemperature = self.external_temperature.override
+        airco_stat.ExternalTemperature = self.external_temperature.wire_value
 
         for key, value in params.items():
             setattr(airco_stat, key, value)
@@ -1397,6 +1417,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         deadline. Saturated at the limit, and the error is kept for the poll
         that crosses it.
         """
+        # Before the once-per-poll guard: it is about the request's baseline,
+        # not about counting the outage.
+        self.foreign_writers.note_poll_failed()
         if self._poll_counted:
             return
         self._poll_counted = True

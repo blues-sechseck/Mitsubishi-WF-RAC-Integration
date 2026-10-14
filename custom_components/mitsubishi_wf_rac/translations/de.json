@@ -113,7 +113,15 @@
     },
     "status_request_unsupported": {
       "title": "Von {device_name} lassen sich keine Betriebsdaten lesen",
-      "description": "Dieses Gerät verstellt sich selbst, sobald Betriebsdaten abgefragt werden — auch dann, wenn die Anfrage seine aktuellen Einstellungen mitführt. Es bleibt nichts mehr, was sich in diese Anfrage schreiben ließe und das Gerät in Ruhe lässt, deshalb sendet Home Assistant sie nicht mehr.\n\nWas das kostet: die daraus gespeisten Diagnosesensoren (Verdichterfrequenz, Betriebsstrom, Heißgastemperatur, EEV-Position und die Wärmetauscher-Temperaturen) werden nicht mehr aktualisiert, und eine in den Optionen eingestellte Raumtemperaturquelle lässt sich dem Gerät nicht mehr übergeben — beides hängt an dieser einen Anfrage. Alles andere bleibt unberührt: Ein/Aus, Modus, Temperatur, Lüfter und Lamellen gehen als gewöhnliche Befehle hinaus.\n\nBitte melden Sie das, zusammen mit der Firmware-Version Ihres Moduls. Nur von wenigen Geräten ist dieses Verhalten bekannt, und ohne Meldung lässt sich nicht daran arbeiten."
+      "description": "Dieses Gerät hat sich selbst verstellt, sobald Betriebsdaten abgefragt wurden — auch dann, wenn die Anfrage seine aktuellen Einstellungen mitführte. Deshalb sendet Home Assistant diese Anfrage nicht mehr. Das Gerät ist wieder an seinen eigenen Raumfühler zurückgegeben: eine in den Optionen eingestellte Raumtemperaturquelle wird ihm nicht mehr übergeben, und die Klimakarte zeigt die Temperatur, die das Gerät selbst misst.\n\nWas das kostet: die daraus gespeisten Diagnosesensoren (Verdichterfrequenz, Betriebsstrom, Heißgastemperatur, EEV-Position und die Wärmetauscher-Temperaturen) werden nicht mehr aktualisiert. Alles andere bleibt unberührt: Ein/Aus, Modus, Temperatur, Lüfter und Lamellen gehen als gewöhnliche Befehle hinaus.\n\nAuslösen kann die Erkennung auch jemand, der im selben Moment die Fernbedienung benutzt. Zum erneuten Versuch bestätigen Sie diese Reparatur: Die Integration lädt neu und achtet wieder darauf. Geht das Gerät dabei wieder aus oder verstellt sich, erscheint diese Meldung erneut — melden Sie es dann bitte, zusammen mit der Firmware-Version Ihres Moduls.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Betriebsdaten von {device_name} wieder abfragen?",
+            "description": "Home Assistant vergisst, dass dieses Gerät die Anfrage umgesetzt hat, und lädt die Integration neu. Geht das Gerät wieder aus oder verstellt sich, wird die Anfrage erneut gestoppt und diese Reparatur kommt zurück."
+          }
+        }
+      }
     },
     "service_data_unanswered": {
       "title": "Von {device_name} sind keine Betriebsdaten lesbar",

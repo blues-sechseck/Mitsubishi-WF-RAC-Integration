@@ -5,6 +5,7 @@ because entries created under those versions carry the keys, but nothing reads
 them at runtime any more - the migration's job is to leave no trace of them.
 """
 
+import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -21,13 +22,19 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_AVAILABILITY_CHECK,
     CONF_AVAILABILITY_RETRY_LIMIT,
     CONF_CONNECTION_METHOD,
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
+    CONF_STATUS_REQUEST_MODE,
     DOMAIN,
+    STATUS_REQUEST_SILENT,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import registration_full_issue_id
-from homeassistant.config_entries import ConfigEntryState
+from custom_components.mitsubishi_wf_rac.foreign_writers import (
+    status_request_unsupported_issue_id,
+)
+from homeassistant.config_entries import ConfigEntryDisabler, ConfigEntryState
 from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
@@ -35,6 +42,7 @@ from homeassistant.helpers import (
     entity_registry as er,
     issue_registry as ir,
 )
+from tests.unit.live_captures import LIVE_CAPTURES
 
 _DATA = {
     "name": "Living Room AC",
@@ -45,6 +53,7 @@ _DATA = {
 }
 
 _CURRENT_VERSION = 8
+SOURCE = CONF_EXTERNAL_TEMPERATURE_SOURCE
 
 
 def _entry(
@@ -184,6 +193,9 @@ async def test_remove_entry_releases_the_account_of_a_lone_entry(
 ):
     entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
     api = AsyncMock()
+    # Unreachable, so the hand-back before the account goes has nothing to read
+    # from; what it does is tested on its own below.
+    api.get_aircon_stats.side_effect = WfRacConnectionError("unreachable")
     api.del_account_info.return_value = {"result": 0}
 
     with patch(
@@ -200,6 +212,9 @@ async def test_remove_entry_releases_the_account_of_a_never_migrated_entry(
     """A version 5 entry still keeps its host in options."""
     entry = _entry(hass, 5, dict(_DATA), {CONF_HOST: "192.168.1.50"})
     api = AsyncMock()
+    # Unreachable, so the hand-back before the account goes has nothing to read
+    # from; what it does is tested on its own below.
+    api.get_aircon_stats.side_effect = WfRacConnectionError("unreachable")
     api.del_account_info.return_value = {"result": 0}
 
     with patch(
@@ -566,7 +581,7 @@ async def test_stopping_home_assistant_hands_the_override_back(
         device = entry.runtime_data.device
 
         with patch.object(
-            device, "async_release_external_temperature", AsyncMock()
+            device, "async_hand_back_room_sensor", AsyncMock()
         ) as release:
             await hass.config_entries.async_reload(entry.entry_id)
             await hass.async_block_till_done()
@@ -574,13 +589,163 @@ async def test_stopping_home_assistant_hands_the_override_back(
 
         device = entry.runtime_data.device
         with patch.object(
-            device, "async_release_external_temperature", AsyncMock()
+            device, "async_hand_back_room_sensor", AsyncMock()
         ) as release:
             hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
             await hass.async_block_till_done()
             release.assert_awaited_once()
 
         await device.async_shutdown()
+
+
+async def test_disabling_the_entry_hands_the_override_back_but_a_reload_does_not(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    """Disabling is an unload nothing follows with a setup, so the value would
+    stand at the unit - the reload that every saved option causes is followed
+    by one, and re-arms within seconds.
+    """
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=repository,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        device = entry.runtime_data.device
+
+        with patch.object(
+            device, "async_hand_back_room_sensor", AsyncMock()
+        ) as hand_back:
+            await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+            hand_back.assert_not_awaited()
+
+        device = entry.runtime_data.device
+        with patch.object(
+            device, "async_hand_back_room_sensor", AsyncMock()
+        ) as hand_back:
+            await hass.config_entries.async_set_disabled_by(
+                entry.entry_id, ConfigEntryDisabler.USER
+            )
+            await hass.async_block_till_done()
+            hand_back.assert_awaited_once()
+
+
+async def test_removal_hands_the_override_back_before_the_account_goes(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    """The frame is sent under the account: without it the module refuses, and
+    a removed unit would keep the last value it was given."""
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    calls: list[str] = []
+
+    async def _send(_airco_id, command, **_kwargs):
+        raw = base64.b64decode(command)
+        calls.append(f"send:{raw[5]}")
+        return LIVE_CAPTURES["on_cool"][0]
+
+    async def _delete(_airco_id):
+        calls.append("delete")
+        return {"result": 0}
+
+    repository.send_airco_command = AsyncMock(side_effect=_send)
+    repository.del_account_info = AsyncMock(side_effect=_delete)
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=repository,
+    ):
+        await async_remove_entry(hass, entry)
+
+    assert calls == ["send:255", "delete"]
+
+
+async def test_removal_leaves_the_unit_alone_while_another_entry_uses_the_slot(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    repository.send_airco_command = AsyncMock()
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=repository,
+    ):
+        await async_remove_entry(hass, entry)
+
+    repository.send_airco_command.assert_not_awaited()
+
+
+async def _set_up(
+    hass: HomeAssistant, repository: AsyncMock, data: dict, options: dict
+):
+    entry = _entry(
+        hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50", **data}, options
+    )
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=repository,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    return entry
+
+
+@pytest.mark.parametrize(
+    ("data", "options", "expected"),
+    [
+        ({CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_SILENT}, {SOURCE: "sensor.room"}, 1),
+        ({CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_SILENT}, {}, 0),
+        ({}, {SOURCE: "sensor.room"}, 0),
+    ],
+)
+async def test_a_silent_entry_with_a_source_hands_back_once_at_setup(
+    hass: HomeAssistant, repository: AsyncMock, data, options, expected
+):
+    """The previous run may have left the source's last value standing, and a
+    blocked feed never sends it again - so setup says so once, without clearing
+    what the source armed."""
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Device."
+        "async_hand_back_room_sensor",
+        AsyncMock(return_value=True),
+    ) as hand_back:
+        entry = await _set_up(hass, repository, data, options)
+        assert hand_back.await_count == expected
+        if expected:
+            hand_back.assert_awaited_once_with(clear=False)
+
+    await entry.runtime_data.device.async_shutdown()
+
+
+async def test_a_silent_entry_gets_its_repair_back_at_setup(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    """The repair was not persistent when the mode was learned (#416): after a
+    restart the entry was silent with nothing to say so."""
+    entry = await _set_up(
+        hass, repository, {CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_SILENT}, {}
+    )
+
+    issue = ir.async_get(hass).async_get_issue(
+        DOMAIN, status_request_unsupported_issue_id(entry.entry_id)
+    )
+    assert issue is not None
+    assert issue.is_persistent is True
+    assert issue.is_fixable is True
+    assert issue.data == {"entry_id": entry.entry_id}
+
+    await entry.runtime_data.device.async_shutdown()
+
+
+async def test_a_strict_entry_gets_no_repair_at_setup(
+    hass: HomeAssistant, repository: AsyncMock
+):
+    entry = await _set_up(hass, repository, {}, {})
+
+    assert not ir.async_get(hass).issues
+
+    await entry.runtime_data.device.async_shutdown()
 
 
 async def test_removal_says_so_when_the_slot_is_not_released(
@@ -594,6 +759,7 @@ async def test_removal_says_so_when_the_slot_is_not_released(
     entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
 
     repository = AsyncMock()
+    repository.get_aircon_stats.side_effect = WfRacError("no answer")
     repository.del_account_info.side_effect = WfRacError("no answer")
     with patch(
         "custom_components.mitsubishi_wf_rac.coordinator.Repository",

@@ -113,7 +113,15 @@
     },
     "status_request_unsupported": {
       "title": "Bedrijfsdata kunnen niet van {device_name} gelezen worden",
-      "description": "Dit apparaat wijzigt zijn eigen instellingen zodra het om bedrijfsdata gevraagd wordt, en het doet dat ook wanneer het verzoek zijn huidige instellingen aan hem teruggeeft. Er is niets meer over om in dat verzoek te zetten waar dit apparaat vanaf blijft, dus is Home Assistant gestopt het te versturen.\n\nWat dat kost: de diagnostische sensoren die eruit gevoed worden (compressorfrequentie, bedrijfsstroom, heetgastemperatuur, EEV-stand en de warmtewisselaartemperaturen) worden niet meer bijgewerkt, en een in de opties ingestelde bron voor de binnentemperatuur kan niet meer aan het apparaat doorgegeven worden — beide rijden op dat ene verzoek. Al het overige blijft ongemoeid: aan/uit, modus, temperatuur, ventilator en lamellen gaan als gewone commando's en worden hier niet door geraakt.\n\nMeld dit alstublieft, met de firmwareversie van uw module erbij. Van slechts twee apparaten is dit gedrag bekend, en een melding is de enige manier waarop eraan gewerkt kan worden."
+      "description": "Dit apparaat wijzigde zijn eigen instellingen zodra het om bedrijfsdata gevraagd werd, ook wanneer het verzoek zijn huidige instellingen meedroeg, dus is Home Assistant gestopt dat verzoek te versturen. Het apparaat is teruggegeven aan zijn eigen kamersensor: een in de opties ingestelde bron voor de binnentemperatuur wordt er niet meer aan doorgegeven, en de klimaatkaart toont de temperatuur die het apparaat zelf meet.\n\nWat dat kost: de diagnostische sensoren die door dat verzoek gevoed worden (compressorfrequentie, bedrijfsstroom, heetgastemperatuur, EEV-stand en de warmtewisselaartemperaturen) worden niet meer bijgewerkt. Al het overige blijft ongemoeid: aan/uit, modus, temperatuur, ventilator en lamellen gaan als gewone commando's.\n\nDe detectie kan ook worden uitgelokt door iemand die op hetzelfde moment de afstandsbediening gebruikt. Om het opnieuw te proberen, bevestigt u deze reparatie: de integratie laadt opnieuw en let er weer op. Gaat het apparaat daarbij weer uit of verstelt het zich, dan verschijnt deze melding opnieuw — meld het dan alstublieft, met de firmwareversie van uw module erbij.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Opnieuw bedrijfsdata bij {device_name} opvragen?",
+            "description": "Home Assistant vergeet dat dit apparaat het verzoek heeft uitgevoerd en laadt de integratie opnieuw. Gaat het apparaat weer uit of verstelt het zich, dan wordt het verzoek opnieuw gestopt en komt deze reparatie terug."
+          }
+        }
+      }
     },
     "service_data_unanswered": {
       "title": "Bedrijfsdata zijn niet beschikbaar van {device_name}",

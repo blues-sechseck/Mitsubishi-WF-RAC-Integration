@@ -46,6 +46,7 @@ from custom_components.mitsubishi_wf_rac import (
     service_data as service_data_module,
 )
 from custom_components.mitsubishi_wf_rac.const import (
+    CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
@@ -64,6 +65,24 @@ from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 from tests.unit.live_captures import LIVE_CAPTURES
+
+
+def _capture_sends(device) -> list[bytes]:
+    """Replace the module's write endpoint with one that echoes, and keep every
+    frame that went out."""
+    sent: list[bytes] = []
+
+    async def _send(airco_id, command, **_kwargs):
+        sent.append(base64.b64decode(command))
+        return await _echo_send_airco_command(airco_id, command)
+
+    device._api.send_airco_command = AsyncMock(side_effect=_send)
+    return sent
+
+
+def _is_command(raw: bytes) -> bool:
+    """Whether a frame carries set-bits (a command) or none (a status request)."""
+    return bool(raw[2] & 2)
 
 
 def _set_options(device, options: dict) -> None:
@@ -546,18 +565,18 @@ async def test_release_hands_the_unit_back_before_stopping(device, monkeypatch):
 
     device._api.send_airco_command = AsyncMock(side_effect=_capture_and_echo)
 
-    await device.async_release_external_temperature()
+    await device.async_hand_back_room_sensor()
 
     assert device.external_temperature_override is None
     assert base64.b64decode(captured["command"])[5] == 0xFF
 
 
-async def test_release_sends_nothing_when_the_unit_never_took_the_value(
+async def test_release_goes_out_even_when_the_value_was_never_applied(
     device, monkeypatch
 ):
-    """Armed but not applied means the unit is on its own sensor already -
-    off, in fan_only, or no frame carried it yet. Spending a frame there would
-    take the write lock for nothing on the way down.
+    """Armed but not applied is not the same as not held: an override restored
+    after a restart has not gone out yet, while the unit still holds the value
+    of the run before. Only a frame says otherwise.
     """
     _shorten_service_data_timing(monkeypatch)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
@@ -565,22 +584,214 @@ async def test_release_sends_nothing_when_the_unit_never_took_the_value(
 
     device.set_external_temperature_override(18.7)
     device.airco.ControllerRoomTempRaw = 0xFF
-    device._api.send_airco_command = AsyncMock()
+    sent = _capture_sends(device)
 
-    await device.async_release_external_temperature()
+    await device.async_hand_back_room_sensor()
 
     assert device.external_temperature_override is None
-    device._api.send_airco_command.assert_not_awaited()
+    assert [raw[5] for raw in sent] == [0xFF]
 
 
-async def test_release_is_a_no_op_without_an_override(device):
+async def test_release_is_a_no_op_with_nothing_to_release(device):
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     device._api.send_airco_command = AsyncMock()
 
-    await device.async_release_external_temperature()
+    assert await device.async_hand_back_room_sensor() is False
 
     device._api.send_airco_command.assert_not_awaited()
+
+
+async def test_a_configured_source_is_enough_reason_to_release(device):
+    """The value of the previous run may still be standing at the unit."""
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    _set_options(device, {CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.room"})
+    sent = _capture_sends(device)
+
+    assert await device.async_hand_back_room_sensor() is True
+
+    assert [raw[5] for raw in sent] == [0xFF]
+
+
+async def test_a_forced_release_does_not_ask_whether_anything_is_held(device):
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    sent = _capture_sends(device)
+
+    assert await device.async_hand_back_room_sensor(force=True) is True
+
+    assert len(sent) == 1
+
+
+def _echo_mode(device) -> None:
+    device._status_request_mode = STATUS_REQUEST_ECHO
+    device._parser.status_request_carries_state = True
+
+
+def _silent_mode(device) -> None:
+    device._status_request_mode = STATUS_REQUEST_SILENT
+
+
+@pytest.mark.parametrize(
+    ("mode", "payload", "is_command"),
+    [
+        ("strict", ON_COOL_PAYLOAD, False),
+        ("echo", ON_COOL_PAYLOAD, True),
+        ("echo", OFF_PAYLOAD, True),
+        ("silent", ON_COOL_PAYLOAD, True),
+        ("silent", OFF_PAYLOAD, True),
+    ],
+)
+async def test_the_release_frame_fits_the_mode_the_unit_is_in(
+    device, mode, payload, is_command
+):
+    """Where the operation-data request is allowed and writes nothing, it is
+    the release. Everywhere else only a command carries byte 5, so the state
+    is read first and sent back unchanged - off included, since an unattended
+    unit that is off still holds the value it last regulated on.
+    """
+    if mode == "echo":
+        _echo_mode(device)
+    if mode == "silent":
+        _silent_mode(device)
+    device._api.get_aircon_stats.return_value = _stats_response(payload)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    sent = _capture_sends(device)
+    reads_before = device._api.get_aircon_stats.await_count
+
+    assert await device.async_hand_back_room_sensor() is True
+
+    assert len(sent) == 1
+    assert sent[0][5] == 0xFF
+    assert _is_command(sent[0]) is is_command
+    # A command is built from a state read a moment ago, not from the poll's.
+    assert device._api.get_aircon_stats.await_count == reads_before + (
+        1 if is_command else 0
+    )
+
+
+async def test_the_release_command_changes_nothing_but_byte_5(device):
+    """Sent back unchanged: a block built from the read state with the
+    sentinel in it is the frame the unit would have been sent with an
+    override, byte for byte, apart from that one byte and the checksum.
+    """
+    _silent_mode(device)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    sent = _capture_sends(device)
+
+    held = device._build_command({})
+    held.ExternalTemperature = 18.7
+    held_frame = base64.b64decode(device._parser.to_base64(held))
+    device.set_external_temperature_override(18.7)
+    await device.async_hand_back_room_sensor()
+
+    differing = [
+        i for i, (a, b) in enumerate(zip(held_frame, sent[0], strict=True)) if a != b
+    ]
+    assert differing == [5, 23, 24]
+
+
+async def test_a_failed_release_is_logged_not_raised(device):
+    _silent_mode(device)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    device._api.send_airco_command = AsyncMock(side_effect=WfRacError("no answer"))
+
+    assert await device.async_hand_back_room_sensor() is False
+
+
+async def test_no_release_command_goes_out_without_a_fresh_read(device):
+    """The block is the unit's state, so one older than a round trip could
+    undo what somebody just changed at the remote."""
+    _echo_mode(device)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    device._api.get_aircon_stats.side_effect = WfRacError("no answer")
+    device._api.send_airco_command = AsyncMock()
+
+    assert await device.async_hand_back_room_sensor() is False
+
+    device._api.send_airco_command.assert_not_awaited()
+
+
+async def test_a_release_can_leave_the_armed_value_in_place(device):
+    _silent_mode(device)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    sent = _capture_sends(device)
+
+    await device.async_hand_back_room_sensor(clear=False)
+
+    assert device.external_temperature_override == 18.7
+    assert sent[0][5] == 0xFF
+
+
+async def test_a_silent_unit_gets_the_sentinel_whatever_is_armed(device):
+    """Nothing refreshes or releases a value on such a unit, so one that went
+    out once would stand for good (#416)."""
+    _silent_mode(device)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.set_external_temperature_override(18.7)
+    sent = _capture_sends(device)
+
+    await device.set_airco({AirconCommands.PresetTemp: 22})
+
+    assert sent[0][5] == 0xFF
+    # Remembered for the diagnostics, only kept off the wire.
+    assert device.external_temperature_override == 18.7
+    assert device.external_temperature_applied is False
+    assert device.external_temperature_room_value is None
+    assert device.external_temperature.needs_frame is False
+
+
+async def test_a_silent_unit_holds_no_carrier(device):
+    _silent_mode(device)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    device.set_external_temperature_override(18.7)
+
+    assert device.external_temperature._carrier is None
+
+
+async def test_the_room_value_is_the_source_again_when_the_unit_is_fed(device):
+    """The counterpart of the above: unblocked, the same call shows the value."""
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    _set_options(device, {CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.room"})
+    device.set_external_temperature_override(18.7)
+
+    assert device.external_temperature_room_value == 18.7
+
+    _silent_mode(device)
+
+    assert device.external_temperature_room_value is None
+
+
+async def test_a_pending_release_goes_out_on_a_unit_without_operation_data(
+    device, monkeypatch
+):
+    """The frame a release rides on is not asked for when the unit answers no
+    segments. Gating on the armed value alone left a release that was still
+    owed unsent, with the carrier held for it."""
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device.service_data._unsupported = True
+    device.set_airco = set_airco = AsyncMock()
+
+    device.external_temperature._release_pending = True
+    device.external_temperature._sync_carrier()
+    await asyncio.sleep(0.05)
+
+    set_airco.assert_awaited_once()
 
 
 async def test_external_temperature_applied_reads_the_echoed_byte(device):
@@ -2749,6 +2960,158 @@ async def test_an_ordinary_change_at_the_unit_is_not_read_as_the_fault(
 
     assert device._parser.status_request_carries_state is False
     assert CONF_STATUS_REQUEST_MODE not in device.config_entry.data
+
+
+def _payload_with(**fields) -> str:
+    """A running unit's capture with the given settings changed.
+
+    Built through the parser rather than by patching bytes, so the settings land
+    in the fields they would on the wire.
+    """
+    parser = RacParser()
+    stat = AirconStat.from_aircon(parser.translate_bytes(ON_COOL_PAYLOAD))
+    for name, value in fields.items():
+        setattr(stat, name, value)
+    content = [b - 256 if b > 127 else b for b in parser.receive_to_bytes(stat)]
+    return _build_stat_response(content[:18])
+
+
+async def test_the_remote_switching_the_unit_off_is_not_read_as_the_fault(
+    device, monkeypatch
+):
+    """#416. The remote's "off" sends the state it has stored: the vanes and
+    the fan at their first position, a lower setpoint, the power off - four of
+    the five fields landing on their minimum, exactly the pattern. But the mode
+    is the one somebody chose; the fault takes that down with the rest.
+    """
+    device.config_entry.add_to_hass(device.hass)
+    heating = _payload_with(OperationMode=2, WindDirectionUD=3, WindDirectionLR=4)
+    device._api.get_aircon_stats.return_value = _stats_response(heating)
+    await device.update()
+
+    from_remote = _payload_with(
+        Operation=False,
+        OperationMode=2,
+        PresetTemp=20,
+        AirFlow=1,
+        WindDirectionUD=1,
+        WindDirectionLR=1,
+    )
+    device._api.send_airco_command = AsyncMock(return_value=from_remote)
+    await _run_service_data_request(device, monkeypatch)
+
+    assert device._parser.status_request_carries_state is False
+    assert CONF_STATUS_REQUEST_MODE not in device.config_entry.data
+
+
+async def test_the_same_fields_with_the_mode_on_auto_are_the_fault(device, monkeypatch):
+    device.config_entry.add_to_hass(device.hass)
+    heating = _payload_with(OperationMode=2, WindDirectionUD=3, WindDirectionLR=4)
+    device._api.get_aircon_stats.return_value = _stats_response(heating)
+    await device.update()
+
+    cleared = _payload_with(
+        Operation=False,
+        OperationMode=0,
+        PresetTemp=20,
+        AirFlow=1,
+        WindDirectionUD=1,
+        WindDirectionLR=1,
+    )
+    device._api.send_airco_command = AsyncMock(return_value=cleared)
+    await _run_service_data_request(device, monkeypatch)
+
+    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_ECHO
+
+
+async def test_a_unit_that_was_in_auto_already_can_still_show_the_fault(
+    device, monkeypatch
+):
+    """The mode cannot move to its zero when it sits there, so it says nothing
+    either way and the other fields decide."""
+    device.config_entry.add_to_hass(device.hass)
+    auto = _payload_with(OperationMode=0, WindDirectionUD=3, WindDirectionLR=4)
+    device._api.get_aircon_stats.return_value = _stats_response(auto)
+    await device.update()
+
+    cleared = _payload_with(
+        Operation=False,
+        OperationMode=0,
+        PresetTemp=20,
+        AirFlow=1,
+        WindDirectionUD=1,
+        WindDirectionLR=1,
+    )
+    device._api.send_airco_command = AsyncMock(return_value=cleared)
+    await _run_service_data_request(device, monkeypatch)
+
+    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_ECHO
+
+
+async def test_a_failed_poll_drops_the_state_the_request_was_built_from(
+    device, monkeypatch
+):
+    """Kept across an outage, the baseline would stretch the window in which a
+    change at the remote can be taken for the request's doing (#416: result 1,
+    the module had no fresh data)."""
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
+    await _run_service_data_request(device, monkeypatch)
+    assert device.foreign_writers._request_baseline is not None
+
+    device._api.get_aircon_stats.side_effect = WfRacCommandError(
+        "Aircon answered getAirconStat with result 1 and no state"
+    )
+    assert await device.update() is False
+    assert device.foreign_writers._request_baseline is None
+
+    # And what follows is not blamed on a request that is minutes old.
+    device._api.get_aircon_stats.side_effect = None
+    device._api.get_aircon_stats.return_value = _stats_response(CLEARED_PAYLOAD)
+    await device.update()
+
+    assert device._parser.status_request_carries_state is False
+
+
+async def test_going_silent_blocks_the_feed_before_the_settings_are_restored(
+    device, monkeypatch
+):
+    """The frame that puts the settings back goes out after the unit stopped
+    being fed, so it carries the sentinel and is the release (#416). Built
+    after the switch rather than at some later point, or it would carry the
+    override once more."""
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+    device._status_request_mode = STATUS_REQUEST_ECHO
+    device._parser.status_request_carries_state = True
+    sent: list[bytes] = []
+
+    async def _send(_airco_id, command, **_kwargs):
+        sent.append(base64.b64decode(command))
+        return CLEARED_PAYLOAD
+
+    device._api.send_airco_command = AsyncMock(side_effect=_send)
+    _shorten_service_data_timing(monkeypatch)
+    # Arming asks for the frame it rides on, which is the request that gets
+    # the unit to show the fault.
+    device.set_external_temperature_override(18.7)
+    await asyncio.sleep(0.1)
+
+    assert device._status_request_mode == STATUS_REQUEST_SILENT
+    assert sent[0][5] != 0xFF
+    assert _is_command(sent[-1]) is True
+    assert sent[-1][5] == 0xFF
+    assert device.external_temperature._carrier is None
+    issue = ir.async_get(device.hass).async_get_issue(
+        DOMAIN, f"status_request_unsupported_{device.entry_id}"
+    )
+    assert issue is not None
+    assert issue.is_persistent is True
+    assert issue.is_fixable is True
+    assert issue.data == {"entry_id": device.entry_id}
 
 
 async def test_a_learned_status_request_mode_survives_a_restart(hass):

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from pywfrac import AirconCommands, WfRacError
 
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
@@ -97,6 +98,31 @@ def status_request_unsupported_issue_id(entry_id: str) -> str:
     return f"status_request_unsupported_{entry_id}"
 
 
+def report_status_request_unsupported(
+    hass: HomeAssistant, entry_id: str, device_name: str
+) -> None:
+    """Raise the repair for a unit we have stopped sending the request to.
+
+    Persistent, so that it outlives a restart - the mode it reports is stored,
+    and a repair that vanished with the restart left an entry that is still
+    silent without anything pointing at it (#416). Fixable because the
+    detection can be wrong, and the way back is to ask again; see repairs.py.
+    Also called at setup for an entry that is silent, to bring back what an
+    earlier version never persisted.
+    """
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        status_request_unsupported_issue_id(entry_id),
+        data={"entry_id": entry_id},
+        is_fixable=True,
+        is_persistent=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="status_request_unsupported",
+        translation_placeholders={"device_name": device_name},
+    )
+
+
 class ForeignWriterWatch:
     """Attribution of setting changes for one unit."""
 
@@ -162,6 +188,16 @@ class ForeignWriterWatch:
         rewritten to close.
         """
         self._request_baseline = dict(before) if before is not None else None
+
+    def note_poll_failed(self) -> None:
+        """Forget the state a status request was built from.
+
+        It is only comparable with the answer that follows it. Kept across a
+        failed poll it would turn the next successful one into a window as
+        long as the outage, in which any change made at the unit reads as the
+        request's doing.
+        """
+        self._request_baseline = None
 
     def pause_to_settle(self) -> timedelta | None:
         """How long the stand-down that has just ended lasted, once.
@@ -392,6 +428,14 @@ class ForeignWriterWatch:
         matched = self._empty_block_matches(before)
         if len(matched) < EMPTY_BLOCK_MATCH_MIN:
             return
+        # The fault takes the mode down with the rest (#329). Anything that
+        # leaves it where it was is somebody's own settings arriving: the IR
+        # remote's "off" sends the state it has stored - vanes and fan at 1, a
+        # lower setpoint - with the mode somebody chose in it (#416), and the
+        # app sends what was picked there. Not decisive when the unit was in
+        # auto already: the mode could not move to its zero, so it says nothing.
+        if "OperationMode" not in matched and before.get("OperationMode") != 0:
+            return
         changed = ", ".join(
             f"{name} {before[name]} -> {getattr(self._device.airco, name)}"
             for name in matched
@@ -412,9 +456,9 @@ class ForeignWriterWatch:
                 "[%s] changed its settings during an operation-data request "
                 "that carried its own state: %s. Nothing this integration can "
                 "put in that frame leaves the unit alone, so it will not be "
-                "sent again. The operation-data sensors and the external "
-                "temperature override stop working on this unit; everything "
-                "else is unaffected",
+                "sent again. The operation-data sensors stop updating and the "
+                "unit goes back to its own room sensor; everything else is "
+                "unaffected",
                 self._device.device_name,
                 changed,
             )
@@ -430,21 +474,20 @@ class ForeignWriterWatch:
                 DOMAIN,
                 request_stops_unit_issue_id(self._device.entry_id),
             )
-        ir.async_create_issue(
-            self._device.hass,
-            DOMAIN,
-            request_stops_unit_issue_id(self._device.entry_id)
-            if self._device.status_request_mode == STATUS_REQUEST_ECHO
-            else status_request_unsupported_issue_id(self._device.entry_id),
-            is_fixable=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key=(
-                "request_stops_unit"
-                if self._device.status_request_mode == STATUS_REQUEST_ECHO
-                else "status_request_unsupported"
-            ),
-            translation_placeholders={"device_name": self._device.device_name},
-        )
+            report_status_request_unsupported(
+                self._device.hass, self._device.entry_id, self._device.device_name
+            )
+        else:
+            ir.async_create_issue(
+                self._device.hass,
+                DOMAIN,
+                request_stops_unit_issue_id(self._device.entry_id),
+                is_fixable=False,
+                is_persistent=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="request_stops_unit",
+                translation_placeholders={"device_name": self._device.device_name},
+            )
 
     async def _async_restore_settings(self, before: Mapping[str, Any]) -> None:
         """Put back what the request just cleared.
