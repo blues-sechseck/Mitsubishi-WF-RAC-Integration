@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
+from homeassistant.components.repairs import (
+    ConfirmRepairFlow,
+    RepairsFlow,
+    RepairsFlowResult,
+)
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import issue_registry as ir
 
 from .const import CONF_CARRY_POWER_STATE, CONF_STATUS_REQUEST_MODE, DOMAIN
@@ -29,7 +32,7 @@ class StatusRequestRetryFlow(ConfirmRepairFlow):
 
     async def async_step_confirm(
         self, user_input: dict[str, str] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         """Reset the learned mode once the user confirms."""
         if user_input is None:
             return await super().async_step_confirm()

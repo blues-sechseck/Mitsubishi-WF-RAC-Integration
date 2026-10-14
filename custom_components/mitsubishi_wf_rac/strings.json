@@ -63,12 +63,11 @@
     },
     "status_request_unsupported": {
       "title": "Operation data cannot be read from {device_name}",
-      "description": "This unit changed its own settings whenever it was asked for operation data, even when the request carried its current settings back to it, so Home Assistant has stopped sending that request. The unit has been handed back to its own room sensor: an indoor temperature source set in the integration's options is no longer passed to it, and the climate card shows the temperature the unit measures.\n\nWhat that costs: the diagnostic sensors fed by that request (compressor frequency, operating current, hot gas temperature, EEV position and the coil temperatures) no longer update. Everything else is unaffected: power, mode, temperature, fan and louvres are sent as ordinary commands.\n\nThe detection can also be set off by someone using the remote control at the same moment. To try again, submit this repair: the integration reloads and watches for it anew. If the unit switches off or changes its settings again, this message returns - please report it then, including your module's firmware version.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Ask {device_name} for operation data again?",
-            "description": "Home Assistant forgets that this unit applied the request and reloads the integration. If the unit switches off or changes its settings again, the request is stopped again and this repair comes back."
+            "description": "This unit changed its own settings whenever it was asked for operation data, even when the request carried its current settings back to it, so Home Assistant has stopped sending that request. The unit has been handed back to its own room sensor: an indoor temperature source set in the integration's options is no longer passed to it, and the climate card shows the temperature the unit measures.\n\nWhat that costs: the diagnostic sensors fed by that request (compressor frequency, operating current, hot gas temperature, EEV position and the coil temperatures) no longer update. Everything else is unaffected: power, mode, temperature, fan and louvres are sent as ordinary commands.\n\nThe detection can also be set off by someone using the remote control at the same moment. To try again, submit this repair: the integration reloads and watches for it anew. If the unit switches off or changes its settings again, this message returns - please report it then, including your module's firmware version."
           }
         }
       }
