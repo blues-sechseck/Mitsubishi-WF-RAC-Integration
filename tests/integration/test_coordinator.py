@@ -629,7 +629,7 @@ def _echo_mode(device) -> None:
     device._parser.status_request_carries_state = True
 
 
-def _silent_mode(device) -> None:
+def _stopped_mode(device) -> None:
     device._status_request_mode = STATUS_REQUEST_STOPPED
 
 
@@ -639,8 +639,8 @@ def _silent_mode(device) -> None:
         ("strict", ON_COOL_PAYLOAD, False),
         ("echo", ON_COOL_PAYLOAD, True),
         ("echo", OFF_PAYLOAD, True),
-        ("silent", ON_COOL_PAYLOAD, True),
-        ("silent", OFF_PAYLOAD, True),
+        ("stopped", ON_COOL_PAYLOAD, True),
+        ("stopped", OFF_PAYLOAD, True),
     ],
 )
 async def test_the_release_frame_fits_the_mode_the_unit_is_in(
@@ -653,8 +653,8 @@ async def test_the_release_frame_fits_the_mode_the_unit_is_in(
     """
     if mode == "echo":
         _echo_mode(device)
-    if mode == "silent":
-        _silent_mode(device)
+    if mode == "stopped":
+        _stopped_mode(device)
     device._api.get_aircon_stats.return_value = _stats_response(payload)
     await device.update()
     device.set_external_temperature_override(18.7)
@@ -677,7 +677,7 @@ async def test_the_release_command_changes_nothing_but_byte_5(device):
     sentinel in it is the frame the unit would have been sent with an
     override, byte for byte, apart from that one byte and the checksum.
     """
-    _silent_mode(device)
+    _stopped_mode(device)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     sent = _capture_sends(device)
@@ -695,7 +695,7 @@ async def test_the_release_command_changes_nothing_but_byte_5(device):
 
 
 async def test_a_failed_release_is_logged_not_raised(device):
-    _silent_mode(device)
+    _stopped_mode(device)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     device.set_external_temperature_override(18.7)
@@ -720,7 +720,7 @@ async def test_no_release_command_goes_out_without_a_fresh_read(device):
 
 
 async def test_a_release_can_leave_the_armed_value_in_place(device):
-    _silent_mode(device)
+    _stopped_mode(device)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     device.set_external_temperature_override(18.7)
@@ -735,7 +735,7 @@ async def test_a_release_can_leave_the_armed_value_in_place(device):
 async def test_a_stopped_unit_gets_the_sentinel_whatever_is_armed(device):
     """Nothing refreshes or releases a value on such a unit, so one that went
     out once would stand for good (#416)."""
-    _silent_mode(device)
+    _stopped_mode(device)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
     device.set_external_temperature_override(18.7)
@@ -752,7 +752,7 @@ async def test_a_stopped_unit_gets_the_sentinel_whatever_is_armed(device):
 
 
 async def test_a_stopped_unit_holds_no_carrier(device):
-    _silent_mode(device)
+    _stopped_mode(device)
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     await device.update()
 
@@ -770,7 +770,7 @@ async def test_the_room_value_is_the_source_again_when_the_unit_is_fed(device):
 
     assert device.external_temperature_room_value == 18.7
 
-    _silent_mode(device)
+    _stopped_mode(device)
 
     assert device.external_temperature_room_value is None
 
