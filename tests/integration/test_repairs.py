@@ -15,24 +15,34 @@ from custom_components.mitsubishi_wf_rac.foreign_writers import (
     report_status_request_unsupported,
     status_request_unsupported_issue_id,
 )
-from homeassistant.components.repairs.issue_handler import RepairsFlowManager
+from custom_components.mitsubishi_wf_rac.repairs import (
+    StatusRequestRetryFlow,
+    async_create_fix_flow,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.setup import async_setup_component
 
 
-async def _start_fix(hass: HomeAssistant, entry: MockConfigEntry):
-    assert await async_setup_component(hass, "repairs", {})
-    # The repairs platform of an integration is only looked up once the
-    # integration counts as loaded.
-    hass.config.components.add(DOMAIN)
-    # Older cores pick the platform up from that in a task of its own.
-    await hass.async_block_till_done()
+async def _fix_flow(hass: HomeAssistant, entry: MockConfigEntry):
+    """The flow Home Assistant's repairs manager would build for the issue.
+
+    Built directly rather than through the manager: how the manager finds a
+    custom integration's repairs platform differs between test harness
+    releases, and what is under test is the flow, not that lookup.
+    """
     report_status_request_unsupported(hass, entry.entry_id, "Living room")
     issue_id = status_request_unsupported_issue_id(entry.entry_id)
-    manager: RepairsFlowManager = hass.data["repairs"]["flow_manager"]
-    return manager, await manager.async_init(DOMAIN, data={"issue_id": issue_id})
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id)
+    assert issue is not None
+    assert issue.is_fixable
+    assert issue.is_persistent
+    flow = await async_create_fix_flow(hass, issue_id, issue.data)
+    flow.hass = hass
+    flow.handler = DOMAIN
+    flow.issue_id = issue_id
+    flow.data = issue.data
+    return flow
 
 
 async def test_the_fix_forgets_the_learned_mode_and_reloads(hass: HomeAssistant):
@@ -47,15 +57,16 @@ async def test_the_fix_forgets_the_learned_mode_and_reloads(hass: HomeAssistant)
         },
     )
     entry.add_to_hass(hass)
+    flow = await _fix_flow(hass, entry)
+    assert isinstance(flow, StatusRequestRetryFlow)
 
-    manager, result = await _start_fix(hass, entry)
-
+    result = await flow.async_step_init()
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "confirm"
     assert result["description_placeholders"] == {"device_name": "Living room"}
 
     with patch.object(hass.config_entries, "async_schedule_reload") as reload:
-        result = await manager.async_configure(result["flow_id"], {})
+        result = await flow.async_step_confirm({})
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert dict(entry.data) == {"airco_id": "a"}
@@ -71,9 +82,16 @@ async def test_the_fix_forgets_the_learned_mode_and_reloads(hass: HomeAssistant)
 async def test_the_fix_of_a_removed_entry_just_closes_the_repair(hass: HomeAssistant):
     entry = MockConfigEntry(domain=DOMAIN, data={"airco_id": "a"})
     entry.add_to_hass(hass)
-    manager, result = await _start_fix(hass, entry)
+    flow = await _fix_flow(hass, entry)
     await hass.config_entries.async_remove(entry.entry_id)
 
-    result = await manager.async_configure(result["flow_id"], {})
+    result = await flow.async_step_confirm({})
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_a_repair_without_data_gets_the_plain_confirm_flow(hass: HomeAssistant):
+    """Rows raised by an earlier version carry no entry id."""
+    flow = await async_create_fix_flow(hass, "status_request_unsupported_x", None)
+
+    assert not isinstance(flow, StatusRequestRetryFlow)
