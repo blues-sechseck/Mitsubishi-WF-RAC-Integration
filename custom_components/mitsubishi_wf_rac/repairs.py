@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from homeassistant.components.repairs import (
-    ConfirmRepairFlow,
-    RepairsFlow,
-    RepairsFlowResult,
-)
+from typing import TYPE_CHECKING
+
+from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
 from .const import CONF_CARRY_POWER_STATE, CONF_STATUS_REQUEST_MODE, DOMAIN
 from .foreign_writers import status_request_unsupported_issue_id
+
+if TYPE_CHECKING:
+    # Not exported from the repairs package by older cores; on the oldest
+    # supported core a runtime import would keep this platform from loading.
+    from homeassistant.components.repairs import RepairsFlowResult
 
 
 class StatusRequestRetryFlow(ConfirmRepairFlow):
