@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Mapping
 from datetime import datetime, timedelta
+import hashlib
 import logging
 import re
 from typing import Any, Final
@@ -63,6 +64,18 @@ from .service_data import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def poll_offset(airco_id: str) -> timedelta:
+    """Return the fixed whole-second delay that staggers this unit's poll.
+
+    Derived from the id with a stable hash so it is the same after every
+    restart (the built-in hash() is randomized per process).
+    """
+    digest = hashlib.sha256(airco_id.encode()).hexdigest()
+    seconds = int(MIN_TIME_BETWEEN_UPDATES.total_seconds())
+    return timedelta(seconds=int(digest, 16) % seconds)
+
 
 # The silent write reaches the indoor unit after the module has answered; on
 # hardware the new state read back reliably three seconds later.
@@ -280,6 +293,15 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             config_entry=config_entry,
             name=name,
             update_interval=MIN_TIME_BETWEEN_UPDATES,
+        )
+        # Home Assistant aligns every refresh to a whole second, so units set
+        # up together would poll in lockstep for good. The first periodic
+        # poll waits this much longer; _async_update_data() then restores the
+        # normal interval.
+        self.poll_offset = poll_offset(airco_id)
+        self.update_interval = MIN_TIME_BETWEEN_UPDATES + self.poll_offset
+        _LOGGER.debug(
+            "First periodic poll of [%s] delayed by %s", name, self.poll_offset
         )
 
     @property
@@ -1592,6 +1614,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # The poll starts here, not in update(): set_airco() calls that too,
         # and the count has to hold for exactly one poll.
         self._poll_counted = False
+        self.update_interval = MIN_TIME_BETWEEN_UPDATES
         try:
             async with asyncio.timeout(POLL_TIMEOUT.total_seconds()):
                 answered = await self.update()
