@@ -1,12 +1,16 @@
 """Test the Mitsubishi WF-RAC setup, unload and migrations."""
 
 from dataclasses import replace
+from datetime import timedelta
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 from pywfrac import (
     WfRacAccountTableFullError,
     WfRacCommandError,
@@ -20,7 +24,11 @@ from custom_components.mitsubishi_wf_rac.const import (
     CONF_OPERATOR_ID,
     DOMAIN,
 )
-from custom_components.mitsubishi_wf_rac.coordinator import registration_full_issue_id
+from custom_components.mitsubishi_wf_rac.coordinator import (
+    Device,
+    poll_offset,
+    registration_full_issue_id,
+)
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
@@ -39,7 +47,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
 )
 
-from . import AIRCO_ID, ENTRY_DATA, HOST, PORT, advance_polls
+from . import AIRCO_ID, ENTRY_DATA, HOST, POLL, PORT, advance_polls
 
 ENTITY_ID = "climate.living_room"
 LEGACY_UNIQUE_ID = f"{DOMAIN}-{AIRCO_ID}-climate"
@@ -280,9 +288,64 @@ async def test_a_failed_platform_unload_keeps_the_coordinator(
 
     status = mock_repository.async_get_status.return_value
     status.aircon = replace(status.aircon, PresetTemp=25.0)
+    # The first periodic poll comes later by the unit's stagger offset.
+    freezer.tick(poll_offset(AIRCO_ID))
     await advance_polls(hass, freezer)
 
     assert hass.states.get(ENTITY_ID).attributes["temperature"] == 25.0
+
+
+def test_poll_offset_is_stable_and_within_a_poll() -> None:
+    """The stagger is the same on every call and never exceeds one interval."""
+    ids = ["0011223344aa", "348e89c5a137", "airco-id", ""]
+    for airco_id in ids:
+        offset = poll_offset(airco_id)
+        assert offset == poll_offset(airco_id)
+        assert offset.total_seconds() == int(offset.total_seconds())
+        assert timedelta(0) <= offset < POLL
+    # Pinned: it has to be reproducible from a log after any restart.
+    assert poll_offset("0011223344aa") == timedelta(seconds=58)
+
+
+def test_different_units_get_different_offsets() -> None:
+    """Two units set up together do not poll in the same second."""
+    assert poll_offset("0011223344aa") != poll_offset("348e89c5a137")
+
+
+async def test_the_first_periodic_poll_is_delayed_by_the_offset(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    mock_repository: MagicMock,
+    init_integration: MockConfigEntry,
+) -> None:
+    """The offset applies once; later polls keep the normal interval."""
+    offset = poll_offset(AIRCO_ID)
+    assert timedelta(0) < offset
+
+    async def tick(delta: timedelta) -> None:
+        freezer.tick(delta)
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+    with patch.object(
+        Device,
+        "_async_update_data",
+        autospec=True,
+        side_effect=Device._async_update_data,  # noqa: SLF001
+    ) as poll:
+        # HA truncates each schedule to a whole second, so every check keeps
+        # a margin of two seconds instead of landing on the edge.
+        await tick(POLL + offset - timedelta(seconds=2))
+        assert poll.call_count == 0
+
+        await tick(timedelta(seconds=3))
+        assert poll.call_count == 1
+
+        await tick(POLL - timedelta(seconds=3))
+        assert poll.call_count == 1
+
+        await tick(timedelta(seconds=4))
+        assert poll.call_count == 2
 
 
 @pytest.mark.usefixtures("mock_repository")
