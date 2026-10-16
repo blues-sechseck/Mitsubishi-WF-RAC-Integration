@@ -474,6 +474,11 @@ While an override is in effect, the climate entity's `current_temperature` shows
   in `auto` cycles rather than settles (measured: 4 K peak to peak). Nothing in this integration can
   narrow that; `cool` or `heat` holds a room far more closely (see
   [What `auto` does with your setting](#what-auto-does-with-your-setting) above).
+- **The energy counter can reset with operation data on `WF-RAC` modules.** On one unit with a `WF-RAC`
+  (010) module, Energy Usage stayed at 0 while the operation-data sensors were enabled and counted
+  again once they were disabled; an indoor temperature source alone did not affect it. Nothing
+  detects this yet - if you see it, disable those sensors and open an issue with your module and
+  unit model.
 - **One device, one connection.** The WF-RAC module handles requests one at a time. This
   integration already serializes its own requests to respect that, but running a second tool (a
   custom script, another integration instance, the Smart M-Air app at the same moment) against the
