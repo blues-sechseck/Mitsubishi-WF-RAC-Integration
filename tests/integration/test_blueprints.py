@@ -421,15 +421,20 @@ async def test_a_waiting_room_takes_the_outdoor_unit_only_at_its_band_edge(
 
 
 @pytest.mark.parametrize(
-    ("lounge_demand", "direction"),
+    ("office_demand", "lounge_demand", "direction"),
     [
         # The lounge is heating: the case Cooling priority is for.
-        ("on", "heat"),
+        ("off", "on", "heat"),
         # Nothing is calling, but the idle outdoor unit can still hold heating
         # for a master unit the blueprint cannot see. `direction != 'cool'`
         # stands the heating side down here too, on purpose - see the comment
         # above `priority_ready`.
-        ("off", "none"),
+        ("off", "off", "none"),
+        # The office was the unit heating, and its demand is still on when the
+        # change to cooling arrives. That demand is from heating, not cooling.
+        # Until 0.10.9 it made the direction 'cool' and nothing stood down.
+        # [HW, 2026-10-11, the kitchen]
+        ("on", "off", "none"),
     ],
 )
 async def test_cooling_priority_stands_the_heating_side_down(
@@ -437,6 +442,7 @@ async def test_cooling_priority_stands_the_heating_side_down(
     device_registry: dr.DeviceRegistry,
     entity_registry: er.EntityRegistry,
     freezer: FrozenDateTimeFactory,
+    office_demand: str,
     lounge_demand: str,
     direction: str,
 ) -> None:
@@ -453,7 +459,9 @@ async def test_cooling_priority_stands_the_heating_side_down(
         hass, device_registry, entity_registry, entry, "lounge", "heat", 20, 21
     )
     freezer.tick(timedelta(minutes=30))
+    hass.states.async_set(office[1], office_demand)
     hass.states.async_set(lounge[1], lounge_demand)
+    freezer.tick(timedelta(minutes=5))
 
     from_state = hass.states.get(office[0])
     hass.states.async_set(

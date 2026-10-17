@@ -1,0 +1,193 @@
+blueprint:
+  name: MHI airflow by mode
+  author: smdev0925
+  homeassistant:
+    min_version: "2024.12.0"
+  description: >-
+    **Version 3.0.0** — 10 October 2026
+
+
+    Sets the fan speed and air direction whenever a unit changes mode. Open
+    each mode below and pick what you want. Anything left on **No change** is
+    left alone.
+
+
+    You can add more than one unit if they should all behave the same way. For
+    a unit that needs different settings, create another automation from this
+    blueprint.
+
+
+    It only acts when the mode changes. If you adjust the fan or direction
+    yourself afterwards, your change sticks until the next mode change.
+
+
+    It never changes the mode itself, so it is fine to run alongside the AUTO
+    replacement or the lockout resolver.
+  domain: automation
+  input:
+    units:
+      name: Units
+      icon: mdi:hvac
+      input:
+        climate_entities:
+          name: Units
+          description: Every unit you pick here gets the same settings.
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - integration: mitsubishi_wf_rac
+                  domain: climate
+    cool:
+      name: Cooling
+      icon: mdi:snowflake
+      collapsed: true
+      input:
+        cool_fan:
+          name: Fan speed
+          default: keep
+          selector: &fan
+            select:
+              options:
+                - { label: No change, value: keep }
+                - { label: Auto, value: auto }
+                - { label: Quiet, value: quiet }
+                - { label: Low, value: low }
+                - { label: Medium, value: medium }
+                - { label: High, value: high }
+        cool_3d:
+          name: 3D auto
+          description: &three_d >-
+            The unit steers the air up, down, left and right by itself. While
+            this is on, the two direction settings below are ignored. Leaving it
+            off does not switch 3D auto off on the unit — pick a direction below
+            to do that. Units without 3D auto use the directions below instead.
+          default: false
+          selector: &toggle
+            boolean: {}
+        cool_swing:
+          name: Up/down direction
+          description: &swing_help Ignored when 3D auto is on.
+          default: keep
+          selector: &swing
+            select:
+              options:
+                - { label: No change, value: keep }
+                - { label: Swing up and down, value: up_down_auto }
+                - { label: Highest, value: highest }
+                - { label: Middle, value: middle }
+                - { label: Normal, value: normal }
+                - { label: Lowest, value: lowest }
+        cool_horizontal:
+          name: Left/right direction
+          description: &horizontal_help >-
+            Ignored when 3D auto is on. Skipped on units that cannot direct air
+            left and right.
+          default: keep
+          selector: &horizontal
+            select:
+              options:
+                - { label: No change, value: keep }
+                - { label: Swing left and right, value: left_right_auto }
+                - { label: Left-left, value: left_left }
+                - { label: Left-center, value: left_center }
+                - { label: Center-center, value: center_center }
+                - { label: Center-right, value: center_right }
+                - { label: Right-right, value: right_right }
+                - { label: Left-right, value: left_right }
+                - { label: Right-left, value: right_left }
+    heat:
+      name: Heating
+      icon: mdi:fire
+      collapsed: true
+      input:
+        heat_fan: { name: Fan speed, default: keep, selector: *fan }
+        heat_3d: { name: 3D auto, description: *three_d, default: false, selector: *toggle }
+        heat_swing: { name: Up/down direction, description: *swing_help, default: keep, selector: *swing }
+        heat_horizontal: { name: Left/right direction, description: *horizontal_help, default: keep, selector: *horizontal }
+    dry:
+      name: Dry
+      icon: mdi:water-percent
+      collapsed: true
+      input:
+        dry_fan: { name: Fan speed, default: keep, selector: *fan }
+        dry_3d: { name: 3D auto, description: *three_d, default: false, selector: *toggle }
+        dry_swing: { name: Up/down direction, description: *swing_help, default: keep, selector: *swing }
+        dry_horizontal: { name: Left/right direction, description: *horizontal_help, default: keep, selector: *horizontal }
+    fan_only:
+      name: Fan only
+      icon: mdi:fan
+      collapsed: true
+      input:
+        fan_only_fan: { name: Fan speed, default: keep, selector: *fan }
+        fan_only_3d: { name: 3D auto, description: *three_d, default: false, selector: *toggle }
+        fan_only_swing: { name: Up/down direction, description: *swing_help, default: keep, selector: *swing }
+        fan_only_horizontal: { name: Left/right direction, description: *horizontal_help, default: keep, selector: *horizontal }
+    auto:
+      name: Auto
+      icon: mdi:thermostat-auto
+      collapsed: true
+      input:
+        auto_fan: { name: Fan speed, default: keep, selector: *fan }
+        auto_3d: { name: 3D auto, description: *three_d, default: false, selector: *toggle }
+        auto_swing: { name: Up/down direction, description: *swing_help, default: keep, selector: *swing }
+        auto_horizontal: { name: Left/right direction, description: *horizontal_help, default: keep, selector: *horizontal }
+
+# Runs in turn, so the last mode change of a unit is the one that stays.
+mode: queued
+max: 25
+
+# A mode change only. Not from unavailable: the hourly reconnect would
+# otherwise undo every change made by hand.
+triggers:
+  - trigger: state
+    entity_id: !input climate_entities
+    not_from: [unavailable, unknown]
+    to: [cool, heat, dry, fan_only, auto]
+
+variables:
+  unit: "{{ trigger.entity_id }}"
+  # mode -> [fan, up/down, left/right, 3D auto]
+  settings:
+    cool: [!input cool_fan, !input cool_swing, !input cool_horizontal, !input cool_3d]
+    heat: [!input heat_fan, !input heat_swing, !input heat_horizontal, !input heat_3d]
+    dry: [!input dry_fan, !input dry_swing, !input dry_horizontal, !input dry_3d]
+    fan_only: [!input fan_only_fan, !input fan_only_swing, !input fan_only_horizontal, !input fan_only_3d]
+    auto: [!input auto_fan, !input auto_swing, !input auto_horizontal, !input auto_3d]
+  chosen: "{{ settings[trigger.to_state.state] }}"
+  fan: "{{ chosen[0] }}"
+  # 3D auto is one flag for both vanes, and a vane position clears it. So when
+  # it is on, it replaces both vane settings - if the unit has it.
+  three_d: "{{ chosen[3] and '3d_auto' in (state_attr(unit, 'swing_modes') or []) }}"
+  swing: "{{ '3d_auto' if three_d else chosen[1] }}"
+  horizontal: "{{ 'keep' if three_d else chosen[2] }}"
+
+# A setting is sent if the unit lists the value. 'keep' is in no list, and a
+# unit with no horizontal vane has none. Sent even if the unit reads it as set
+# already: some units always read 3D auto as off and the horizontal vane as
+# auto (docs/wf-rac-module-reference.md 6.7).
+actions:
+  - if:
+      - "{{ fan in (state_attr(unit, 'fan_modes') or []) }}"
+    then:
+      - action: climate.set_fan_mode
+        target:
+          entity_id: "{{ unit }}"
+        data:
+          fan_mode: "{{ fan }}"
+  - if:
+      - "{{ swing in (state_attr(unit, 'swing_modes') or []) }}"
+    then:
+      - action: climate.set_swing_mode
+        target:
+          entity_id: "{{ unit }}"
+        data:
+          swing_mode: "{{ swing }}"
+  - if:
+      - "{{ horizontal in (state_attr(unit, 'swing_horizontal_modes') or []) }}"
+    then:
+      - action: climate.set_swing_horizontal_mode
+        target:
+          entity_id: "{{ unit }}"
+        data:
+          swing_horizontal_mode: "{{ horizontal }}"
