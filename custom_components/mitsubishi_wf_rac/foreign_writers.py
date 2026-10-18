@@ -50,6 +50,11 @@ _LOGGER = logging.getLogger(__name__)
 # is happening. See pause_to_settle().
 FOREIGN_ACTIVITY_BACKOFF = timedelta(minutes=3)
 
+# The module's write lock runs this long past the request's `timestamp`, and
+# the `expires` a poll reports is exactly that deadline. Which is what lets a
+# write whose answer never arrived be recognised by the deadline it left.
+WRITE_LOCK_SECONDS: Final = 60
+
 # What the settings look like on a unit that applied an all-zero command block.
 # Every field in it decodes to the lowest value it can hold: power off, mode
 # auto, fan and both vane axes to their first position. The setpoint is not
@@ -139,6 +144,11 @@ class ForeignWriterWatch:
         # a single set-bit, and reading that as "a write happened" is what
         # would leave every change made at the unit unattributable.
         self._wrote_settings_since_last_poll = False
+        # The `expires` values a write of ours could have left when its answer
+        # was lost, and whether that write could have moved a setting. Consumed
+        # by the same poll as the flags above - see note_unanswered_write().
+        self._unanswered_deadlines: tuple[int, int] | None = None
+        self._unanswered_could_move = False
         self._expected_settings: dict[str, Any] | None = None
         # The settings a status request was built from, kept until something
         # has been able to answer for them - see check_request_was_applied().
@@ -166,6 +176,30 @@ class ForeignWriterWatch:
         self._wrote_since_last_poll = True
         if could_move_a_setting:
             self._wrote_settings_since_last_poll = True
+
+    def note_unanswered_write(
+        self, first_stamp: int, last_stamp: int, *, could_move_a_setting: bool
+    ) -> None:
+        """Record a write of ours that went out but came back without an answer.
+
+        The module can carry out a setAirconStat and still fail to answer it:
+        seen as a body with garbage bytes in it, which does not parse, and a
+        timeout looks the same from here. Such a write moves `expires` like
+        any other, and without this the next poll would call it foreign.
+
+        It is claimed only by the deadline it would have left - the stamps the
+        request could have carried, plus the lock duration - rather than by any
+        rise at all, because nothing confirmed it happened. A foreign write
+        lands outside that window unless it was sent in the same second or two.
+        """
+        low = first_stamp + WRITE_LOCK_SECONDS
+        high = last_stamp + WRITE_LOCK_SECONDS
+        if self._unanswered_deadlines is not None:
+            low = min(low, self._unanswered_deadlines[0])
+            high = max(high, self._unanswered_deadlines[1])
+        self._unanswered_deadlines = (low, high)
+        if could_move_a_setting:
+            self._unanswered_could_move = True
 
     def note_own_command(self) -> None:
         """Move the expectation to what the unit reported back to our command.
@@ -250,11 +284,30 @@ class ForeignWriterWatch:
         self._wrote_since_last_poll = False
         wrote_settings = self._wrote_settings_since_last_poll
         self._wrote_settings_since_last_poll = False
+        unanswered = self._unanswered_deadlines
+        self._unanswered_deadlines = None
+        unanswered_could_move = self._unanswered_could_move
+        self._unanswered_could_move = False
 
         known = self._device.account_expires
         expires_moved = (
             isinstance(expires, int) and isinstance(known, int) and expires > known
         )
+        if (
+            expires_moved
+            and not wrote
+            and unanswered is not None
+            and unanswered[0] <= expires <= unanswered[1]
+        ):
+            _LOGGER.debug(
+                "[%s]: expires moved %s -> %s, matching a write of ours whose "
+                "answer was lost",
+                self._device.device_name,
+                known,
+                expires,
+            )
+            wrote = True
+            wrote_settings = wrote_settings or unanswered_could_move
         if expires_moved and not wrote:
             self._note_foreign_write(f"expires moved {known} -> {expires}")
         # Not `expires_moved or wrote`: our own operation-data request moves

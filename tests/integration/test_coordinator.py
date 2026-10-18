@@ -37,6 +37,7 @@ from pywfrac import (
     WfRacCommandError,
     WfRacConnectionError,
     WfRacError,
+    WfRacMalformedResponseError,
     WfRacRegistrationError,
     WfRacWriteRefusedError,
 )
@@ -1618,6 +1619,88 @@ async def test_rising_expires_after_our_own_write_is_not_foreign_activity(device
     await device.update()
 
     assert device.foreign_activity is False
+
+
+async def test_rising_expires_after_our_unanswered_write_is_not_foreign_activity(
+    device, freezer
+):
+    """The module can carry out a write and answer it with a body that does not
+    parse. `expires` then moves to exactly that write's deadline, which must
+    still count as ours.
+    """
+    freezer.move_to("2026-10-18 12:08:15+00:00")
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_000
+    )
+    await device.update()
+    device._api.send_airco_command = AsyncMock(
+        side_effect=WfRacMalformedResponseError("not JSON")
+    )
+
+    with pytest.raises(WfRacError):
+        await device.set_airco({AirconCommands.Operation: True}, log_failure=False)
+
+    deadline = round(dt_util.utcnow().timestamp()) + 60
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, deadline
+    )
+    await device.update()
+
+    assert device.foreign_activity is False
+
+
+async def test_unanswered_write_does_not_cover_another_deadline(device, freezer):
+    """An unanswered write claims only the deadline it could have left - a rise
+    to any other value is still somebody else's.
+    """
+    freezer.move_to("2026-10-18 12:08:15+00:00")
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_000
+    )
+    await device.update()
+    device._api.send_airco_command = AsyncMock(
+        side_effect=WfRacConnectionError("timeout")
+    )
+
+    with pytest.raises(WfRacError):
+        await device.set_airco({AirconCommands.Operation: True}, log_failure=False)
+
+    deadline = round(dt_util.utcnow().timestamp()) + 60
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, deadline + 20
+    )
+    await device.update()
+
+    assert device.foreign_activity is True
+
+
+async def test_refused_write_claims_no_deadline(device, freezer):
+    """A refused write was not carried out, so it cannot explain a rise in
+    `expires` - not even one to its own deadline.
+    """
+    freezer.move_to("2026-10-18 12:08:15+00:00")
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_000
+    )
+    await device.update()
+    device._api.send_airco_command = AsyncMock(
+        side_effect=WfRacWriteRefusedError("result 12")
+    )
+
+    with pytest.raises(WfRacError):
+        await device.set_airco(
+            {AirconCommands.Operation: True},
+            log_failure=False,
+            retry_when_locked=False,
+        )
+
+    deadline = round(dt_util.utcnow().timestamp()) + 60
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, deadline
+    )
+    await device.update()
+
+    assert device.foreign_activity is True
 
 
 async def test_unchanged_expires_is_not_foreign_activity(device):

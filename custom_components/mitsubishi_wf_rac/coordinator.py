@@ -1146,6 +1146,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 raise ValueError("Airco object is empty")
 
             airco_stat = self._build_command(params)
+            # The earliest `timestamp` any send below can stamp, the same way
+            # pywfrac stamps it - for claiming the write if its answer is lost.
+            first_stamp = round(dt_util.utcnow().timestamp()) + timestamp_offset
+            confirmed = False
 
             try:
                 command = self._parser.to_base64(airco_stat)
@@ -1197,6 +1201,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     could_move_a_setting=not is_status_request
                     or self._parser.status_request_carries_state
                 )
+                confirmed = True
                 new_airco = self._parser.translate_bytes(response)
                 self._carry_forward_home_leave_mode(new_airco)
                 self.service_data.carry_forward(new_airco)
@@ -1222,6 +1227,17 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # is there.
                 self._record_reachable()
             except (WfRacError, KeyError, TypeError, ValueError) as ex:
+                # A refusal is the one failure known not to have been carried
+                # out. Anything else may have reached the unit and been applied
+                # with only the answer lost - seen as a body that does not
+                # parse, while `expires` moved to exactly this write's deadline.
+                if not confirmed and not isinstance(ex, WfRacWriteRefusedError):
+                    self.foreign_writers.note_unanswered_write(
+                        first_stamp,
+                        round(dt_util.utcnow().timestamp()) + timestamp_offset,
+                        could_move_a_setting=not is_status_request
+                        or self._parser.status_request_carries_state,
+                    )
                 if log_failure:
                     _LOGGER.warning("Could not send airco data: %s", str(ex))
                 raise
