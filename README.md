@@ -525,6 +525,14 @@ problem: the module mishandles WiFi roaming and steering management frames. Reco
 - Blocking the module's outbound internet access at the router removes these outages in some
   setups; this integration only needs LAN access. The hourly reassociation continues either way.
 
+# Without Home Assistant
+
+Other projects talk to the same module locally:
+
+- [AirLAN](https://github.com/erdtsieck/airlan): Android app, built on [pywfrac](https://github.com/blues-sechseck/pywfrac)
+- [homebridge-mhi-wfrac](https://github.com/JobDoesburg/homebridge-mhi-wfrac): Homebridge plugin for Apple Home
+- [ioBroker.mhi-wfrac](https://github.com/hacki11/ioBroker.mhi-wfrac): ioBroker adapter
+
 # Protocol reference
 
 If you are writing your own client against the WF-RAC module — or building a CNS/SPI replacement
