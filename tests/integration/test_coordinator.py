@@ -1703,6 +1703,38 @@ async def test_refused_write_claims_no_deadline(device, freezer):
     assert device.foreign_activity is True
 
 
+async def test_refused_status_request_claims_its_deadline(device, freezer):
+    """A status request refused with result 12 can still take the write lock -
+    seen on units with an external temperature in the frame (#421). Its own
+    deadline must count as ours, or every refusal pauses operation data.
+    """
+    freezer.move_to("2026-10-18 12:08:15+00:00")
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, 1_000
+    )
+    await device.update()
+    device._api.send_airco_command = AsyncMock(
+        side_effect=WfRacWriteRefusedError("result 12")
+    )
+
+    with pytest.raises(WfRacError):
+        await device.set_airco(
+            {},
+            log_failure=False,
+            timestamp_offset=-55,
+            is_status_request=True,
+            retry_when_locked=False,
+        )
+
+    deadline = round(dt_util.utcnow().timestamp()) - 55 + 60
+    device._api.get_aircon_stats.return_value = _stats_response_with_expires(
+        OFF_PAYLOAD, deadline
+    )
+    await device.update()
+
+    assert device.foreign_activity is False
+
+
 async def test_unchanged_expires_is_not_foreign_activity(device):
     device._api.get_aircon_stats.return_value = _stats_response_with_expires(
         OFF_PAYLOAD, 1_000
