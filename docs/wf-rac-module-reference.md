@@ -334,10 +334,26 @@ CRC16-CCITT, appended **little-endian** to each block: `[APP]`
 | Init | `0xFFFF` |
 | Reflect in / out | no / no |
 | Final XOR | none |
-| Covers | the block's own bytes only (state + count + segments) |
+| Covers | the block's own bytes only (state + count + segments) — except the RECEIVE CRC in a device response, below |
 
 The bridge MCU verifies the COMMAND block's CRC before doing anything with it.
 `[FW]`
+
+**The RECEIVE CRC in a device response starts two bytes early.** The bridge MCU
+computes it from a fixed buffer offset of 23 over `19 + 4 × rx_seg_count` bytes,
+while the RECEIVE block itself starts at 25 (the response's COMMAND block always
+carries one segment). So it covers the COMMAND CRC and all of the RECEIVE block
+except its last two bytes, and is stored right after the block as usual. Same
+code in MCU 131 and 200. `[FW]` Checked against live captures:
+`crc(data[23:54])` matches the stored value of a 58-byte response. `[HW]`
+
+```python
+rx_crc_ok = crc16(data[23 : len(data) - 4]) == int.from_bytes(data[-2:], "little")
+```
+
+Neither the official app nor pywfrac checks this CRC, and it cannot detect
+damage to the last two RECEIVE bytes. Frames you send are unaffected: each of
+their blocks carries a CRC over its own bytes.
 
 ### 3.3 The "nothing to send" sentinel
 
