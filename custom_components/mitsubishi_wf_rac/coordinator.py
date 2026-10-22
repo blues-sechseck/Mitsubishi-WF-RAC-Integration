@@ -1231,7 +1231,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # out. Anything else may have reached the unit and been applied
                 # with only the answer lost - seen as a body that does not
                 # parse, while `expires` moved to exactly this write's deadline.
-                if not confirmed and not isinstance(ex, WfRacWriteRefusedError):
+                # A status request is the exception to the exception: with an
+                # external temperature in the frame the module refuses it with
+                # result 12 and still takes the write lock (#421).
+                if not confirmed and (
+                    not isinstance(ex, WfRacWriteRefusedError) or is_status_request
+                ):
                     self.foreign_writers.note_unanswered_write(
                         first_stamp,
                         round(dt_util.utcnow().timestamp()) + timestamp_offset,
