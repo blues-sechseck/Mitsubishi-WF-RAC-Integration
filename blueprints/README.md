@@ -51,6 +51,15 @@ who use them on their own systems.
   seen to fire on hardware**, nor has a genuine recovery from a stranded unit,
   nor the dry block.
 
+- **[MHI airflow by mode](automation/smdev0925/mhi-airflow-by-mode.yaml)**
+  by [smdev0925](https://github.com/smdev0925) — sets the fan speed and air
+  direction whenever a unit changes mode. Each mode has its own fan speed,
+  up/down and left/right direction, and a 3D auto switch; anything left on
+  "No change" is left alone. Units that should behave the same share one
+  automation; a unit with different settings gets its own. It never changes a
+  mode, so it runs alongside either blueprint above. Running on a four-head
+  SCM80.
+
 ## Why they live here and not in the integration
 
 The integration reports what a unit says and sends what you ask it to. It does
