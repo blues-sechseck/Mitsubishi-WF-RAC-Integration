@@ -147,7 +147,7 @@ blueprint:
   homeassistant:
     min_version: "2024.10.0"
   description: >-
-    **Version 0.10.8** — 5 October 2026
+    **Version 0.10.9** — 11 October 2026
 
 
     To keep this up to date automatically, install
@@ -494,7 +494,7 @@ variables:
   # Bumped on every change. It appears at the top of the description, in the
   # trace, and at the front of every logbook entry, so the version actually
   # running can be read off a live system rather than assumed.
-  version: "0.10.8"
+  version: "0.10.9"
 
   climate_entities: !input climate_entities
   cool_limit: !input cool_limit
@@ -590,6 +590,7 @@ variables:
                         or (d.state == 'off' and since < release_grace_minutes)),
              'on': d is not none and d.state == 'on',
              'since': since | round(1),
+             'stale': (dwell | round(1)) < (since | round(1)) - 1,
              'after': want if (want != mode and dwell >= dwell_minutes) else mode,
              'temp': temp,
              'target': target,
@@ -645,8 +646,9 @@ variables:
   # shows the last mode of the compressor. The blueprint reads this value only
   # when all units are quiet, which is the only time that it is correct.
   #
-  # A unit whose mode changed AFTER its demand last changed is skipped: it ran
-  # in its old mode, and its current mode says nothing about the side that ran.
+  # A unit whose mode changed AFTER its demand last changed is skipped (`stale`):
+  # it ran in its old mode, and its current mode says nothing about the side
+  # that ran.
   # Until 0.10.1 it was not skipped. A unit set from heating to cooling became
   # "cooling operated last", so the lockout chose to stand down the units that
   # had just asked for cooling - held back only by the cooldown - and Cooling
@@ -655,7 +657,7 @@ variables:
   last_served: >-
     {% set ns = namespace(t=99999, mode='none') %}
     {% for f in fleet %}
-      {% if f.since < ns.t and f.dwell >= f.since - 1 %}
+      {% if f.since < ns.t and not f.stale %}
         {% set ns.t = f.since %}
         {% set ns.mode = f.mode %}
       {% endif %}
@@ -732,9 +734,18 @@ variables:
   # the units inside their release grace decide. Until 0.10.4 both counted
   # together and heating won a tie, so a heating unit whose demand had stopped
   # minutes ago made "heating" the direction while cooling ran.
+  #
+  # A `stale` unit does not count, for the same reason as in last_served: its
+  # demand is from its old mode. Until 0.10.9 it counted. The kitchen passed
+  # its Heating Limit and was changed to cooling, and its heating demand stayed
+  # on for two more seconds. [HW, 2026-10-11] With no other demand on, the run
+  # started by that change read "cooling has the outdoor unit", Cooling
+  # priority did not fire, and the heating side kept the outdoor unit.
   direction: >-
-    {% set r = fleet | selectattr('on') | map(attribute='mode') | list %}
-    {% set m = r if r | count > 0 else in_use | map(attribute='mode') | list %}
+    {% set live = fleet | rejectattr('stale') | list %}
+    {% set r = live | selectattr('on') | map(attribute='mode') | list %}
+    {% set m = r if r | count > 0
+               else live | selectattr('calling') | map(attribute='mode') | list %}
     {{ 'heat' if 'heat' in m else 'cool' if 'cool' in m else 'none' }}
 
   # --- a room outside its band gets its turn ---------------------------------
