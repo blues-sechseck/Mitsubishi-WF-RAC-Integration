@@ -20,7 +20,11 @@ from homeassistant.components.automation.config import (
 )
 from homeassistant.components.blueprint import models
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    condition,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.template import Template
 from homeassistant.util.yaml import loader
 
@@ -33,6 +37,7 @@ LOCKOUT = next(p for p in BLUEPRINTS if p.name == "mhi-multi-split-mode-lockout.
 AUTO_REPLACEMENT = next(
     p for p in BLUEPRINTS if p.name == "mhi-multi-split-auto-replacement.yaml"
 )
+AIRFLOW = next(p for p in BLUEPRINTS if p.name == "mhi-airflow-by-mode.yaml")
 
 HEADS = {
     "bedroom": ("cooling", "off"),
@@ -491,3 +496,98 @@ async def test_cooling_priority_stands_the_heating_side_down(
         "ACT cooling priority: office_thermostat changed to cooling, so "
         "lounge_thermostat stands down now"
     )
+
+
+# The airflow blueprint. Its variables are built from nested inputs, so these
+# tests take the automation the blueprint produces, not the raw variables block.
+
+
+def _airflow(unit: str, **inputs) -> dict:
+    """The automation for one unit, every setting at its default unless given."""
+    blueprint = _load(AIRFLOW)
+    return PLATFORM_SCHEMA(
+        models.BlueprintInputs(
+            blueprint,
+            {
+                "use_blueprint": {
+                    "path": AIRFLOW.name,
+                    "input": {"climate_entities": [unit]} | inputs,
+                }
+            },
+        ).async_substitute()
+    )
+
+
+async def test_the_airflow_blueprint_skips_a_unit_that_was_just_created(
+    hass: HomeAssistant,
+) -> None:
+    """Reloading the entry, or a restart, creates the climate entity again. It
+    has no old state, which `not_from` lets through, and the run would put the
+    mode's settings back over a change made by hand.
+    """
+    unit = "climate.office"
+    hass.states.async_set(unit, "cool")
+    automation = _airflow(unit)
+    (passes,) = [
+        await condition.async_from_config(hass, c) for c in automation["conditions"]
+    ]
+
+    def trigger(from_state):
+        return {
+            "trigger": {
+                "entity_id": unit,
+                "from_state": from_state,
+                "to_state": hass.states.get(unit),
+            }
+        }
+
+    assert passes(hass, trigger(None)) is False
+    hass.states.async_set(unit, "heat")
+    from_state = hass.states.get(unit)
+    hass.states.async_set(unit, "cool")
+    assert passes(hass, trigger(from_state)) is True
+
+
+@pytest.mark.parametrize(
+    ("swing_modes", "three_d", "swing", "horizontal"),
+    [
+        # 3D auto replaces both vane settings.
+        (["highest", "3d_auto"], True, "3d_auto", "keep"),
+        # Switched off, the vane settings are sent as they are.
+        (["highest", "3d_auto"], False, "highest", "right_right"),
+        # A unit without 3D auto uses the vane settings instead.
+        (["highest"], True, "highest", "right_right"),
+    ],
+)
+async def test_3d_auto_replaces_both_vanes_only_on_a_unit_that_has_it(
+    hass: HomeAssistant,
+    swing_modes: list,
+    three_d: bool,
+    swing: str,
+    horizontal: str,
+) -> None:
+    """Cooling is set to the highest vane, right-right, and 3D auto as given."""
+    unit = "climate.office"
+    hass.states.async_set(unit, "heat")
+    from_state = hass.states.get(unit)
+    hass.states.async_set(unit, "cool", {"swing_modes": swing_modes})
+    automation = _airflow(
+        unit,
+        cool_3d=three_d,
+        cool_swing="highest",
+        cool_horizontal="right_right",
+    )
+
+    variables = automation["variables"].async_render(
+        hass,
+        {
+            "trigger": {
+                "entity_id": unit,
+                "from_state": from_state,
+                "to_state": hass.states.get(unit),
+            }
+        },
+    )
+
+    assert variables["swing"] == swing
+    assert variables["horizontal"] == horizontal

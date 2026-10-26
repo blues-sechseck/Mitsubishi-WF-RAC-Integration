@@ -4,7 +4,7 @@ blueprint:
   homeassistant:
     min_version: "2024.12.0"
   description: >-
-    **Version 3.0.0** — 10 October 2026
+    **Version 3.0.1** — 26 October 2026
 
 
     Sets the fan speed and air direction whenever a unit changes mode. Open
@@ -144,6 +144,11 @@ triggers:
     entity_id: !input climate_entities
     not_from: [unavailable, unknown]
     to: [cool, heat, dry, fan_only, auto]
+
+# Not when the entity is created: a reload of the entry, or a restart. It has
+# no old state then, and not_from lets that through.
+conditions:
+  - "{{ trigger.from_state is not none }}"
 
 variables:
   unit: "{{ trigger.entity_id }}"
