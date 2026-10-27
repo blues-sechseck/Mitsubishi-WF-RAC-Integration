@@ -18,6 +18,7 @@ from pywfrac import (
     SERVICE_DATA_DEFROST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
+    SERVICE_DATA_HOT_START,
     SERVICE_DATA_HUMIDITY,
     SERVICE_DATA_INDOOR_COIL_RAW,
     SERVICE_DATA_OUTDOOR_COIL_RAW,
@@ -104,9 +105,10 @@ def test_the_request_never_exceeds_the_budget(platform_device):
 
 def test_the_codes_left_out_of_a_full_request_lead_the_next(platform_device):
     channel = platform_device.service_data
-    # None read yet. Defrost is held back by its condition, so it is not one
-    # of the codes competing for the slots here.
-    codes = [c for c in SERVICE_DATA_INTERVALS if c != SERVICE_DATA_DEFROST]
+    # None read yet. Defrost and hot start are held back by their conditions,
+    # so they are not among the codes competing for the slots here.
+    held_back = {SERVICE_DATA_DEFROST, SERVICE_DATA_HOT_START}
+    codes = [c for c in SERVICE_DATA_INTERVALS if c not in held_back]
     assert len(codes) == SERVICE_DATA_BUDGET + 1
     _prove(channel, *codes)
 
@@ -121,7 +123,8 @@ def test_the_codes_left_out_of_a_full_request_lead_the_next(platform_device):
 
 def test_with_ten_or_fewer_due_codes_everything_goes_sorted(platform_device):
     channel = platform_device.service_data
-    codes = sorted(c for c in SERVICE_DATA_CODES if c != SERVICE_DATA_DEFROST)[
+    held_back = {SERVICE_DATA_DEFROST, SERVICE_DATA_HOT_START}
+    codes = sorted(c for c in SERVICE_DATA_CODES if c not in held_back)[
         :SERVICE_DATA_BUDGET
     ]
 
@@ -370,7 +373,9 @@ async def test_an_armed_override_keeps_a_code_in_every_poll(
             SERVICE_DATA_INDOOR_COIL_RAW, dt_util.utcnow()
         )
 
-    assert sent == [(SERVICE_DATA_INDOOR_COIL_RAW,)] * 3
+    # Which code carries the frame is the unit's most overdue one - the
+    # piggyback dependency may be it - but one always does.
+    assert [len(codes) for codes in sent] == [1] * 3
 
 
 async def test_without_an_override_nothing_due_sends_nothing(

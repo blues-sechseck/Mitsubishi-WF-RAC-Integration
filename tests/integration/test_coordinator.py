@@ -1529,7 +1529,10 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
 
     set_airco.assert_awaited_once_with(
         {
+            # The compressor reading is the defrost code's dependency, which
+            # rides along with every request.
             AirconCommands.ServiceDataStatusRequest: (
+                SERVICE_DATA_COMPRESSOR_FREQ,
                 SERVICE_DATA_EEV_PULSES,
                 SERVICE_DATA_HOT_GAS_TEMP,
             )
@@ -1569,7 +1572,11 @@ async def test_raw_service_data_sensor_requests_its_segment_code(
     await asyncio.sleep(0.05)
 
     set_airco.assert_awaited_once_with(
-        {AirconCommands.ServiceDataStatusRequest: (code,)},
+        {
+            AirconCommands.ServiceDataStatusRequest: tuple(
+                sorted({code, SERVICE_DATA_COMPRESSOR_FREQ})
+            )
+        },
         log_failure=False,
         timestamp_offset=-round(
             coordinator_module.SERVICE_DATA_STAMP_BACKDATE.total_seconds()

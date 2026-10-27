@@ -29,6 +29,7 @@ from pywfrac import (
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
     SERVICE_DATA_HOT_GAS_TEMP,
+    SERVICE_DATA_HOT_START,
     SERVICE_DATA_HUMIDITY,
     SERVICE_DATA_INDOOR_COIL_OUTLET_RAW,
     SERVICE_DATA_INDOOR_COIL_RAW,
@@ -39,6 +40,7 @@ from pywfrac import (
     Aircon,
     ServiceDataRefusals,
     defrost_possible,
+    hot_start_possible,
 )
 
 from homeassistant.helpers import issue_registry as ir
@@ -144,6 +146,8 @@ SERVICE_DATA_INTERVALS: Final[dict[int, timedelta]] = {
     SERVICE_DATA_OUTDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_MEDIUM,
     SERVICE_DATA_HUMIDITY: SERVICE_DATA_INTERVAL_MEDIUM,
     SERVICE_DATA_DEFROST: SERVICE_DATA_INTERVAL_MEDIUM,
+    # A hot start lasts one to four minutes, so anything slower can miss it.
+    SERVICE_DATA_HOT_START: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW: SERVICE_DATA_INTERVAL_SLOW,
     SERVICE_DATA_PROTECTION_RAW: SERVICE_DATA_INTERVAL_SLOW,
     SERVICE_DATA_SILENT_OPERATION: SERVICE_DATA_INTERVAL_SLOW,
@@ -159,6 +163,7 @@ SERVICE_DATA_DUE_TOLERANCE: Final = MIN_TIME_BETWEEN_UPDATES / 2
 # the last reading. Codes without an entry are always eligible.
 SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {
     SERVICE_DATA_DEFROST: defrost_possible,
+    SERVICE_DATA_HOT_START: hot_start_possible,
 }
 
 # Codes whose condition above reads another code, which therefore has to be
@@ -166,6 +171,13 @@ SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {
 SERVICE_DATA_DEPENDS_ON: Final[dict[int, tuple[int, ...]]] = {
     SERVICE_DATA_DEFROST: (SERVICE_DATA_COMPRESSOR_FREQ,),
 }
+
+
+# Codes the climate entity's hvac_action reads. It must never cause a request
+# of its own: every operation-data request takes the unit's 60-second write
+# lock and locks other clients out. They are asked only inside a request that
+# goes out anyway, for an enabled sensor or an armed temperature override.
+SERVICE_DATA_PIGGYBACK_CODES: Final = (SERVICE_DATA_HOT_START, SERVICE_DATA_DEFROST)
 
 
 def service_data_interval(code: int) -> timedelta:
@@ -182,6 +194,8 @@ def service_data_expiry(code: int) -> timedelta:
 SERVICE_DATA_FIELDS = (
     "Defrosting",
     "DefrostingRaw",
+    "HotStart",
+    "HotStartRaw",
     "SilentOperation",
     "IndoorHumidity",
     "IndoorHumidityRaw",
@@ -235,6 +249,11 @@ RESEARCH_SERVICE_DATA_CODES: Final = (
 )
 RESEARCH_CONTEXT: Final = "research_data"
 
+# Research codes asked in every request once they answer, instead of waiting
+# for their turn in the rotation: 0x0D shows a state for about ten minutes
+# after some heating starts, shorter than one trip through the rotation.
+RESEARCH_PINNED_CODES: Final = (0x0D,)
+
 
 # A single code is written off only after this many refusals: result 11 is
 # also what a request gets while another client holds the write lock.
@@ -264,24 +283,36 @@ class ResearchData:
     def request_codes(
         self, slots: int = RESEARCH_BATCH_SIZE, *, allow_untested: bool = True
     ) -> tuple[int, ...]:
-        """One untested code alone, or else a rotating batch of answering ones.
+        """Pinned codes, then one untested code or a rotating batch.
 
         At most `slots` codes, the room the regular codes leave in the
         request. An untested code is only tried when nothing else in the
-        request is unproven (`allow_untested`), so a refusal has one suspect.
+        request is unproven (`allow_untested`), so a refusal has one suspect;
+        an answering pinned code is proven and does not count.
         """
         if slots <= 0:
             return ()
+        pinned = self._pinned_ok()[:slots]
+        slots -= len(pinned)
         untested = [code for code, state in self.states.items() if state == "untested"]
-        if untested and allow_untested:
-            return (untested[0],)
-        ok = [code for code, state in self.states.items() if state == "ok"]
-        if not ok:
-            return ()
+        if untested and allow_untested and slots:
+            return (*pinned, untested[0])
+        ok = [
+            code
+            for code, state in self.states.items()
+            if state == "ok" and code not in pinned
+        ]
+        if not ok or not slots:
+            return pinned
         count = min(slots, len(ok))
         start = self._rotation % len(ok)
         self._rotation += count
-        return tuple((ok + ok)[start : start + count])
+        return (*pinned, *(ok + ok)[start : start + count])
+
+    def _pinned_ok(self) -> tuple[int, ...]:
+        return tuple(
+            code for code in RESEARCH_PINNED_CODES if self.states.get(code) == "ok"
+        )
 
     def note_answer(self, airco: Aircon) -> None:
         """Keep every research segment the frame carried."""
@@ -295,7 +326,14 @@ class ResearchData:
             self._refusals.pop(code, None)
 
     def note_refused(self, requested: tuple[int, ...]) -> None:
-        """Count a refusal against a lone code; a batch goes back to untested."""
+        """Count a refusal against a lone code; a batch goes back to untested.
+
+        Answering pinned codes are not suspects, unless nothing else was asked.
+        """
+        pinned = self._pinned_ok()
+        suspects = tuple(code for code in requested if code not in pinned)
+        if suspects:
+            requested = suspects
         if len(requested) == 1:
             code = requested[0]
             self._refusals[code] = self._refusals.get(code, 0) + 1
@@ -319,6 +357,7 @@ class ResearchData:
 # all: the raw field is set whenever the segment arrived.
 SERVICE_DATA_DERIVED_FROM = {
     "Defrosting": "DefrostingRaw",
+    "HotStart": "HotStartRaw",
     "IndoorHumidity": "IndoorHumidityRaw",
     "IndoorCoilTemp": "IndoorCoilRaw",
     "IndoorCoilOutletTemp": "IndoorCoilOutletRaw",

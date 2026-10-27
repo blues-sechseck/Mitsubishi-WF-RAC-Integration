@@ -6,6 +6,7 @@ import pytest
 from pywfrac import (
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_DEFROST,
+    SERVICE_DATA_HOT_START,
     Aircon,
     defrost_possible,
 )
@@ -68,7 +69,13 @@ async def test_subscribing_defrost_also_requests_the_compressor_reading(
     remove = platform_device.async_add_listener(lambda: None, SERVICE_DATA_DEFROST)
     try:
         assert platform_device._subscribed_service_data_codes() == tuple(
-            sorted((SERVICE_DATA_DEFROST, SERVICE_DATA_COMPRESSOR_FREQ))
+            sorted(
+                (
+                    SERVICE_DATA_DEFROST,
+                    SERVICE_DATA_COMPRESSOR_FREQ,
+                    SERVICE_DATA_HOT_START,
+                )
+            )
         )
     finally:
         remove()

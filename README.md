@@ -56,6 +56,12 @@ See [Github To Do & Bug List](https://github.com/blues-sechseck/Mitsubishi-WF-RA
 This integration is part of the HACS default list — no custom repository needed. In HACS, go to
 **Integrations**, search for **"Mitsubishi WF-RAC"**, and install it from there.
 
+From Home Assistant 2026.11 HACS ships built in as the Marketplace, where this integration is found
+the same way. After an update, Home Assistant needs a restart; a repair reminds you.
+
+Beta releases are offered only after you enable the **Pre-release** entity on the repository's
+device page in HACS.
+
 Needs Home Assistant **2026.4** or newer. That is the oldest release the test suite runs against,
 so it is a version this has actually been shown to work on rather than one it is merely hoped to.
 
@@ -116,7 +122,7 @@ This integration creates one device per airco with the following entities.
 | | `current_temperature` | °C | Indoor temperature as measured by the unit, corrected by the "Indoor Temp. Sensor Offset" option if set. |
 | | `preset_mode` | `none`, `away` | Only on units that report the Vacant bit. `away` is the unit's own Home Leave Mode, entered with the away-target of the direction the unit is currently running in - so it needs `cool` or `heat`, and refuses in `auto`/`dry`/`fan_only`. The Home Leave Mode select names the direction explicitly and works from any mode. |
 | | `target_temperature` step | 0.5 °C | The setpoint travels the wire in 0.5 K steps; anything finer is truncated by the unit. |
-| | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `drying`, `fan` | What the unit is actually doing right now. `idle` means the unit is on but the compressor is stopped (e.g. setpoint satisfied) - same signal as the Compressor Demand binary sensor below. In `auto` mode, `cooling`/`heating` reflects the unit's own cool/heat decision, not just the configured mode. |
+| | `hvac_action` | `off`, `idle`, `cooling`, `heating`, `preheating`, `defrosting`, `drying`, `fan` | What the unit is actually doing right now. `idle` means the unit is on but the compressor is stopped (e.g. setpoint satisfied) - same signal as the Compressor Demand binary sensor below. `preheating` means the unit holds the fan back after a heating start until the indoor coil is warm; `defrosting` means the outdoor unit is defrosting. Those two come from operation data and show up only while at least one operation-data sensor is enabled: they ride along on requests that go out anyway, and the climate entity never causes a request of its own. In `auto` mode, `cooling`/`heating` reflects the unit's own cool/heat decision, not just the configured mode. |
 
 ## Sensors
 

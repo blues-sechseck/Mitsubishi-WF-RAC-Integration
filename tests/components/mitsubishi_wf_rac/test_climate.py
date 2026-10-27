@@ -440,6 +440,50 @@ async def test_commands_issued_together_become_one_command(
         pytest.param(
             {**RUNNING_HEAT, "CompressorRunning": True}, HVACAction.HEATING, id="heat"
         ),
+        pytest.param(
+            {**RUNNING_HEAT, "HotStart": True}, HVACAction.PREHEATING, id="hot-start"
+        ),
+        pytest.param(
+            {**RUNNING_HEAT, "HotStart": True, "CompressorRunning": True},
+            HVACAction.PREHEATING,
+            id="hot-start-compressor-running",
+        ),
+        pytest.param(
+            {
+                "Operation": True,
+                "OperationMode": OperationMode.AUTO,
+                "CoolHotJudge": True,
+                "HotStart": True,
+            },
+            HVACAction.PREHEATING,
+            id="hot-start-auto-heat",
+        ),
+        pytest.param(
+            {**RUNNING_HEAT, "HotStart": False}, HVACAction.IDLE, id="hot-start-over"
+        ),
+        pytest.param(
+            {**RUNNING_COOL, "CompressorRunning": True, "HotStart": True},
+            HVACAction.COOLING,
+            id="hot-start-while-cooling",
+        ),
+        pytest.param(
+            {**RUNNING_HEAT, "HotStart": True, "Defrosting": True},
+            HVACAction.DEFROSTING,
+            id="defrost-before-hot-start",
+        ),
+        pytest.param(
+            {**RUNNING_HEAT, "Defrosting": True}, HVACAction.DEFROSTING, id="defrost"
+        ),
+        pytest.param(
+            {**RUNNING_HEAT, "CompressorRunning": True, "Defrosting": False},
+            HVACAction.HEATING,
+            id="defrost-over",
+        ),
+        pytest.param(
+            {**RUNNING_COOL, "CompressorRunning": True, "Defrosting": True},
+            HVACAction.COOLING,
+            id="defrost-while-cooling",
+        ),
         pytest.param({}, HVACAction.OFF, id="off"),
     ],
 )
