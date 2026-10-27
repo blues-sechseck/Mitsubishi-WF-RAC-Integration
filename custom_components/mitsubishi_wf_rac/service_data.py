@@ -235,6 +235,11 @@ RESEARCH_SERVICE_DATA_CODES: Final = (
 )
 RESEARCH_CONTEXT: Final = "research_data"
 
+# Research codes asked in every request once they answer, instead of waiting
+# for their turn in the rotation: 0x0D shows a state for about ten minutes
+# after some heating starts, shorter than one trip through the rotation.
+RESEARCH_PINNED_CODES: Final = (0x0D,)
+
 
 # A single code is written off only after this many refusals: result 11 is
 # also what a request gets while another client holds the write lock.
@@ -264,24 +269,36 @@ class ResearchData:
     def request_codes(
         self, slots: int = RESEARCH_BATCH_SIZE, *, allow_untested: bool = True
     ) -> tuple[int, ...]:
-        """One untested code alone, or else a rotating batch of answering ones.
+        """Pinned codes, then one untested code or a rotating batch.
 
         At most `slots` codes, the room the regular codes leave in the
         request. An untested code is only tried when nothing else in the
-        request is unproven (`allow_untested`), so a refusal has one suspect.
+        request is unproven (`allow_untested`), so a refusal has one suspect;
+        an answering pinned code is proven and does not count.
         """
         if slots <= 0:
             return ()
+        pinned = self._pinned_ok()[:slots]
+        slots -= len(pinned)
         untested = [code for code, state in self.states.items() if state == "untested"]
-        if untested and allow_untested:
-            return (untested[0],)
-        ok = [code for code, state in self.states.items() if state == "ok"]
-        if not ok:
-            return ()
+        if untested and allow_untested and slots:
+            return (*pinned, untested[0])
+        ok = [
+            code
+            for code, state in self.states.items()
+            if state == "ok" and code not in pinned
+        ]
+        if not ok or not slots:
+            return pinned
         count = min(slots, len(ok))
         start = self._rotation % len(ok)
         self._rotation += count
-        return tuple((ok + ok)[start : start + count])
+        return (*pinned, *(ok + ok)[start : start + count])
+
+    def _pinned_ok(self) -> tuple[int, ...]:
+        return tuple(
+            code for code in RESEARCH_PINNED_CODES if self.states.get(code) == "ok"
+        )
 
     def note_answer(self, airco: Aircon) -> None:
         """Keep every research segment the frame carried."""
@@ -295,7 +312,14 @@ class ResearchData:
             self._refusals.pop(code, None)
 
     def note_refused(self, requested: tuple[int, ...]) -> None:
-        """Count a refusal against a lone code; a batch goes back to untested."""
+        """Count a refusal against a lone code; a batch goes back to untested.
+
+        Answering pinned codes are not suspects, unless nothing else was asked.
+        """
+        pinned = self._pinned_ok()
+        suspects = tuple(code for code in requested if code not in pinned)
+        if suspects:
+            requested = suspects
         if len(requested) == 1:
             code = requested[0]
             self._refusals[code] = self._refusals.get(code, 0) + 1

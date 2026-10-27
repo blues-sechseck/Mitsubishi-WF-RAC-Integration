@@ -30,6 +30,7 @@ from custom_components.mitsubishi_wf_rac.const import DOMAIN, STATUS_REQUEST_STO
 from custom_components.mitsubishi_wf_rac.service_data import (
     RESEARCH_BATCH_SIZE,
     RESEARCH_CONTEXT,
+    RESEARCH_PINNED_CODES,
     RESEARCH_SERVICE_DATA_CODES,
     SERVICE_DATA_MAX_AGE,
     SERVICE_DATA_REQUEST_INTERVAL,
@@ -259,7 +260,7 @@ def test_untested_codes_go_out_alone_and_qualify_on_an_answer():
 
     assert research.states[first] == "ok"
     assert research.values[first] == (0x10, 0x01, 0xFF)
-    assert research.request_codes() == (RESEARCH_SERVICE_DATA_CODES[1],)
+    assert research.request_codes()[-1] == RESEARCH_SERVICE_DATA_CODES[1]
 
 
 def test_a_lone_code_is_dropped_only_after_repeated_refusals():
@@ -281,7 +282,9 @@ def test_a_refused_batch_goes_back_to_untested():
     assert len(batch) == RESEARCH_BATCH_SIZE
     research.note_refused(batch)
 
-    assert all(research.states[code] == "untested" for code in batch)
+    rotated = [code for code in batch if code not in RESEARCH_PINNED_CODES]
+    assert all(research.states[code] == "untested" for code in rotated)
+    assert all(research.states[code] == "ok" for code in RESEARCH_PINNED_CODES)
 
 
 def test_batches_rotate_through_the_answering_codes():
@@ -294,6 +297,37 @@ def test_batches_rotate_through_the_answering_codes():
         seen.update(research.request_codes())
 
     assert seen == set(RESEARCH_SERVICE_DATA_CODES)
+
+
+def test_an_answering_pinned_code_goes_out_with_every_request():
+    research = ResearchData()
+    pinned = RESEARCH_PINNED_CODES[0]
+    research.note_answer(_answer(pinned))
+    for code in RESEARCH_SERVICE_DATA_CODES[1:5]:
+        research.states[code] = "ok"
+
+    untested = research.request_codes()
+    assert untested == (pinned, RESEARCH_SERVICE_DATA_CODES[5])
+
+    for code in RESEARCH_SERVICE_DATA_CODES:
+        research.states[code] = "ok"
+    for _ in range(4):
+        assert research.request_codes()[0] == pinned
+    assert research.request_codes(slots=1) == (pinned,)
+    assert research.request_codes(allow_untested=False)[0] == pinned
+
+
+def test_a_refusal_alongside_a_pinned_code_counts_against_the_other_one():
+    research = ResearchData()
+    pinned = RESEARCH_PINNED_CODES[0]
+    research.note_answer(_answer(pinned))
+    other = RESEARCH_SERVICE_DATA_CODES[1]
+
+    research.note_refused((pinned, other))
+    research.note_refused((pinned, other))
+
+    assert research.states[other] == "refused"
+    assert research.states[pinned] == "ok"
 
 
 # --- beta gating ---------------------------------------------------------------
