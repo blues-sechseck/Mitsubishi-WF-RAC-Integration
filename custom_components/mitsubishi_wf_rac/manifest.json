@@ -1,9 +1,6 @@
 {
   "domain": "mitsubishi_wf_rac",
   "name": "Mitsubishi WF-RAC",
-  "categories": [
-    "climate.heat_pumps_air_conditioning"
-  ],
   "codeowners": [
     "@blues-sechseck"
   ],
