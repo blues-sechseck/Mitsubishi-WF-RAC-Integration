@@ -59,6 +59,7 @@ from .foreign_writers import ForeignWriterWatch
 from .service_data import (
     RESEARCH_CONTEXT,
     SERVICE_DATA_DEPENDS_ON,
+    SERVICE_DATA_PIGGYBACK_CODES,
     ResearchData,
     ServiceDataChannel,
 )
@@ -469,8 +470,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
         One per enabled diagnostic sensor, plus the carrier an armed external
         temperature override holds (see _sync_external_temperature_carrier).
+        Once a request goes out for those, the codes the climate entity reads
+        ride along (SERVICE_DATA_PIGGYBACK_CODES); alone they never cause one.
         """
         codes = set(self.async_contexts()).intersection(SERVICE_DATA_CODES)
+        if codes:
+            codes.update(SERVICE_DATA_PIGGYBACK_CODES)
         for code in tuple(codes):
             codes.update(SERVICE_DATA_DEPENDS_ON.get(code, ()))
         return tuple(sorted(codes))
@@ -720,6 +725,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 SERVICE_DATA_BUDGET - len(regular_codes),
                 allow_untested=not self.service_data.has_unproven(regular_codes),
             )
+        # A pinned or rotating research code may also be a regular one.
+        research_codes = tuple(c for c in research_codes if c not in regular_codes)
         service_data_codes = (*regular_codes, *research_codes)
         if not service_data_codes:
             # Never send an empty request: without codes the frame is no
