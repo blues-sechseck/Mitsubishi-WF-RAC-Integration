@@ -3441,6 +3441,41 @@ async def test_a_plain_home_leave_status_request_reads_nothing_extra(device):
     device._api.get_aircon_stats.assert_not_awaited()
 
 
+async def test_a_home_leave_request_that_clears_the_unit_is_detected(device):
+    """The Home Leave request is the same empty block as the operation-data
+    one, and setup sends it once in strict mode. Without the watch a unit that
+    applies that block went off on every start with nothing in the log
+    (#427)."""
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    device._api.send_airco_command = AsyncMock(return_value=CLEARED_PAYLOAD)
+    await device.async_request_home_leave_mode_status()
+
+    assert device._parser.status_request_carries_state is True
+    assert device.config_entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_ECHO
+
+
+async def test_a_home_leave_request_cleared_only_by_the_next_poll_is_detected(
+    device,
+):
+    """Same timing as the operation-data case: the cleared settings may show
+    up in the following poll rather than in the answer (#329)."""
+    device.config_entry.add_to_hass(device.hass)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    await device.update()
+
+    device._api.send_airco_command = AsyncMock(return_value=ON_COOL_PAYLOAD)
+    await device.async_request_home_leave_mode_status()
+    assert device._parser.status_request_carries_state is False
+
+    device._api.get_aircon_stats.return_value = _stats_response(CLEARED_PAYLOAD)
+    await device.update()
+
+    assert device._parser.status_request_carries_state is True
+
+
 async def test_a_carrying_request_writes_the_settings_back_instead_of_zeros(device):
     """The empty block writes a zero into every field an affected module
     applies; the carrying one writes the unit's own settings back instead.
