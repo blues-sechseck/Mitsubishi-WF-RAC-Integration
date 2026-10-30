@@ -1367,10 +1367,16 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 translation_key="status_request_read_failed",
                 translation_placeholders={"device": self.device_name},
             )
+        # The same frame as the operation-data request, so it needs the same
+        # watch: setup sends it once in strict mode, and on a unit that applies
+        # the empty block that switched it off on every start (#427).
+        before = self.foreign_writers.snapshot()
+        self.foreign_writers.note_status_request(before)
         await self.set_airco(
             {AirconCommands.HomeLeaveModeStatusRequest: True},
             is_status_request=True,
         )
+        self.foreign_writers.check_request_was_applied(before)
 
     async def async_read_home_leave_mode_once(self) -> None:
         """Read Tag 248 once at setup, so away heating has its setting.

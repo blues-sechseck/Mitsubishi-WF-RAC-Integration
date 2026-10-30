@@ -496,8 +496,8 @@ class ForeignWriterWatch:
         if self._device.status_request_mode == STATUS_REQUEST_STRICT:
             self._device.adopt_status_request_mode(STATUS_REQUEST_ECHO)
             _LOGGER.warning(
-                "[%s] applied the settings in the request that asked it for "
-                "operation data, which carries none: %s. From now on that "
+                "[%s] applied the settings in a request that only asked it "
+                "for readings and carries none: %s. From now on that "
                 "request carries the unit's own settings back to it, so the "
                 "frame confirms them instead of clearing them",
                 self._device.device_name,
@@ -506,8 +506,8 @@ class ForeignWriterWatch:
         else:
             self._device.adopt_status_request_mode(STATUS_REQUEST_STOPPED)
             _LOGGER.warning(
-                "[%s] changed its settings during an operation-data request "
-                "that carried its own state: %s. Nothing this integration can "
+                "[%s] changed its settings during a status request that "
+                "carried its own state: %s. Nothing this integration can "
                 "put in that frame leaves the unit alone, so it will not be "
                 "sent again. The operation-data sensors stop updating and the "
                 "unit goes back to its own room sensor; everything else is "
