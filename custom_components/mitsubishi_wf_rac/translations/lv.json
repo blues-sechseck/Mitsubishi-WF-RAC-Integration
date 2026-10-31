@@ -1,0 +1,568 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "Resursdators",
+          "port": "Ports",
+          "force_update": "Ignorēt dublētu IP adresi"
+        },
+        "description": "Lūdzu, ievadiet pareizo informāciju, lai pievienotu gaisa kondicionieri manuāli",
+        "title": "WF-RAC AC savienojuma informācija",
+        "data_description": {
+          "host": "Gaisa kondicioniera bezvadu moduļa lokālā IP adrese. Mainīta adrese tiek atpazīta, kad modulis atkal paziņo par sevi; iestatiet modulim fiksētu adresi maršrutētājā vai labojiet to šeit, ja tā nenotiek.",
+          "port": "Ports, kuru klausās moduļa lokālais API. Atstājiet 51443, ja jūsu modulis nepaziņo citu.",
+          "force_update": "Pievienot šo gaisa kondicionieri, pat ja cits ieraksts jau izmanto šo IP adresi. Paredzēts ierīces pievienošanai no jauna, ja tās vecais ieraksts ir pazudis: modulis pieņem tikai vienu savienojumu vienlaikus, tāpēc divi ieraksti, kas to aptaujā, žurnālā radīs kļūdas."
+        }
+      },
+      "discovery_confirm": {
+        "description": "Atrasts gaisa kondicionieris ar id: {id}, IP: {host} un portu: {port}. Ports parasti ir 51443 — labojiet to zemāk, ja tas izskatās citādi.",
+        "title": "Atrasts WF-RAC gaisa kondicionieris",
+        "data": {
+          "port": "Ports"
+        },
+        "data_description": {
+          "port": "Ports, uz kuru sazināties ar moduli. Parasti tas ir 51443 — labojiet to šeit, ja augstāk paziņotā vērtība izskatās citādi."
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Resursdators",
+          "port": "Ports"
+        },
+        "description": "Atjauniniet šī gaisa kondicioniera savienojuma datus.",
+        "title": "Pārkonfigurēt WF-RAC AC savienojumu",
+        "data_description": {
+          "host": "Gaisa kondicioniera bezvadu moduļa lokālā IP adrese. Mainīta adrese tiek atpazīta, kad modulis atkal paziņo par sevi; iestatiet modulim fiksētu adresi maršrutētājā vai labojiet to šeit, ja tā nenotiek.",
+          "port": "Ports, kuru klausās moduļa lokālais API. Atstājiet 51443, ja jūsu modulis nepaziņo citu."
+        }
+      }
+    },
+    "error": {
+      "unexpected_error": "Radās neparedzēta kļūda. Lūdzu, pārbaudiet žurnālu, lai uzzinātu vairāk.",
+      "cannot_connect": "Neizdevās izveidot savienojumu ar gaisa kondicionieri: {reason}",
+      "invalid_host": "Nederīgs resursdatora nosaukums vai IP adrese",
+      "host_already_configured": "Gaisa kondicioniera IP jau ir konfigurēta kā [{error_name}]",
+      "too_many_devices_registered": "Šim gaisa kondicionierim ir reģistrēts pārāk daudz ierīču. Lūdzu, dzēsiet kādu ierīci (lietotnē) vai atiestatiet moduli uz rūpnīcas iestatījumiem."
+    },
+    "abort": {
+      "existing_instance_updated": "Esošā konfigurācija atjaunināta.",
+      "already_configured": "Pakalpojums jau ir konfigurēts",
+      "reconfigure_successful": "Pārkonfigurēšana bija veiksmīga",
+      "wrong_device": "Šis ir cits gaisa kondicionieris, nevis tas, kuram šis ieraksts tika izveidots. Norādiet atpakaļ uz sākotnējo ierīci vai pievienojiet otru kā atsevišķu ierakstu."
+    }
+  },
+  "issues": {
+    "too_many_devices": {
+      "title": "Ierīcē {device_name} reģistrēts pārāk daudz kontu",
+      "description": "Šai ierīcei ir vieta četriem reģistrētiem kontiem, un visi četri ir aizņemti, tāpēc Home Assistant nevar reģistrēties. Modulis pats nekad neatbrīvo vietu: reģistrācijas nebeidzas, un jauna tiek noraidīta, nevis aizstāj vecāku. Smart M-Air lietotnē noņemiet šo ierīci no tālruņa, kas vairs nav vajadzīgs — katrs konts var noņemt tikai pats sevi, un vairāki tālruņi, kas izmanto vienu Smart M-Air kontu, kopā aizņem vienu vietu. Pēc tam pārlādējiet šo integrāciju. Ja neviens nevar atbrīvot vietu — sen pazudis tālrunis joprojām tur vienu —, modulis ir jāiestata no jauna."
+    },
+    "request_stops_unit": {
+      "title": "{device_name} maina savus iestatījumus, kad tai pieprasa darbības datus",
+      "description": "Diagnostikas sensori kompresoram, strāvai un temperatūrām tiek nolasīti ar papildu pieprasījumu reizi minūtē. Šis pieprasījums nenes nekādus iestatījumus — tas tikai jautā —, taču šis modulis to tomēr piemēro, un katrs tukšs lauks tiek nolasīts kā vērtība: ierīce izslēdzas, režīms pāriet uz auto, ventilators un žalūzijas nokrīt uz pirmo pozīciju, un iestatījuma vērtība nokrīt līdz zemākajai, ko ierīce pieļauj.\n\nHome Assistant ir pārslēdzis šo pieprasījumu tā, lai tas nestu pašas ierīces iestatījumus, nolasītus brīdi pirms nosūtīšanas, tādējādi kadrs tos apstiprina, nevis dzēš. Tādu formu izmanto paša ražotāja lietotne. Iestatījumi, ko pieprasījums bija izdzēsis, ir ierakstīti atpakaļ. Kamēr Home Assistant uzskata, ka ierīce ir izslēgta, pieprasījums netiek sūtīts nemaz, tāpēc šie sensori saglabā pēdējo vērtību, līdz ierīce atkal darbojas.\n\nNekas cits nav jādara — vienkārši vērojiet dažas minūtes. Ja ierīce joprojām pati maina savus iestatījumus, Home Assistant pārtrauks sūtīt pieprasījumu pavisam un paziņos par to šeit."
+    },
+    "status_request_unsupported": {
+      "title": "No {device_name} nevar nolasīt darbības datus",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Vai atkal pieprasīt darbības datus no {device_name}?",
+            "description": "Šī ierīce mainīja savus iestatījumus ikreiz, kad tai pieprasīja darbības datus, pat ja pieprasījums tai atnesa atpakaļ tās pašreizējos iestatījumus, tāpēc Home Assistant ir pārtraucis sūtīt šo pieprasījumu. Ierīce ir atdota savam telpas sensoram: integrācijas opcijās norādītais iekštelpu temperatūras avots tai vairs netiek nodots, un klimata kartīte rāda temperatūru, ko mēra pati ierīce.\n\nKo tas maksā: diagnostikas sensori, ko baro šis pieprasījums (kompresora frekvence, darba strāva, karstās gāzes temperatūra, EEV pozīcija un siltummaiņu temperatūras), vairs netiek atjaunināti. Viss pārējais nav ietekmēts: ieslēgšana/izslēgšana, režīms, temperatūra, ventilators un žalūzijas tiek sūtīti kā parastas komandas.\n\nNoteikšanu var izraisīt arī tas, ka kāds tajā pašā brīdī lieto tālvadības pulti. Lai mēģinātu vēlreiz, iesniedziet šo labojumu: integrācija pārlādējas un vēro no jauna. Ja ierīce atkal izslēdzas vai maina savus iestatījumus, šis ziņojums atgriezīsies — lūdzu, tad ziņojiet par to, norādot sava moduļa programmaparatūras versiju."
+          }
+        }
+      }
+    },
+    "service_data_unanswered": {
+      "title": "No {device_name} nav pieejami darbības dati",
+      "description": "Diagnostikas sensori kompresoram, strāvai, temperatūrām un EEV pozīcijai tiek nolasīti ar papildu pieprasījumu reizi minūtē. Šī ierīce pieņem pieprasījumu un atbild uz to, taču tajā nekad nav atgriezusi nevienu segmentu — tāpēc šie sensori nekad nerādītu vērtību, lai kā arī pieprasījums izskatītos.\n\nHome Assistant ir pārtraucis jautāt. Sensori tagad rāda nepieejams, nevis nezināms, un tā ir godīga atšķirība: rādījums nav kavējies, tā vienkārši nav. Varat tos atspējot šajā ierīcē; nekas netiek zaudēts, un tie pazūd no redzesloka.\n\nViss pārējais nav ietekmēts — ieslēgšana/izslēgšana, režīms, temperatūra, ventilators un žalūzijas ir parastas komandas un šo kanālu neizmanto. Arī integrācijas opcijās norādītais iekštelpu temperatūras avots turpina darboties: tas ceļo ar to pašu pieprasījumu, kas tā dēļ joprojām tiek sūtīts.\n\nIntegrācijas pārlādēšana liek mēģināt vēlreiz, ja tā bija īslaicīga problēma."
+    },
+    "external_temperature_unsupported": {
+      "title": "{device_name} nepieņem telpas temperatūru",
+      "description": "Šī ierīce nesniedz telpas temperatūru un ignorē tai nosūtīto, tāpēc šīs integrācijas opcijās norādītajam iekštelpu temperatūras avotam nav nekādas ietekmes, un tā dēļ netiek sūtīts nekas. Avotu varat noņemt opcijās; šis ziņojums pazudīs pēc integrācijas pārlādēšanas."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Zemāk ir opcijas, ko varat mainīt šim gaisa kondicionierim.",
+        "data": {
+          "availability_retry_limit": "Atkārtojumu ierobežojums",
+          "firmware_update_check": "Pārbaudīt programmaparatūras atjauninājumus"
+        },
+        "data_description": {
+          "availability_retry_limit": "Neveiksmīgu aptauju skaits pēc kārtas, pirms gaisa kondicionieris tiek atzīmēts kā nepieejams. Minimālie trīs ir aptuveni trīs minūtes pie 60 sekunžu aptaujas intervāla — pietiekami, lai pārdzīvotu moduļa ik stundu notiekošo WiFi atkārtoto pieslēgšanos. Palieliniet to pie vāja savienojuma.",
+          "firmware_update_check": "Pievieno programmaparatūras atjauninājuma entitāti, kas salīdzina moduļa versiju ar ražotāja serveri. Tas ir vienīgais izejošais interneta savienojums, ko veido integrācija — atstājiet izslēgtu, lai viss paliktu pilnībā lokāls."
+        },
+        "title": "WF-RAC opcijas",
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Iekštelpu temperatūras avots",
+            "description": "Nodot ierīcei telpā izmērītu telpas temperatūru, nevis to, ko tā nolasa pie sava atgaisa režģa.",
+            "data": {
+              "external_temperature_source": "Sensors",
+              "overshoot_cool": "Pārsniegums dzesēšanā",
+              "overshoot_dry": "Pārsniegums sausināšanā",
+              "overshoot_heat": "Pārsniegums apsildē"
+            },
+            "data_description": {
+              "external_temperature_source": "Ierīce regulē pēc šī sensora. Atstājiet tukšu, lai ierīci atgrieztu pie sava sensora. Nepieejami vai nezināmi stāvokļi dara to pašu nākamajā kadrā. Apsildes režīmā lielākā daļa ierīču pašas pieskaita iestatījumam 2 °C, kas kļūst redzams, ja sensors atrodas telpā — README paskaidro, kā to izslēgt ierīcē.",
+              "overshoot_cool": "Cik tālu telpa aiziet pāri jūsu iestatījumam, pirms ierīce apstājas. Iestatiet 22 °C, un telpa nostabilizējas pie 21,5 °C: ievadiet 0,5. Sākuma vērtība ir 0,5, jo tas ir nepieciešams līdz šim izmērītajām ierīcēm — pārbaudiet, kur nostabilizējas jūsu telpa, un pielāgojiet. Ja tā tā vietā apstājas par agru un nekad nekļūst pietiekami auksta, ievadiet negatīvu skaitli. Ceturtdaļgrādi ir smalkākais solis, kas sasniedz ierīci. Attiecas tikai uz dzesēšanas režīmu — sausināšanai ir savs lauks, un režīmā auto ierīcei tiek nodots jūsu rādījums bez korekcijas.",
+              "overshoot_dry": "Tas pats sausināšanai, kas arī dzesē un ņem to pašu zīmi. Sākas ar 0: vienīgā šajā režīmā izmērītā ierīce nonāca pie sava iestatījuma, ar platāku joslu nekā dzesēšanā. Ja jūsējā iet tam pāri, iestatiet mērķi, ļaujiet telpai nostabilizēties un ievadiet, cik tālu telpa pārsniedza.",
+              "overshoot_heat": "Tas pats apsildei, un tikai apsildes režīmā: pozitīvs, ja telpa nonāk virs jūsu iestatījuma, negatīvs, ja apstājas zem tā."
+            }
+          },
+          "setpoint_offsets": {
+            "name": "Iestatījuma nobīdes",
+            "description": "Mainiet ierīcei sūtāmo iestatījumu, kamēr kartīte turpina rādīt jūsējo. Ja tiek izmantots avots, labāks rīks ir iepriekš minētais pārsniegums, un, ja iestatāt abus, tiek piemēroti abi.",
+            "data": {
+              "target_offset": "Mērķa temp. nobīde",
+              "target_offset_cool": "Mērķa temp. nobīde (dzesēšana)",
+              "target_offset_heat": "Mērķa temp. nobīde (apsilde)"
+            },
+            "data_description": {
+              "target_offset": "Pozitīva vērtība samazina ierīcei sūtāmo iestatījumu, negatīva paaugstina — kartīte abos gadījumos turpina rādīt jūsējo. Lielākā daļa ierīču pusgrādu noapaļo uz augšu līdz nākamajam veselajam, tāpēc 0,5 šeit bieži darbojas kā 1. Ja tiek izmantots iekštelpu temperatūras avots, ierīcei, kas aiziet par tālu, labāks rīks ir iepriekš minētais pārsniegums dzesēšanā — tas ir smalkāks un atstāj iestatījumu atbilstošu lietotnei.",
+              "target_offset_cool": "Atstājiet tukšu, lai izmantotu vispārīgo mērķa temperatūras nobīdi.",
+              "target_offset_heat": "Atstājiet tukšu, lai izmantotu vispārīgo mērķa temperatūras nobīdi."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Sensoru nobīdes",
+            "description": "Koriģējiet Home Assistant rādītos rādījumus. Tikai attēlošanai — neviena nemaina ierīces darbību.",
+            "data": {
+              "indoor_offset": "Iekštelpu temp. sensora nobīde",
+              "outdoor_offset": "Ārā temp. sensora nobīde"
+            },
+            "data_description": {
+              "indoor_offset": "Tiek pieskaitīta ierīces paša iekštelpu rādījumam pirms tā parādīšanas. Tikai attēlošanai — tā nemaina ierīces darbību.",
+              "outdoor_offset": "Tas pats ārā temperatūrai, ko sniedz ierīce."
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Neizdevās sasniegt gaisa kondicionieri pie {device}."
+    },
+    "update_failed": {
+      "message": "Gaisa kondicioniera pie {device} aptauja neizdevās: {error}"
+    },
+    "command_failed": {
+      "message": "Komandas sūtīšana gaisa kondicionierim pie {device} neizdevās: {error}"
+    },
+    "command_unencodable": {
+      "message": "Gaisa kondicionieris pie {device} ziņoja par iestatījumu, ko nevar nosūtīt atpakaļ, tāpēc nekas netika nosūtīts. Vispirms iestatiet ventilatora režīmu un mēģiniet vēlreiz."
+    },
+    "command_cancelled": {
+      "message": "Komanda gaisa kondicionierim pie {device} tika atcelta, jo integrācija tiek izslēgta."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C ir zem minimālās {min_temp} °C hvac_mode {hvac_mode} režīmam. Iekļaujiet hvac_mode tajā pašā darbības izsaukumā, lai pārbaudītu pret režīmu, uz kuru pārslēdzat."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C ir virs maksimālās {max_temp} °C hvac_mode {hvac_mode} režīmam. Iekļaujiet hvac_mode tajā pašā darbības izsaukumā, lai pārbaudītu pret režīmu, uz kuru pārslēdzat."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "Šis modelis nesniedz informāciju par Home Leave režīma iespēju."
+    },
+    "external_temperature_source_configured": {
+      "message": "Iekštelpu temperatūru kontrolē konfigurētā avota entitāte."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Home Leave režīma vērtības vēl nav zināmas. Vispirms vienreiz izsauciet klimata entitātes darbību \"Request Home Leave Mode status\" — ierīce tās neiekļauj parastā aptaujā."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} nav kopējā enerģijas patēriņa sensors."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Home Leave režīms ir pieejams tikai dzesēšanas vai apsildes laikā, nevis režīmā {hvac_mode}. Vispirms pārslēdziet ierīci uz dzesēšanu vai apsildi vai izmantojiet Home Leave režīma atlasi, lai norādītu virzienu."
+    },
+    "status_request_read_failed": {
+      "message": "Neizdevās nolasīt gaisa kondicioniera stāvokli pie {device}, tāpēc statusa pieprasījums netika nosūtīts."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant vairs nesūta statusa pieprasījumus gaisa kondicionierim pie {device}, jo šī ierīce uz tiem reaģē, mainot savus iestatījumus."
+    },
+    "silent_operation_not_applied": {
+      "message": "Gaisa kondicionieris pie {device} neapstiprināja kluso darbību izmaiņu. Ja klusā darbība tika iestatīta ar IR tālvadības pulti, to var atcelt tikai ar pulti."
+    },
+    "silent_operation_unit_off": {
+      "message": "Kluso darbību gaisa kondicionierim pie {device} var mainīt tikai tad, kad tas darbojas."
+    },
+    "reduced_status_not_supported": {
+      "message": "Gaisa kondicionieris pie {device} neatbild uz darbības datu vai Home Leave statusa pieprasījumiem, tāpēc šī darbība tam nav pieejama."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "indoor": {
+        "name": "Telpās"
+      },
+      "outdoor": {
+        "name": "Ārā"
+      },
+      "target": {
+        "name": "Mērķis"
+      },
+      "airco_id": {
+        "name": "Gaisa kondicioniera ID"
+      },
+      "operator_id": {
+        "name": "Operatora ID"
+      },
+      "device_id": {
+        "name": "Ierīces ID"
+      },
+      "host": {
+        "name": "IP adrese"
+      },
+      "connected_accounts": {
+        "name": "Pieslēgtie konti"
+      },
+      "error": {
+        "name": "Kļūda"
+      },
+      "updated_by": {
+        "name": "Atjauninājis"
+      },
+      "account_expires": {
+        "name": "Konta derīguma beigas"
+      },
+      "led_status": {
+        "name": "LED statuss"
+      },
+      "auto_heating": {
+        "name": "Automātiskā apsilde"
+      },
+      "model_nr": {
+        "name": "Modeļa numurs"
+      },
+      "cool_hot_judge": {
+        "name": "Dzesēšanas/apsildes noteikšana",
+        "state": {
+          "cooling": "Dzesēšana",
+          "heating": "Apsilde"
+        }
+      },
+      "energy_usage": {
+        "name": "Enerģijas patēriņš (pašreizējais darbības cikls)"
+      },
+      "energy_usage_total": {
+        "name": "Kopējais enerģijas patēriņš"
+      },
+      "compressor_frequency": {
+        "name": "Kompresora frekvence"
+      },
+      "compressor_frequency_raw": {
+        "name": "Kompresora frekvence (neapstrādāta)"
+      },
+      "operating_current": {
+        "name": "Darba strāva"
+      },
+      "operating_current_raw": {
+        "name": "Darba strāva (neapstrādāta)"
+      },
+      "hot_gas_temp": {
+        "name": "Karstās gāzes temperatūra"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Karstās gāzes temperatūra (neapstrādāta)"
+      },
+      "eev_pulses": {
+        "name": "EEV impulsi"
+      },
+      "eev_position": {
+        "name": "EEV pozīcija"
+      },
+      "indoor_coil_temp": {
+        "name": "Iekštelpu siltummaiņa temperatūra"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Iekštelpu siltummaiņa izejas temperatūra"
+      },
+      "indoor_coil_raw": {
+        "name": "Iekštelpu siltummaiņa temperatūra (neapstrādāta)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Iekštelpu siltummaiņa izejas temperatūra (neapstrādāta)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Ārējā siltummaiņa temperatūra (neapstrādāta)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Izplūdes pārkarsējums (neapstrādāts)"
+      },
+      "protection_raw": {
+        "name": "Aizsardzības numurs (neapstrādāts)"
+      },
+      "indoor_humidity": {
+        "name": "Mitrums"
+      },
+      "research_data": {
+        "name": "Pētījuma dati"
+      }
+    },
+    "update": {
+      "firmware_update": {
+        "name": "Programmaparatūras atjauninājums"
+      }
+    },
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "auto": "Auto",
+              "quiet": "Kluss",
+              "low": "Zems",
+              "medium": "Vidējs",
+              "high": "Augsts"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "up_down_auto": "Augšā/lejā auto",
+              "highest": "Augstākais",
+              "middle": "Vidējais",
+              "normal": "Parastais",
+              "lowest": "Zemākais",
+              "3d_auto": "3D auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "left_right_auto": "Pa kreisi/pa labi auto",
+              "left_left": "Kreisi-kreisi",
+              "left_center": "Kreisi-centrs",
+              "center_center": "Centrs-centrs",
+              "center_right": "Centrs-labi",
+              "right_right": "Labi-labi",
+              "left_right": "Kreisi-labi",
+              "right_left": "Labi-kreisi",
+              "3d_auto": "3D auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Horizontālās šūpošanās virziens",
+        "state": {
+          "left_right_auto": "Pa kreisi/pa labi auto",
+          "left_left": "Kreisi-kreisi",
+          "left_center": "Kreisi-centrs",
+          "center_center": "Centrs-centrs",
+          "center_right": "Centrs-labi",
+          "right_right": "Labi-labi",
+          "left_right": "Kreisi-labi",
+          "right_left": "Labi-kreisi",
+          "3d_auto": "3D auto"
+        }
+      },
+      "vertical_swing": {
+        "name": "Vertikālās šūpošanās virziens",
+        "state": {
+          "up_down_auto": "Augšā/lejā auto",
+          "highest": "Augstākais",
+          "middle": "Vidējais",
+          "normal": "Parastais",
+          "lowest": "Zemākais",
+          "3d_auto": "3D auto"
+        }
+      },
+      "fan_speed": {
+        "name": "Ventilatora ātrums",
+        "state": {
+          "auto": "Auto",
+          "quiet": "Kluss",
+          "low": "Zems",
+          "medium": "Vidējs",
+          "high": "Augsts"
+        }
+      },
+      "home_leave_mode": {
+        "name": "Home Leave režīms",
+        "state": {
+          "off": "Izslēgts",
+          "away_cool": "Dzesēšana prombūtnē",
+          "away_heat": "Apsilde prombūtnē"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Home Leave dzesēšanas gaisa plūsma",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Home Leave apsildes gaisa plūsma",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Home Leave dzesēšanas ārā temperatūras slieksnis"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Home Leave dzesēšanas telpas mērķa temperatūra"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Home Leave apsildes ārā temperatūras slieksnis"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Home Leave apsildes telpas mērķa temperatūra"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problēma"
+      },
+      "occupancy": {
+        "name": "Klātbūtne"
+      },
+      "compressor": {
+        "name": "Kompresora pieprasījums"
+      },
+      "external_control": {
+        "name": "Ārējā vadība"
+      },
+      "external_temperature_active": {
+        "name": "Iekštelpu temperatūras pārrakstīšana"
+      },
+      "defrost": {
+        "name": "Atsaldēšana"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Atiestatīt kopējo enerģijas patēriņu"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Klusā darbība"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Iestatīt horizontālās šūpošanās režīmu",
+      "description": "Iestata horizontālās (pa kreisi/pa labi) šūpošanās režīmu.",
+      "fields": {
+        "swing_mode": {
+          "name": "Horizontālās šūpošanās režīms",
+          "description": "Kādu horizontālās šūpošanās režīmu iestatīt."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Iestatīt vertikālās šūpošanās režīmu",
+      "description": "Iestata vertikālās (augšā/lejā) šūpošanās režīmu.",
+      "fields": {
+        "swing_mode": {
+          "name": "Vertikālās šūpošanās režīms",
+          "description": "Kādu vertikālās šūpošanās režīmu iestatīt."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Pieprasīt Home Leave režīma statusu",
+      "description": "Lūdz ierīci ziņot par tās pašreizējiem Home Leave režīma sliekšņiem/gaisa plūsmu. Izsauciet vienreiz, lai number/select entitātēm būtu vērtība, ko rādīt un rediģēt — citādi ierīce tās parastā aptaujā izlaiž. Atbalstīts tikai modeļiem ar HomeLeaveMode iespēju."
+    },
+    "set_home_leave_mode": {
+      "name": "Iestatīt Home Leave režīmu",
+      "description": "Ieraksta jaunus Home Leave režīma sliekšņus/gaisa plūsmu dzesēšanai un apsildei. Atbalstīts tikai modeļiem ar HomeLeaveMode iespēju.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Dzesēšanas temperatūras slieksnis",
+          "description": "Ārā/telpas temperatūras slieksnis, virs kura ieslēdzas dzesēšanas Home Leave režīms, °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Dzesēšanas temperatūras iestatījums",
+          "description": "Mērķa temperatūra, kamēr dzesēšanas Home Leave režīms ir aktīvs, °C."
+        },
+        "air_flow_cooling": {
+          "name": "Dzesēšanas gaisa plūsma",
+          "description": "Ventilatora ātrums, kamēr dzesēšanas Home Leave režīms ir aktīvs."
+        },
+        "temp_rule_heating": {
+          "name": "Apsildes temperatūras slieksnis",
+          "description": "Ārā/telpas temperatūras slieksnis, zem kura ieslēdzas apsildes Home Leave režīms, °C."
+        },
+        "temp_setting_heating": {
+          "name": "Apsildes temperatūras iestatījums",
+          "description": "Mērķa temperatūra, kamēr apsildes Home Leave režīms ir aktīvs, °C."
+        },
+        "air_flow_heating": {
+          "name": "Apsildes gaisa plūsma",
+          "description": "Ventilatora ātrums, kamēr apsildes Home Leave režīms ir aktīvs."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Iestatīt iekštelpu temperatūru",
+      "description": "Sagatavo telpas temperatūru, pēc kuras gaisa kondicionierim regulēt, nevis to, ko nolasa tā paša iekštelpu sensors. Šī darbība pati vērtību nenosūta; tā ceļo līdzi nākamajam kadram, kas tāpat tiek sūtīts, tāpēc ietekme parādās minūtes laikā. Kamēr pārrakstīšana ir sagatavota, integrācija ik ciklā pieprasa ierīcei vienu darbības datu segmentu, un tieši šis kadrs to nes. Izlaidiet temperatūru, lai atgrieztos pie iekšējā telpas sensora.",
+      "fields": {
+        "temperature": {
+          "name": "Temperatūra",
+          "description": "Telpas temperatūra °C. Atstājiet tukšu, lai izmantotu ierīces paša sensoru."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Iestatīt kopējo enerģijas patēriņu",
+      "description": "Pārraksta uzkrāto kopējo enerģijas patēriņu vienai ierīcei. Izmantojiet 0, lai to atiestatītu, vai agrāk glabāta skaitītāja rādījumu, lai pārnestu šo skaitli. Ietekmē tikai integrācijas paša kopsummu — ierīces skaitītāju ierakstīt nevar.",
+      "fields": {
+        "value": {
+          "name": "Vērtība",
+          "description": "Jaunā kopsumma kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Pa kreisi/pa labi auto",
+        "left_left": "Kreisi-kreisi",
+        "left_center": "Kreisi-centrs",
+        "center_center": "Centrs-centrs",
+        "center_right": "Centrs-labi",
+        "right_right": "Labi-labi",
+        "left_right": "Kreisi-labi",
+        "right_left": "Labi-kreisi"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Augšā/lejā auto",
+        "highest": "Augstākais",
+        "middle": "Vidējais",
+        "normal": "Parastais",
+        "lowest": "Zemākais",
+        "3d_auto": "3D auto"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Auto",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
+      }
+    }
+  }
+}

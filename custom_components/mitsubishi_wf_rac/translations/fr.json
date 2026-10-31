@@ -1,0 +1,568 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "Hôte",
+          "port": "Port",
+          "force_update": "Ignorer l'adresse IP en double"
+        },
+        "description": "Renseignez les informations correctes pour ajouter le climatiseur manuellement.",
+        "title": "Informations de connexion du climatiseur WF-RAC",
+        "data_description": {
+          "host": "L'adresse IP locale du module sans fil du climatiseur. Une adresse modifiée est reprise dès que le module s'annonce à nouveau ; attribuez-lui une adresse fixe dans votre routeur, ou corrigez-la ici si ce n'est pas le cas.",
+          "port": "Le port sur lequel l'API locale du module écoute. Laissez 51443, sauf si votre module en annonce un autre.",
+          "force_update": "Ajoute ce climatiseur même si une autre entrée utilise déjà cette adresse IP. Prévu pour rajouter un appareil dont l'ancienne entrée a disparu : le module n'accepte qu'une connexion à la fois, donc deux entrées qui l'interrogent provoqueront des erreurs dans le journal."
+        }
+      },
+      "discovery_confirm": {
+        "description": "Le climatiseur d'identifiant {id}, IP {host} et port {port} a été découvert. Le port est normalement 51443 ; corrigez-le ci-dessous s'il semble différent.",
+        "title": "Climatiseur WF-RAC découvert",
+        "data": {
+          "port": "Port"
+        },
+        "data_description": {
+          "port": "Le port permettant de joindre le module. Il s'agit normalement de 51443 ; corrigez-le ici si la valeur annoncée ci-dessus semble différente."
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Hôte",
+          "port": "Port"
+        },
+        "description": "Mettez à jour les informations de connexion de ce climatiseur.",
+        "title": "Reconfigurer la connexion du climatiseur WF-RAC",
+        "data_description": {
+          "host": "L'adresse IP locale du module sans fil du climatiseur. Une adresse modifiée est reprise dès que le module s'annonce à nouveau ; attribuez-lui une adresse fixe dans votre routeur, ou corrigez-la ici si ce n'est pas le cas.",
+          "port": "Le port sur lequel l'API locale du module écoute. Laissez 51443, sauf si votre module en annonce un autre."
+        }
+      }
+    },
+    "error": {
+      "unexpected_error": "Une erreur inattendue s'est produite. Consultez le journal pour plus de détails.",
+      "cannot_connect": "Impossible de se connecter au climatiseur : {reason}",
+      "invalid_host": "Nom d'hôte ou adresse IP non valide",
+      "host_already_configured": "L'IP du climatiseur est déjà configurée sous [{error_name}]",
+      "too_many_devices_registered": "Trop d'appareils sont enregistrés sur ce climatiseur. Supprimez un appareil (dans l'application) ou réinitialisez le module aux paramètres d'usine."
+    },
+    "abort": {
+      "existing_instance_updated": "La configuration existante a été mise à jour.",
+      "already_configured": "Le service est déjà configuré",
+      "reconfigure_successful": "La reconfiguration a réussi",
+      "wrong_device": "Il s'agit d'un autre climatiseur que celui pour lequel cette entrée a été configurée. Redirigez-la vers l'appareil d'origine, ou ajoutez l'autre comme entrée distincte."
+    }
+  },
+  "issues": {
+    "too_many_devices": {
+      "title": "Trop de comptes enregistrés sur {device_name}",
+      "description": "Cet appareil peut accueillir quatre comptes enregistrés et les quatre places sont occupées, si bien que Home Assistant ne peut pas s'enregistrer. Le module ne libère jamais une place de lui-même : les enregistrements n'expirent pas, et un nouvel enregistrement est refusé au lieu de remplacer un ancien. Dans l'application Smart M-Air, retirez cet appareil depuis un téléphone qui n'en a plus besoin ; chaque compte ne peut retirer que lui-même, et plusieurs téléphones partageant un même compte Smart M-Air n'occupent qu'une seule place à eux tous. Rechargez ensuite cette intégration. Si personne ne peut libérer de place (un téléphone depuis longtemps disparu en occupe une), le module doit être reconfiguré depuis zéro."
+    },
+    "request_stops_unit": {
+      "title": "{device_name} modifie ses propres réglages lorsqu'on lui demande les données de fonctionnement",
+      "description": "Les capteurs de diagnostic du compresseur, du courant et des températures sont lus par une requête supplémentaire envoyée une fois par minute. Cette requête ne contient aucun réglage, elle ne fait que demander, mais ce module l'applique quand même, et chaque champ laissé vide est interprété comme une valeur : l'appareil s'éteint, le mode passe en auto, le ventilateur et les volets reviennent à leur première position, et la consigne tombe au minimum autorisé par l'appareil.\n\nHome Assistant a modifié cette requête pour qu'elle transmette les réglages propres à cet appareil, lus juste avant l'envoi, de sorte que la trame les confirme au lieu de les effacer. C'est la forme qu'utilise l'application du fabricant. Les réglages effacés par la requête ont été réécrits. Tant que Home Assistant considère cet appareil comme éteint, aucune requête n'est envoyée ; ces capteurs conservent donc leur dernière valeur jusqu'à son redémarrage.\n\nRien d'autre n'est à faire : surveillez simplement l'appareil quelques minutes. S'il modifie encore ses réglages de lui-même, Home Assistant cessera complètement d'envoyer la requête et l'indiquera ici."
+    },
+    "status_request_unsupported": {
+      "title": "Les données de fonctionnement de {device_name} ne peuvent pas être lues",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Demander à nouveau les données de fonctionnement de {device_name} ?",
+            "description": "Cet appareil modifiait ses propres réglages chaque fois qu'on lui demandait les données de fonctionnement, même lorsque la requête lui renvoyait ses réglages actuels ; Home Assistant a donc cessé d'envoyer cette requête. L'appareil a été rendu à sa propre sonde ambiante : une source de température intérieure définie dans les options de l'intégration ne lui est plus transmise, et la carte climatisation affiche la température mesurée par l'appareil.\n\nConséquence : les capteurs de diagnostic alimentés par cette requête (fréquence du compresseur, courant de fonctionnement, température du gaz chaud, position du détendeur électronique et températures des échangeurs) ne sont plus mis à jour. Tout le reste fonctionne normalement : marche/arrêt, mode, température, ventilateur et volets sont envoyés comme des commandes ordinaires.\n\nLa détection peut aussi être déclenchée par quelqu'un qui utilise la télécommande au même moment. Pour réessayer, validez cette réparation : l'intégration se recharge et surveille à nouveau. Si l'appareil s'éteint ou modifie de nouveau ses réglages, ce message réapparaîtra ; signalez-le alors en indiquant la version du firmware de votre module."
+          }
+        }
+      }
+    },
+    "service_data_unanswered": {
+      "title": "Les données de fonctionnement de {device_name} ne sont pas disponibles",
+      "description": "Les capteurs de diagnostic du compresseur, du courant, des températures et de la position du détendeur électronique sont lus par une requête supplémentaire envoyée une fois par minute. Cet appareil accepte cette requête et y répond, mais n'a jamais renvoyé le moindre segment ; ces capteurs ne pouvaient donc jamais afficher de valeur, quelle que soit la forme de la requête.\n\nHome Assistant a cessé de la demander. Les capteurs indiquent désormais « indisponible » plutôt qu'« inconnu », ce qui reflète la réalité : la mesure n'est pas en retard, elle n'existe pas. Vous pouvez les désactiver sur cet appareil ; rien n'est perdu et ils disparaissent simplement de l'affichage.\n\nTout le reste n'est pas concerné : marche/arrêt, mode, température, ventilateur et volets sont des commandes ordinaires et n'utilisent pas ce canal. Une source de température intérieure définie dans les options de l'intégration continue aussi de fonctionner : elle circule dans la même requête, qui reste envoyée à cet effet.\n\nRecharger l'intégration provoque une nouvelle tentative, au cas où le problème serait temporaire."
+    },
+    "external_temperature_unsupported": {
+      "title": "{device_name} n'accepte pas de température ambiante",
+      "description": "Cet appareil ne signale aucune température ambiante et ignore celle qu'on lui envoie ; la source de température intérieure définie dans les options de cette intégration n'a donc aucun effet et rien n'est envoyé pour elle. Vous pouvez retirer la source dans les options ; ce message disparaît une fois l'intégration rechargée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Voici les options que vous pouvez modifier pour ce climatiseur.",
+        "data": {
+          "availability_retry_limit": "Nombre maximal de tentatives",
+          "firmware_update_check": "Rechercher les mises à jour du firmware"
+        },
+        "data_description": {
+          "availability_retry_limit": "Nombre d'interrogations consécutives échouées avant que le climatiseur soit marqué comme indisponible. Le minimum de trois correspond à environ trois minutes avec un intervalle d'interrogation de 60 secondes, ce qui suffit pour absorber la réassociation Wi-Fi horaire du module. Augmentez-le si la liaison est faible.",
+          "firmware_update_check": "Ajoute une entité de mise à jour du firmware qui compare la version du module à celle du serveur du fabricant. C'est la seule connexion Internet sortante de l'intégration ; laissez l'option désactivée pour rester entièrement en local."
+        },
+        "title": "Options WF-RAC",
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Source de la température intérieure",
+            "description": "Transmet à l'appareil une température mesurée dans la pièce, au lieu de celle qu'il lit à sa propre grille de reprise d'air.",
+            "data": {
+              "external_temperature_source": "Capteur",
+              "overshoot_cool": "Dépassement en refroidissement",
+              "overshoot_dry": "Dépassement en déshumidification",
+              "overshoot_heat": "Dépassement en chauffage"
+            },
+            "data_description": {
+              "external_temperature_source": "L'appareil se régule sur ce capteur. Laissez vide pour le remettre sur son propre capteur. Un état indisponible ou inconnu produit le même effet à la trame suivante. En mode chauffage, la plupart des appareils ajoutent d'eux-mêmes 2 °C à la consigne, ce qu'un capteur placé dans la pièce rend visible ; le README explique comment le désactiver sur l'appareil.",
+              "overshoot_cool": "De combien la température de la pièce dépasse votre consigne avant que l'appareil s'arrête. Avec une consigne de 22 °C, si la pièce se stabilise à 21,5 °C, saisissez 0,5. La valeur initiale est 0,5 car c'est ce dont les appareils mesurés jusqu'ici ont besoin ; vérifiez où se stabilise votre pièce et ajustez. Si l'appareil s'arrête trop tôt et que la pièce n'est jamais assez fraîche, saisissez un nombre négatif. Le quart de degré est le pas le plus fin que l'appareil accepte. S'applique uniquement en mode refroidissement : la déshumidification a son propre champ, et en mode auto l'appareil reçoit votre mesure sans correction.",
+              "overshoot_dry": "La même chose pour la déshumidification, qui refroidit aussi et suit le même signe. Démarre à 0 : le seul appareil mesuré dans ce mode s'est stabilisé sur sa consigne, avec une plage plus large qu'en refroidissement. Si le vôtre la dépasse, définissez une consigne, laissez la pièce se stabiliser et saisissez de combien elle l'a dépassée.",
+              "overshoot_heat": "La même chose pour le chauffage, uniquement en mode chauffage : positif si la pièce finit au-dessus de votre consigne, négatif si elle s'arrête en dessous."
+            }
+          },
+          "setpoint_offsets": {
+            "name": "Décalages de consigne",
+            "description": "Modifie la consigne envoyée à l'appareil, tandis que la carte continue d'afficher la vôtre. Si une source est utilisée, le dépassement ci-dessus est le meilleur levier ; si vous définissez les deux, les deux s'appliquent.",
+            "data": {
+              "target_offset": "Décalage de la température cible",
+              "target_offset_cool": "Décalage de la température cible (refroidissement)",
+              "target_offset_heat": "Décalage de la température cible (chauffage)"
+            },
+            "data_description": {
+              "target_offset": "Une valeur positive abaisse la consigne envoyée à l'appareil, une valeur négative l'augmente ; dans les deux cas, la carte continue d'afficher la vôtre. La plupart des appareils arrondissent un demi-degré au degré entier supérieur, donc 0,5 agit souvent comme 1. Si une source de température intérieure est utilisée, le dépassement en refroidissement ci-dessus est le bon levier pour un appareil qui dépasse sa consigne : il est plus fin et laisse la consigne identique à celle de l'application.",
+              "target_offset_cool": "Laissez vide pour utiliser le décalage général de la température cible.",
+              "target_offset_heat": "Laissez vide pour utiliser le décalage général de la température cible."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Décalages des capteurs",
+            "description": "Corrige les valeurs affichées dans Home Assistant. Affichage uniquement : aucun des deux ne change le comportement de l'appareil.",
+            "data": {
+              "indoor_offset": "Décalage du capteur de température intérieure",
+              "outdoor_offset": "Décalage du capteur de température extérieure"
+            },
+            "data_description": {
+              "indoor_offset": "Ajouté à la mesure intérieure propre à l'appareil avant son affichage. Affichage uniquement : cela ne change pas le comportement de l'appareil.",
+              "outdoor_offset": "Idem, pour la température extérieure signalée par l'appareil."
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Impossible de joindre le climatiseur à l'adresse {device}."
+    },
+    "update_failed": {
+      "message": "L'interrogation du climatiseur à l'adresse {device} a échoué : {error}"
+    },
+    "command_failed": {
+      "message": "L'envoi de la commande au climatiseur à l'adresse {device} a échoué : {error}"
+    },
+    "command_unencodable": {
+      "message": "Le climatiseur à l'adresse {device} a signalé un réglage qui ne peut pas être renvoyé ; rien n'a donc été envoyé. Définissez d'abord le mode du ventilateur, puis réessayez."
+    },
+    "command_cancelled": {
+      "message": "La commande destinée au climatiseur à l'adresse {device} a été annulée car l'intégration est en cours d'arrêt."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C est inférieur au minimum de {min_temp} °C pour hvac_mode {hvac_mode}. Incluez hvac_mode dans le même appel d'action pour vérifier la valeur par rapport au mode vers lequel vous basculez."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C est supérieur au maximum de {max_temp} °C pour hvac_mode {hvac_mode}. Incluez hvac_mode dans le même appel d'action pour vérifier la valeur par rapport au mode vers lequel vous basculez."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "Ce modèle ne signale pas la fonction Mode Sortie du domicile."
+    },
+    "external_temperature_source_configured": {
+      "message": "La température intérieure est pilotée par l'entité source configurée."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Les valeurs du mode Sortie du domicile ne sont pas encore connues. Appelez d'abord une fois l'action « Demander l'état du mode Sortie du domicile » de l'entité climatisation : l'appareil ne les inclut pas dans une simple interrogation."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} n'est pas un capteur de consommation d'énergie totale."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Le mode Sortie du domicile n'est disponible qu'en refroidissement ou en chauffage, pas en {hvac_mode}. Passez d'abord l'appareil en refroidissement ou en chauffage, ou utilisez la sélection du mode Sortie du domicile pour indiquer le sens."
+    },
+    "status_request_read_failed": {
+      "message": "Impossible de lire l'état du climatiseur à l'adresse {device} ; la requête d'état n'a donc pas été envoyée."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant n'envoie plus de requêtes d'état au climatiseur à l'adresse {device}, car cet appareil modifie ses propres réglages en réponse."
+    },
+    "silent_operation_not_applied": {
+      "message": "Le climatiseur à l'adresse {device} n'a pas confirmé le changement du fonctionnement silencieux. Si le fonctionnement silencieux a été activé avec la télécommande infrarouge, il ne peut être désactivé qu'avec celle-ci."
+    },
+    "silent_operation_unit_off": {
+      "message": "Le fonctionnement silencieux du climatiseur à l'adresse {device} ne peut être modifié que lorsqu'il est en marche."
+    },
+    "reduced_status_not_supported": {
+      "message": "Le climatiseur à l'adresse {device} ne répond ni aux requêtes de données de fonctionnement ni à celles de l'état Sortie du domicile ; cette action n'est donc pas disponible pour lui."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "indoor": {
+        "name": "Intérieur"
+      },
+      "outdoor": {
+        "name": "Extérieur"
+      },
+      "target": {
+        "name": "Consigne"
+      },
+      "airco_id": {
+        "name": "ID du climatiseur"
+      },
+      "operator_id": {
+        "name": "ID de l'opérateur"
+      },
+      "device_id": {
+        "name": "ID de l'appareil"
+      },
+      "host": {
+        "name": "Adresse IP"
+      },
+      "connected_accounts": {
+        "name": "Comptes connectés"
+      },
+      "error": {
+        "name": "Erreur"
+      },
+      "updated_by": {
+        "name": "Mis à jour par"
+      },
+      "account_expires": {
+        "name": "Expiration du compte"
+      },
+      "led_status": {
+        "name": "État de la LED"
+      },
+      "auto_heating": {
+        "name": "Chauffage auto"
+      },
+      "model_nr": {
+        "name": "Numéro de modèle"
+      },
+      "cool_hot_judge": {
+        "name": "Décision froid/chaud",
+        "state": {
+          "cooling": "Refroidissement",
+          "heating": "Chauffage"
+        }
+      },
+      "energy_usage": {
+        "name": "Consommation d'énergie (cycle en cours)"
+      },
+      "energy_usage_total": {
+        "name": "Consommation d'énergie totale"
+      },
+      "compressor_frequency": {
+        "name": "Fréquence du compresseur"
+      },
+      "compressor_frequency_raw": {
+        "name": "Fréquence du compresseur (brute)"
+      },
+      "operating_current": {
+        "name": "Courant de fonctionnement"
+      },
+      "operating_current_raw": {
+        "name": "Courant de fonctionnement (brut)"
+      },
+      "hot_gas_temp": {
+        "name": "Température du gaz chaud"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Température du gaz chaud (brute)"
+      },
+      "eev_pulses": {
+        "name": "Impulsions du détendeur électronique"
+      },
+      "eev_position": {
+        "name": "Position du détendeur électronique"
+      },
+      "indoor_coil_temp": {
+        "name": "Température de l'échangeur intérieur"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Température de sortie de l'échangeur intérieur"
+      },
+      "indoor_coil_raw": {
+        "name": "Température de l'échangeur intérieur (brute)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Température de sortie de l'échangeur intérieur (brute)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Température de l'échangeur extérieur (brute)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Surchauffe au refoulement (brute)"
+      },
+      "protection_raw": {
+        "name": "Numéro de protection (brut)"
+      },
+      "indoor_humidity": {
+        "name": "Humidité"
+      },
+      "research_data": {
+        "name": "Données de recherche"
+      }
+    },
+    "update": {
+      "firmware_update": {
+        "name": "Mise à jour du firmware"
+      }
+    },
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "auto": "Auto",
+              "quiet": "Silencieux",
+              "low": "Faible",
+              "medium": "Moyen",
+              "high": "Fort"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "up_down_auto": "Haut/bas auto",
+              "highest": "Le plus haut",
+              "middle": "Milieu",
+              "normal": "Normal",
+              "lowest": "Le plus bas",
+              "3d_auto": "3D auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "left_right_auto": "Gauche/droite auto",
+              "left_left": "Gauche-gauche",
+              "left_center": "Gauche-centre",
+              "center_center": "Centre-centre",
+              "center_right": "Centre-droite",
+              "right_right": "Droite-droite",
+              "left_right": "Gauche-droite",
+              "right_left": "Droite-gauche",
+              "3d_auto": "3D auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Direction du balayage horizontal",
+        "state": {
+          "left_right_auto": "Gauche/droite auto",
+          "left_left": "Gauche-gauche",
+          "left_center": "Gauche-centre",
+          "center_center": "Centre-centre",
+          "center_right": "Centre-droite",
+          "right_right": "Droite-droite",
+          "left_right": "Gauche-droite",
+          "right_left": "Droite-gauche",
+          "3d_auto": "3D auto"
+        }
+      },
+      "vertical_swing": {
+        "name": "Direction du balayage vertical",
+        "state": {
+          "up_down_auto": "Haut/bas auto",
+          "highest": "Le plus haut",
+          "middle": "Milieu",
+          "normal": "Normal",
+          "lowest": "Le plus bas",
+          "3d_auto": "3D auto"
+        }
+      },
+      "fan_speed": {
+        "name": "Vitesse du ventilateur",
+        "state": {
+          "auto": "Auto",
+          "quiet": "Silencieux",
+          "low": "Faible",
+          "medium": "Moyen",
+          "high": "Fort"
+        }
+      },
+      "home_leave_mode": {
+        "name": "Mode Sortie du domicile",
+        "state": {
+          "off": "Désactivé",
+          "away_cool": "Refroidissement en absence",
+          "away_heat": "Chauffage en absence"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Débit d'air de refroidissement, Sortie du domicile",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Débit d'air de chauffage, Sortie du domicile",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Seuil de température extérieure du refroidissement, Sortie du domicile"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Température ambiante cible du refroidissement, Sortie du domicile"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Seuil de température extérieure du chauffage, Sortie du domicile"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Température ambiante cible du chauffage, Sortie du domicile"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problème"
+      },
+      "occupancy": {
+        "name": "Présence"
+      },
+      "compressor": {
+        "name": "Demande du compresseur"
+      },
+      "external_control": {
+        "name": "Commande externe"
+      },
+      "external_temperature_active": {
+        "name": "Température intérieure forcée"
+      },
+      "defrost": {
+        "name": "Dégivrage"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Réinitialiser la consommation d'énergie totale"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Fonctionnement silencieux"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Définir le mode de balayage horizontal",
+      "description": "Définit le mode de balayage horizontal (gauche/droite).",
+      "fields": {
+        "swing_mode": {
+          "name": "Mode de balayage horizontal",
+          "description": "Le mode de balayage horizontal à définir."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Définir le mode de balayage vertical",
+      "description": "Définit le mode de balayage vertical (haut/bas).",
+      "fields": {
+        "swing_mode": {
+          "name": "Mode de balayage vertical",
+          "description": "Le mode de balayage vertical à définir."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Demander l'état du mode Sortie du domicile",
+      "description": "Demande à l'appareil de signaler les seuils et le débit d'air actuels du mode Sortie du domicile. À appeler une fois pour que les entités nombre/sélection aient une valeur à afficher et à modifier ; sinon l'appareil les omet d'une simple interrogation. Pris en charge uniquement sur les modèles disposant de la fonction HomeLeaveMode."
+    },
+    "set_home_leave_mode": {
+      "name": "Définir le mode Sortie du domicile",
+      "description": "Écrit de nouveaux seuils et débits d'air du mode Sortie du domicile pour le refroidissement et le chauffage. Pris en charge uniquement sur les modèles disposant de la fonction HomeLeaveMode.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Seuil de température en refroidissement",
+          "description": "Seuil de température extérieure/ambiante au-dessus duquel le mode Sortie du domicile en refroidissement s'active, en °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Consigne en refroidissement",
+          "description": "Température cible lorsque le mode Sortie du domicile en refroidissement est actif, en °C."
+        },
+        "air_flow_cooling": {
+          "name": "Débit d'air en refroidissement",
+          "description": "Vitesse du ventilateur lorsque le mode Sortie du domicile en refroidissement est actif."
+        },
+        "temp_rule_heating": {
+          "name": "Seuil de température en chauffage",
+          "description": "Seuil de température extérieure/ambiante en dessous duquel le mode Sortie du domicile en chauffage s'active, en °C."
+        },
+        "temp_setting_heating": {
+          "name": "Consigne en chauffage",
+          "description": "Température cible lorsque le mode Sortie du domicile en chauffage est actif, en °C."
+        },
+        "air_flow_heating": {
+          "name": "Débit d'air en chauffage",
+          "description": "Vitesse du ventilateur lorsque le mode Sortie du domicile en chauffage est actif."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Définir la température intérieure",
+      "description": "Arme une température ambiante sur laquelle le climatiseur se régule, à la place de celle que lit son propre capteur intérieur. La valeur n'est pas envoyée par cette action ; elle accompagne la prochaine trame qui part de toute façon, et prend donc effet en moins d'une minute. Tant qu'un forçage est armé, l'intégration demande à l'appareil un segment de données de fonctionnement par cycle, c'est la trame qui la transporte. Omettez la température pour revenir au capteur ambiant interne.",
+      "fields": {
+        "temperature": {
+          "name": "Température",
+          "description": "Température ambiante en °C. Laissez vide pour utiliser le capteur propre à l'appareil."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Définir la consommation d'énergie totale",
+      "description": "Écrase la consommation d'énergie totale cumulée d'un appareil. Utilisez 0 pour la réinitialiser, ou la valeur relevée sur un compteur conservé précédemment pour reprendre ce chiffre. N'affecte que le total de l'intégration : le compteur de l'appareil ne peut pas être modifié.",
+      "fields": {
+        "value": {
+          "name": "Valeur",
+          "description": "Nouveau total en kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Gauche/droite auto",
+        "left_left": "Gauche-gauche",
+        "left_center": "Gauche-centre",
+        "center_center": "Centre-centre",
+        "center_right": "Centre-droite",
+        "right_right": "Droite-droite",
+        "left_right": "Gauche-droite",
+        "right_left": "Droite-gauche"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Haut/bas auto",
+        "highest": "Le plus haut",
+        "middle": "Milieu",
+        "normal": "Normal",
+        "lowest": "Le plus bas",
+        "3d_auto": "3D auto"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Auto",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
+      }
+    }
+  }
+}

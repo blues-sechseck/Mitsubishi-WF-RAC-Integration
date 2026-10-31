@@ -1,0 +1,568 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "Host",
+          "port": "Puerto",
+          "force_update": "Ignorar dirección IP duplicada"
+        },
+        "description": "Introduce los datos correctos para añadir el aire acondicionado manualmente",
+        "title": "Datos de conexión del aire acondicionado WF-RAC",
+        "data_description": {
+          "host": "La dirección IP local del módulo inalámbrico del aire acondicionado. Si la dirección cambia, se detecta cuando el módulo vuelve a anunciarse; asigna una dirección fija al módulo en tu router o corrígela aquí si no ocurre.",
+          "port": "El puerto en el que escucha la API local del módulo. Déjalo en 51443 salvo que tu módulo anuncie otro distinto.",
+          "force_update": "Añade este aire acondicionado aunque otra entrada ya use esta dirección IP. Pensado para volver a añadir una unidad cuya entrada anterior se perdió: el módulo admite una sola conexión a la vez, así que dos entradas consultándolo generarán errores en el registro."
+        }
+      },
+      "discovery_confirm": {
+        "description": "Se ha descubierto el aire acondicionado con id: {id}, IP: {host} y puerto: {port}. El puerto suele ser 51443; corrígelo abajo si te parece distinto.",
+        "title": "Aire acondicionado WF-RAC descubierto",
+        "data": {
+          "port": "Puerto"
+        },
+        "data_description": {
+          "port": "El puerto por el que se accede al módulo. Normalmente es 51443; corrígelo aquí si el valor anunciado arriba parece distinto."
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Host",
+          "port": "Puerto"
+        },
+        "description": "Actualiza los datos de conexión de este aire acondicionado.",
+        "title": "Reconfigurar la conexión del aire acondicionado WF-RAC",
+        "data_description": {
+          "host": "La dirección IP local del módulo inalámbrico del aire acondicionado. Si la dirección cambia, se detecta cuando el módulo vuelve a anunciarse; asigna una dirección fija al módulo en tu router o corrígela aquí si no ocurre.",
+          "port": "El puerto en el que escucha la API local del módulo. Déjalo en 51443 salvo que tu módulo anuncie otro distinto."
+        }
+      }
+    },
+    "error": {
+      "unexpected_error": "Se ha producido un error inesperado. Consulta el registro para más detalles.",
+      "cannot_connect": "No se pudo conectar con el aire acondicionado: {reason}",
+      "invalid_host": "Nombre de host o dirección IP no válidos",
+      "host_already_configured": "La IP del aire acondicionado ya está configurada como [{error_name}]",
+      "too_many_devices_registered": "Hay demasiados dispositivos registrados para este aire acondicionado. Elimina un dispositivo (en la aplicación) o restablece el módulo a los valores de fábrica."
+    },
+    "abort": {
+      "existing_instance_updated": "Se ha actualizado la configuración existente.",
+      "already_configured": "El servicio ya está configurado",
+      "reconfigure_successful": "La reconfiguración se ha realizado correctamente",
+      "wrong_device": "Este es un aire acondicionado distinto de aquel para el que se creó esta entrada. Vuelve a apuntar a la unidad original o añade la otra como entrada independiente."
+    }
+  },
+  "issues": {
+    "too_many_devices": {
+      "title": "Demasiadas cuentas registradas en {device_name}",
+      "description": "Esta unidad admite cuatro cuentas registradas y las cuatro están ocupadas, por lo que Home Assistant no puede registrarse. El módulo nunca libera una plaza por sí mismo: los registros no caducan y uno nuevo se rechaza en lugar de sustituir a uno anterior. En la aplicación Smart M-Air, elimina esta unidad desde un teléfono que ya no la necesite: cada cuenta solo puede eliminarse a sí misma, y varios teléfonos que comparten una misma cuenta de Smart M-Air ocupan una única plaza entre todos. Después, recarga esta integración. Si nadie puede liberar una plaza (por ejemplo, un teléfono que ya no está en uso sigue ocupando una), hay que volver a configurar el módulo desde cero."
+    },
+    "request_stops_unit": {
+      "title": "{device_name} cambia sus propios ajustes al solicitarle los datos de funcionamiento",
+      "description": "Los sensores de diagnóstico del compresor, la corriente y las temperaturas se leen con una solicitud adicional una vez por minuto. Esa solicitud no lleva ajustes, solo consulta, pero este módulo la aplica igualmente y cada campo que queda vacío se interpreta como un valor: la unidad se apaga, el modo pasa a automático, el ventilador y las lamas bajan a su primera posición y la consigna cae al valor más bajo que admite la unidad.\n\nHome Assistant ha cambiado esa solicitud para que lleve los ajustes propios de esta unidad, leídos un instante antes de enviarla, de modo que el mensaje los confirma en lugar de borrarlos. Es la misma forma que usa la aplicación del fabricante. Los ajustes que la solicitud había borrado se han vuelto a escribir. Mientras Home Assistant considere que esta unidad está apagada, no se envía ninguna solicitud, por lo que estos sensores conservan su último valor hasta que vuelva a funcionar.\n\nNo hay que hacer nada más: obsérvala unos minutos. Si la unidad sigue cambiando sus ajustes por sí sola, Home Assistant dejará de enviar la solicitud por completo y lo indicará aquí."
+    },
+    "status_request_unsupported": {
+      "title": "No se pueden leer los datos de funcionamiento de {device_name}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "¿Solicitar de nuevo los datos de funcionamiento a {device_name}?",
+            "description": "Esta unidad cambiaba sus propios ajustes cada vez que se le solicitaban los datos de funcionamiento, incluso cuando la solicitud le devolvía sus ajustes actuales, por lo que Home Assistant ha dejado de enviarla. La unidad ha vuelto a usar su propio sensor de ambiente: una fuente de temperatura interior definida en las opciones de la integración ya no se le pasa, y la tarjeta de climatización muestra la temperatura que mide la unidad.\n\nLo que esto supone: los sensores de diagnóstico alimentados por esa solicitud (frecuencia del compresor, corriente de funcionamiento, temperatura del gas caliente, posición de la EEV y las temperaturas de las baterías) dejan de actualizarse. Todo lo demás no se ve afectado: encendido, modo, temperatura, ventilador y lamas se envían como comandos normales.\n\nLa detección también puede activarse si alguien usa el mando a distancia en ese mismo momento. Para volver a intentarlo, envía esta reparación: la integración se recarga y vuelve a vigilarlo. Si la unidad se apaga o cambia sus ajustes de nuevo, este mensaje reaparecerá; en ese caso, por favor, infórmalo e indica la versión del firmware de tu módulo."
+          }
+        }
+      }
+    },
+    "service_data_unanswered": {
+      "title": "Los datos de funcionamiento de {device_name} no están disponibles",
+      "description": "Los sensores de diagnóstico del compresor, la corriente, las temperaturas y la posición de la EEV se leen con una solicitud adicional una vez por minuto. Esta unidad acepta esa solicitud y la responde, pero nunca ha devuelto ni un solo segmento en ella, así que esos sensores nunca iban a mostrar un valor, sea cual sea la forma de la solicitud.\n\nHome Assistant ha dejado de solicitarlos. Los sensores ahora aparecen como no disponibles en lugar de desconocidos, que es la diferencia honesta: la lectura no se retrasa, es que no existe. Puedes desactivarlos en este dispositivo; no se pierde nada y dejan de verse.\n\nTodo lo demás no se ve afectado: encendido, modo, temperatura, ventilador y lamas son comandos normales y no usan este canal. Una fuente de temperatura interior definida en las opciones de la integración también sigue funcionando: viaja en la misma solicitud, que se sigue enviando para ello.\n\nRecargar la integración lo intenta de nuevo, por si fuera algo temporal."
+    },
+    "external_temperature_unsupported": {
+      "title": "{device_name} no acepta una temperatura ambiente",
+      "description": "Esta unidad no informa de ninguna temperatura ambiente e ignora la que se le envía, por lo que la fuente de temperatura interior definida en las opciones de esta integración no tiene efecto y no se envía nada para ella. Puedes quitar la fuente en las opciones; este mensaje desaparece cuando se recargue la integración."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "A continuación están las opciones que puedes cambiar para este aire acondicionado.",
+        "data": {
+          "availability_retry_limit": "Límite de reintentos",
+          "firmware_update_check": "Buscar actualizaciones de firmware"
+        },
+        "data_description": {
+          "availability_retry_limit": "Consultas fallidas consecutivas antes de marcar el aire acondicionado como no disponible. El mínimo de tres equivale a unos tres minutos con el intervalo de consulta de 60 segundos, suficiente para superar la reasociación horaria del módulo a la WiFi. Auméntalo si la señal es débil.",
+          "firmware_update_check": "Añade una entidad de actualización de firmware que compara la versión del módulo con el servidor del fabricante. Es la única conexión saliente a internet que realiza la integración; déjalo desactivado para seguir funcionando totalmente en local."
+        },
+        "title": "Opciones de WF-RAC",
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Fuente de temperatura interior",
+            "description": "Entrega a la unidad una temperatura ambiente medida en la propia estancia, en lugar de la que lee en su rejilla de retorno de aire.",
+            "data": {
+              "external_temperature_source": "Sensor",
+              "overshoot_cool": "Sobrepaso en refrigeración",
+              "overshoot_dry": "Sobrepaso en deshumidificación",
+              "overshoot_heat": "Sobrepaso en calefacción"
+            },
+            "data_description": {
+              "external_temperature_source": "La unidad regula según este sensor. Déjalo vacío para que la unidad vuelva a usar el suyo. Un estado no disponible o desconocido tiene el mismo efecto en el siguiente mensaje. En modo calefacción, la mayoría de las unidades suman 2 °C a la consigna por su cuenta, algo que se hace visible con un sensor colocado en la estancia; el README explica cómo desactivarlo en la unidad.",
+              "overshoot_cool": "Cuánto se pasa la estancia de tu consigna antes de que la unidad se detenga. Si fijas 22 °C y la estancia se estabiliza en 21,5 °C, introduce 0,5. Empieza en 0,5 porque es lo que han necesitado las unidades medidas hasta ahora: comprueba en qué valor se estabiliza tu estancia y ajústalo. Si, por el contrario, se queda corta y nunca llega a enfriar lo suficiente, introduce un número negativo. Los cuartos de grado son el paso más fino que llega a la unidad. Se aplica solo en modo refrigeración: la deshumidificación tiene su propio campo y en automático se entrega a la unidad tu lectura sin corregir.",
+              "overshoot_dry": "Lo mismo para la deshumidificación, que también enfría y usa el mismo signo. Empieza en 0: la única unidad medida en este modo se estabilizó en su consigna, con una banda más amplia que en refrigeración. Si la tuya se pasa, fija un objetivo, deja que la estancia se estabilice e introduce cuánto se ha pasado.",
+              "overshoot_heat": "Lo mismo para la calefacción, y solo en modo calefacción: positivo si la estancia acaba por encima de tu consigna, negativo si se queda por debajo."
+            }
+          },
+          "setpoint_offsets": {
+            "name": "Compensaciones de consigna",
+            "description": "Cambian la consigna enviada a la unidad mientras la tarjeta sigue mostrando la tuya. Si usas una fuente, el sobrepaso de arriba es la mejor palanca; si configuras ambos, se aplican los dos.",
+            "data": {
+              "target_offset": "Compensación de temperatura objetivo",
+              "target_offset_cool": "Compensación de temperatura objetivo (refrigeración)",
+              "target_offset_heat": "Compensación de temperatura objetivo (calefacción)"
+            },
+            "data_description": {
+              "target_offset": "Un valor positivo baja la consigna enviada a la unidad y uno negativo la sube; en ambos casos la tarjeta sigue mostrando la tuya. La mayoría de las unidades redondean medio grado al siguiente grado entero, así que 0,5 aquí suele actuar como 1. Si usas una fuente de temperatura interior, el sobrepaso en refrigeración de arriba es la palanca adecuada para una unidad que se pasa: es más fino y deja la consigna coincidiendo con la de la aplicación.",
+              "target_offset_cool": "Déjalo vacío para usar la compensación general de temperatura objetivo.",
+              "target_offset_heat": "Déjalo vacío para usar la compensación general de temperatura objetivo."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Compensaciones de sensor",
+            "description": "Corrigen las lecturas mostradas en Home Assistant. Solo afectan a la visualización; ninguna cambia lo que hace la unidad.",
+            "data": {
+              "indoor_offset": "Compensación del sensor de temperatura interior",
+              "outdoor_offset": "Compensación del sensor de temperatura exterior"
+            },
+            "data_description": {
+              "indoor_offset": "Se suma a la lectura interior de la propia unidad antes de mostrarla. Solo afecta a la visualización; no cambia lo que hace la unidad.",
+              "outdoor_offset": "Lo mismo, para la temperatura exterior que informa la unidad."
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "No se pudo acceder al aire acondicionado en {device}."
+    },
+    "update_failed": {
+      "message": "Ha fallado la consulta al aire acondicionado en {device}: {error}"
+    },
+    "command_failed": {
+      "message": "Ha fallado el envío del comando al aire acondicionado en {device}: {error}"
+    },
+    "command_unencodable": {
+      "message": "El aire acondicionado en {device} ha informado de un ajuste que no se puede devolver, así que no se ha enviado nada. Ajusta primero el modo del ventilador y vuelve a intentarlo."
+    },
+    "command_cancelled": {
+      "message": "El comando al aire acondicionado en {device} se ha cancelado porque la integración se está cerrando."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C está por debajo del mínimo de {min_temp} °C para hvac_mode {hvac_mode}. Incluye hvac_mode en la misma llamada de acción para comprobarlo con el modo al que vas a cambiar."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C está por encima del máximo de {max_temp} °C para hvac_mode {hvac_mode}. Incluye hvac_mode en la misma llamada de acción para comprobarlo con el modo al que vas a cambiar."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "Este modelo no informa de la capacidad del modo ausencia (Home Leave)."
+    },
+    "external_temperature_source_configured": {
+      "message": "La temperatura interior la controla la entidad de origen configurada."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Aún se desconocen los valores del modo ausencia (Home Leave). Ejecuta antes una vez la acción \"Solicitar estado del modo ausencia (Home Leave)\" de la entidad de climatización: la unidad no los incluye en una consulta normal."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} no es un sensor de consumo de energía total."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "El modo ausencia (Home Leave) solo está disponible mientras se enfría o se calienta, no en {hvac_mode}. Pon antes la unidad en refrigeración o calefacción, o usa el selector del modo ausencia para indicar la dirección."
+    },
+    "status_request_read_failed": {
+      "message": "No se pudo leer el estado del aire acondicionado en {device}, por lo que no se envió la solicitud de estado."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant ya no envía solicitudes de estado al aire acondicionado en {device}, porque esta unidad cambia sus propios ajustes en respuesta."
+    },
+    "silent_operation_not_applied": {
+      "message": "El aire acondicionado en {device} no ha confirmado el cambio del funcionamiento silencioso. Si el funcionamiento silencioso se activó con el mando infrarrojo, solo se puede desactivar con el mando."
+    },
+    "silent_operation_unit_off": {
+      "message": "El funcionamiento silencioso del aire acondicionado en {device} solo se puede cambiar mientras está en marcha."
+    },
+    "reduced_status_not_supported": {
+      "message": "El aire acondicionado en {device} no responde a las solicitudes de datos de funcionamiento ni de estado del modo ausencia, por lo que esta acción no está disponible para él."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "indoor": {
+        "name": "Interior"
+      },
+      "outdoor": {
+        "name": "Exterior"
+      },
+      "target": {
+        "name": "Objetivo"
+      },
+      "airco_id": {
+        "name": "ID del aire acondicionado"
+      },
+      "operator_id": {
+        "name": "ID del operador"
+      },
+      "device_id": {
+        "name": "ID del dispositivo"
+      },
+      "host": {
+        "name": "Dirección IP"
+      },
+      "connected_accounts": {
+        "name": "Cuentas conectadas"
+      },
+      "error": {
+        "name": "Error"
+      },
+      "updated_by": {
+        "name": "Actualizado por"
+      },
+      "account_expires": {
+        "name": "Caducidad de la cuenta"
+      },
+      "led_status": {
+        "name": "Estado del LED"
+      },
+      "auto_heating": {
+        "name": "Calefacción automática"
+      },
+      "model_nr": {
+        "name": "Número de modelo"
+      },
+      "cool_hot_judge": {
+        "name": "Evaluación frío/calor",
+        "state": {
+          "cooling": "Refrigeración",
+          "heating": "Calefacción"
+        }
+      },
+      "energy_usage": {
+        "name": "Consumo de energía (ciclo actual)"
+      },
+      "energy_usage_total": {
+        "name": "Consumo de energía total"
+      },
+      "compressor_frequency": {
+        "name": "Frecuencia del compresor"
+      },
+      "compressor_frequency_raw": {
+        "name": "Frecuencia del compresor (sin procesar)"
+      },
+      "operating_current": {
+        "name": "Corriente de funcionamiento"
+      },
+      "operating_current_raw": {
+        "name": "Corriente de funcionamiento (sin procesar)"
+      },
+      "hot_gas_temp": {
+        "name": "Temperatura del gas caliente"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Temperatura del gas caliente (sin procesar)"
+      },
+      "eev_pulses": {
+        "name": "Pulsos de la EEV"
+      },
+      "eev_position": {
+        "name": "Posición de la EEV"
+      },
+      "indoor_coil_temp": {
+        "name": "Temperatura de la batería interior"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Temperatura de salida de la batería interior"
+      },
+      "indoor_coil_raw": {
+        "name": "Temperatura de la batería interior (sin procesar)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Temperatura de salida de la batería interior (sin procesar)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Temperatura de la batería exterior (sin procesar)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Sobrecalentamiento de descarga (sin procesar)"
+      },
+      "protection_raw": {
+        "name": "Número de protección (sin procesar)"
+      },
+      "indoor_humidity": {
+        "name": "Humedad"
+      },
+      "research_data": {
+        "name": "Datos de investigación"
+      }
+    },
+    "update": {
+      "firmware_update": {
+        "name": "Actualización de firmware"
+      }
+    },
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "auto": "Automático",
+              "quiet": "Silencioso",
+              "low": "Bajo",
+              "medium": "Medio",
+              "high": "Alto"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "up_down_auto": "Arriba/abajo automático",
+              "highest": "Más alta",
+              "middle": "Intermedia",
+              "normal": "Normal",
+              "lowest": "Más baja",
+              "3d_auto": "3D automático"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "left_right_auto": "Izquierda/derecha automático",
+              "left_left": "Izquierda-izquierda",
+              "left_center": "Izquierda-centro",
+              "center_center": "Centro-centro",
+              "center_right": "Centro-derecha",
+              "right_right": "Derecha-derecha",
+              "left_right": "Izquierda-derecha",
+              "right_left": "Derecha-izquierda",
+              "3d_auto": "3D automático"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Dirección de oscilación horizontal",
+        "state": {
+          "left_right_auto": "Izquierda/derecha automático",
+          "left_left": "Izquierda-izquierda",
+          "left_center": "Izquierda-centro",
+          "center_center": "Centro-centro",
+          "center_right": "Centro-derecha",
+          "right_right": "Derecha-derecha",
+          "left_right": "Izquierda-derecha",
+          "right_left": "Derecha-izquierda",
+          "3d_auto": "3D automático"
+        }
+      },
+      "vertical_swing": {
+        "name": "Dirección de oscilación vertical",
+        "state": {
+          "up_down_auto": "Arriba/abajo automático",
+          "highest": "Más alta",
+          "middle": "Intermedia",
+          "normal": "Normal",
+          "lowest": "Más baja",
+          "3d_auto": "3D automático"
+        }
+      },
+      "fan_speed": {
+        "name": "Velocidad del ventilador",
+        "state": {
+          "auto": "Automático",
+          "quiet": "Silencioso",
+          "low": "Bajo",
+          "medium": "Medio",
+          "high": "Alto"
+        }
+      },
+      "home_leave_mode": {
+        "name": "Modo ausencia (Home Leave)",
+        "state": {
+          "off": "Apagado",
+          "away_cool": "Refrigeración en ausencia",
+          "away_heat": "Calefacción en ausencia"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Caudal de aire de refrigeración en modo ausencia (Home Leave)",
+        "state": {
+          "auto": "Automático",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Caudal de aire de calefacción en modo ausencia (Home Leave)",
+        "state": {
+          "auto": "Automático",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Umbral de temperatura exterior de refrigeración en modo ausencia (Home Leave)"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Temperatura ambiente objetivo de refrigeración en modo ausencia (Home Leave)"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Umbral de temperatura exterior de calefacción en modo ausencia (Home Leave)"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Temperatura ambiente objetivo de calefacción en modo ausencia (Home Leave)"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problema"
+      },
+      "occupancy": {
+        "name": "Presencia"
+      },
+      "compressor": {
+        "name": "Demanda del compresor"
+      },
+      "external_control": {
+        "name": "Control externo"
+      },
+      "external_temperature_active": {
+        "name": "Temperatura interior forzada"
+      },
+      "defrost": {
+        "name": "Desescarche"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Restablecer consumo de energía total"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Funcionamiento silencioso"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Establecer oscilación horizontal",
+      "description": "Establece el modo de oscilación horizontal (izquierda/derecha).",
+      "fields": {
+        "swing_mode": {
+          "name": "Oscilación horizontal",
+          "description": "Qué modo de oscilación horizontal establecer."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Establecer oscilación vertical",
+      "description": "Establece el modo de oscilación vertical (arriba/abajo).",
+      "fields": {
+        "swing_mode": {
+          "name": "Oscilación vertical",
+          "description": "Qué modo de oscilación vertical establecer."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Solicitar estado del modo ausencia (Home Leave)",
+      "description": "Pide a la unidad que informe de sus umbrales y caudales de aire actuales del modo ausencia (Home Leave). Ejecútalo una vez para que las entidades number y select tengan un valor que mostrar y editar; de lo contrario, la unidad los omite en una consulta normal. Solo es compatible con modelos que tengan la capacidad HomeLeaveMode."
+    },
+    "set_home_leave_mode": {
+      "name": "Establecer modo ausencia (Home Leave)",
+      "description": "Escribe nuevos umbrales y caudales de aire del modo ausencia (Home Leave) para refrigeración y calefacción. Solo es compatible con modelos que tengan la capacidad HomeLeaveMode.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Umbral de refrigeración",
+          "description": "Umbral de temperatura exterior/ambiente por encima del cual se activa el modo ausencia (Home Leave) de refrigeración, en °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Consigna de refrigeración",
+          "description": "Temperatura objetivo mientras el modo ausencia (Home Leave) de refrigeración está activo, en °C."
+        },
+        "air_flow_cooling": {
+          "name": "Caudal de aire de refrigeración",
+          "description": "Velocidad del ventilador mientras el modo ausencia (Home Leave) de refrigeración está activo."
+        },
+        "temp_rule_heating": {
+          "name": "Umbral de calefacción",
+          "description": "Umbral de temperatura exterior/ambiente por debajo del cual se activa el modo ausencia (Home Leave) de calefacción, en °C."
+        },
+        "temp_setting_heating": {
+          "name": "Consigna de calefacción",
+          "description": "Temperatura objetivo mientras el modo ausencia (Home Leave) de calefacción está activo, en °C."
+        },
+        "air_flow_heating": {
+          "name": "Caudal de aire de calefacción",
+          "description": "Velocidad del ventilador mientras el modo ausencia (Home Leave) de calefacción está activo."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Establecer temperatura interior",
+      "description": "Prepara una temperatura ambiente para que el aire acondicionado regule según ella en lugar de la que lee su propio sensor interior. Esta acción no envía el valor: viaja en el siguiente mensaje que se envíe de todos modos, por lo que surte efecto en menos de un minuto. Mientras haya una temperatura forzada, la integración pide a la unidad un segmento de datos de funcionamiento por ciclo, que es el mensaje que la lleva. Omite la temperatura para volver al sensor de ambiente interno.",
+      "fields": {
+        "temperature": {
+          "name": "Temperatura",
+          "description": "Temperatura ambiente en °C. Déjalo en blanco para usar el sensor de la propia unidad."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Establecer consumo de energía total",
+      "description": "Sobrescribe el consumo de energía total acumulado de una unidad. Usa 0 para restablecerlo, o una lectura de un contador que hayas conservado para trasladar esa cifra. Solo afecta al total propio de la integración: el contador de la unidad no se puede escribir.",
+      "fields": {
+        "value": {
+          "name": "Valor",
+          "description": "Nuevo total en kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Izquierda/derecha automático",
+        "left_left": "Izquierda-izquierda",
+        "left_center": "Izquierda-centro",
+        "center_center": "Centro-centro",
+        "center_right": "Centro-derecha",
+        "right_right": "Derecha-derecha",
+        "left_right": "Izquierda-derecha",
+        "right_left": "Derecha-izquierda"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Arriba/abajo automático",
+        "highest": "Más alta",
+        "middle": "Intermedia",
+        "normal": "Normal",
+        "lowest": "Más baja",
+        "3d_auto": "3D automático"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Automático",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
+      }
+    }
+  }
+}
