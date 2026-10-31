@@ -93,6 +93,17 @@ class ExternalTemperatureFeed:
         return self._device.status_request_mode == STATUS_REQUEST_STOPPED
 
     @property
+    def ignored(self) -> bool:
+        """Whether the unit takes no room temperature from us at all.
+
+        True on a unit with a reduced state block (#431): it ignores byte 5
+        and reports none, so nothing is armed, no frame is sent for it and no
+        value can be standing at the unit. A source in the options is left
+        alone here - the repair for it asks the user to remove it.
+        """
+        return self._device.reduced_status_block
+
+    @property
     def source_configured(self) -> bool:
         """Whether an indoor temperature source is set in the options.
 
@@ -109,7 +120,7 @@ class ExternalTemperatureFeed:
         restored after a restart that has not gone out yet, where the unit
         still holds the one from the previous run.
         """
-        return (
+        return not self.ignored and (
             self._override is not None
             or self._release_pending
             or self.source_configured
@@ -123,7 +134,7 @@ class ExternalTemperatureFeed:
         ride on that frame (see _sync_carrier). Never while blocked - no such
         frame is sent then, and the release goes out as a command instead.
         """
-        if self.blocked:
+        if self.blocked or self.ignored:
             return False
         return self._override is not None or self._release_pending
 
@@ -135,7 +146,7 @@ class ExternalTemperatureFeed:
         armed value is still remembered for as long as it is set, so that the
         diagnostics show what a source asked for.
         """
-        return None if self.blocked else self._override
+        return None if self.blocked or self.ignored else self._override
 
     def mode_changed(self) -> None:
         """Re-evaluate the carrier after the coordinator changed the mode."""
@@ -162,7 +173,11 @@ class ExternalTemperatureFeed:
         by this very call. A clear therefore leaves a release outstanding
         whenever a frame really did carry a value, and the carrier stays up
         until one has carried the sentinel (#218 follow-up).
+
+        Not at all on a unit that ignores the value (see ignored).
         """
+        if self.ignored:
+            return
         if value is None:
             if self._written:
                 self._release_pending = True
@@ -183,7 +198,7 @@ class ExternalTemperatureFeed:
         entity knows, from its restored state - see
         AircoClimate.async_added_to_hass().
         """
-        if self._override is not None:
+        if self.ignored or self._override is not None:
             return
         self._release_pending = True
         self._sync_carrier()
@@ -211,7 +226,7 @@ class ExternalTemperatureFeed:
         Costs what an enabled operation-data sensor costs: one extra request
         per poll cycle, holding the unit's write lock for part of it.
         """
-        if self.blocked:
+        if self.blocked or self.ignored:
             self.release_carrier()
             return
         if self._override is not None or self._release_pending:

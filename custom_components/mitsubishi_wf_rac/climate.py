@@ -852,7 +852,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         if self.supported_features & ClimateEntityFeature.PRESET_MODE:
             self._attr_preset_mode = PRESET_AWAY if airco.Vacant else PRESET_NONE
 
-    def _determine_hvac_action(self, airco: Aircon) -> HVACAction:
+    def _determine_hvac_action(self, airco: Aircon) -> HVACAction | None:
         """Determine the current HVAC action from operation mode and state.
 
         CoolHotJudge reflects the unit's own AUTO logic and is inverted - the
@@ -863,6 +863,10 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         there while it is being read anyway; both can happen with the
         compressor stopped, so they are checked before it. A missing value
         (None) falls through to the logic below.
+
+        A unit with a reduced state block reports neither the compressor flag
+        nor CoolHotJudge (#431), so the mode is all there is: heating and
+        cooling follow it, and auto has no direction to name.
         """
         _mode = airco.OperationMode
 
@@ -871,6 +875,13 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
 
         if _mode == 4:
             return HVACAction.DRYING
+
+        if self.coordinator.reduced_status_block:
+            if _mode == 2:
+                return HVACAction.HEATING
+            if _mode == 1:
+                return HVACAction.COOLING
+            return None
 
         # Both only exist in heating; a value carried over from before a switch
         # to cooling must not outlive it.

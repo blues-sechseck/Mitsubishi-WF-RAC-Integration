@@ -560,6 +560,20 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         """Whether a temperature source entity is picked for this entry."""
         return bool(self.config_entry.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE))
 
+    @property
+    def _reduced_status_block(self) -> bool:
+        """Whether the loaded unit takes no room temperature from us (#431).
+
+        Only known while the entry is loaded; otherwise the form stays as it
+        is for every other unit.
+        """
+        data = getattr(self.config_entry, "runtime_data", None)
+        return (
+            self.config_entry.state is config_entries.ConfigEntryState.LOADED
+            and data is not None
+            and data.device.reduced_status_block
+        )
+
     def _rendered_option_keys(self) -> set[str]:
         """The option keys this form shows for the current configuration.
 
@@ -579,7 +593,19 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
             CONF_INDOOR_OFFSET,
             CONF_OUTDOOR_OFFSET,
         }
-        if self._source_configured:
+        if self._reduced_status_block:
+            # Nothing to offer a source for. One that is already set stays in
+            # the form, or the repair that asks for its removal would send the
+            # user to a place where it cannot be removed.
+            keys -= {
+                CONF_EXTERNAL_TEMPERATURE_SOURCE,
+                CONF_OVERSHOOT_COOL,
+                CONF_OVERSHOOT_DRY,
+                CONF_OVERSHOOT_HEAT,
+            }
+            if self._source_configured:
+                keys.add(CONF_EXTERNAL_TEMPERATURE_SOURCE)
+        elif self._source_configured:
             keys |= {CONF_OVERSHOOT_COOL, CONF_OVERSHOOT_DRY, CONF_OVERSHOOT_HEAT}
         return keys
 
@@ -683,7 +709,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         # would recommend the arrangement that has no fallback (#218). They
         # appear once a source is picked and saved - a form cannot rebuild
         # itself while it is open.
-        if self._source_configured:
+        if self._source_configured and not self._reduced_status_block:
             source_fields.update(
                 {
                     # Cooling starts at the figure four units have measured:
@@ -744,6 +770,13 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
             for key in (CONF_INDOOR_OFFSET, CONF_OUTDOOR_OFFSET)
         }
 
+        sections: dict[Any, Any] = {}
+        if not self._reduced_status_block or self._source_configured:
+            sections[vol.Required(SECTION_INDOOR_TEMPERATURE_SOURCE)] = section(
+                vol.Schema(source_fields),  # type: ignore[arg-type]
+                {"collapsed": False},
+            )
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(  # type: ignore[arg-type]
@@ -764,10 +797,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                         CONF_FIRMWARE_UPDATE_CHECK,
                         default=options.get(CONF_FIRMWARE_UPDATE_CHECK, False),
                     ): bool,
-                    vol.Required(SECTION_INDOOR_TEMPERATURE_SOURCE): section(
-                        vol.Schema(source_fields),  # type: ignore[arg-type]
-                        {"collapsed": False},
-                    ),
+                    **sections,
                     # Collapsed once a source is in use: the overshoot above is
                     # the right lever then, and these two stack with it if both
                     # are set. Still shown, because they keep working - what

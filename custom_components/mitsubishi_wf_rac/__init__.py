@@ -51,6 +51,11 @@ from .foreign_writers import (
     request_stops_unit_issue_id,
     status_request_unsupported_issue_id,
 )
+from .reduced_status import (
+    async_remove_unsupported_entities,
+    external_temperature_unsupported_issue_id,
+    report_external_temperature_unsupported,
+)
 from .service_data import service_data_unanswered_issue_id
 from .services import async_setup_services
 
@@ -318,6 +323,19 @@ async def async_setup_entry(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _handle_stop)
     )
 
+    # Before the platforms: they leave these entities out, which would leave
+    # whatever an earlier run registered behind as permanently unknown.
+    if _device.reduced_status_block:
+        async_remove_unsupported_entities(hass, entry.entry_id, _device.airco_id_lower)
+    if _device.reduced_status_block and _device.external_temperature.source_configured:
+        report_external_temperature_unsupported(
+            hass, entry.entry_id, _device.device_name
+        )
+    else:
+        ir.async_delete_issue(
+            hass, DOMAIN, external_temperature_unsupported_issue_id(entry.entry_id)
+        )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     if _device.status_request_mode == STATUS_REQUEST_STOPPED:
@@ -457,6 +475,9 @@ async def async_remove_entry(
     )
     ir.async_delete_issue(
         hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
+    )
+    ir.async_delete_issue(
+        hass, DOMAIN, external_temperature_unsupported_issue_id(entry.entry_id)
     )
 
     if temp_device is None:

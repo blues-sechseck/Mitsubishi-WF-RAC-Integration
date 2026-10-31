@@ -36,7 +36,11 @@ async def async_setup_entry(
 
     device: Device = entry.runtime_data.device
 
-    entities: list[SwitchEntity] = [SilentOperationSwitch(device)]
+    entities: list[SwitchEntity] = []
+    # Read and written through operation data, which a unit with a reduced
+    # state block does not answer (#431).
+    if not device.reduced_status_block:
+        entities.append(SilentOperationSwitch(device))
 
     _async_remove_self_clean_switch(hass, device)
     _async_remove_home_leave_mode_switch(hass, device)

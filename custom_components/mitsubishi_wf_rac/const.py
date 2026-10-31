@@ -88,6 +88,26 @@ ATTR_OUTDOOR_COIL_RAW = "outdoor_coil_raw"
 ATTR_DISCHARGE_SUPERHEAT_RAW = "discharge_superheat_raw"
 ATTR_PROTECTION_RAW = "protection_raw"
 ATTR_INDOOR_HUMIDITY = "indoor_humidity"
+# Every type ServiceDataSensor is built for; the registry cleanup for units
+# without an operation-data channel (reduced_status.py) names them from here.
+SERVICE_DATA_SENSOR_TYPES = (
+    ATTR_COMPRESSOR_FREQUENCY,
+    ATTR_COMPRESSOR_FREQUENCY_RAW,
+    ATTR_OPERATING_CURRENT,
+    ATTR_OPERATING_CURRENT_RAW,
+    ATTR_HOT_GAS_TEMP,
+    ATTR_HOT_GAS_TEMP_RAW,
+    ATTR_EEV_PULSES,
+    ATTR_EEV_POSITION,
+    ATTR_INDOOR_COIL_TEMP,
+    ATTR_INDOOR_COIL_OUTLET_TEMP,
+    ATTR_INDOOR_COIL_RAW,
+    ATTR_INDOOR_COIL_OUTLET_RAW,
+    ATTR_OUTDOOR_COIL_RAW,
+    ATTR_DISCHARGE_SUPERHEAT_RAW,
+    ATTR_PROTECTION_RAW,
+    ATTR_INDOOR_HUMIDITY,
+)
 
 # New offset constants
 CONF_INDOOR_OFFSET = "indoor_offset"

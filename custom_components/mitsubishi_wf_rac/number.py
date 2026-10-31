@@ -40,7 +40,9 @@ async def async_setup_entry(
     device: Device = entry.runtime_data.device
 
     entities: list[NumberEntity] = []
-    if device.airco.Capabilities.home_leave_mode:
+    # Read with the Home Leave status request, which a unit with a reduced
+    # state block does not answer (#431).
+    if device.airco.Capabilities.home_leave_mode and not device.reduced_status_block:
         for mode in ("cooling", "heating"):
             entities.append(HomeLeaveModeNumber(device, mode, "TempRule"))
             entities.append(HomeLeaveModeNumber(device, mode, "TempSetting"))
