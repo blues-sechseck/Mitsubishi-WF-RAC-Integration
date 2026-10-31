@@ -67,7 +67,9 @@ async def async_setup_entry(
 
     # Same HomeLeaveMode capability gate as the diagnostic sensors removed by
     # _async_remove_home_leave_mode_sensors() in sensor.py.
-    if device.airco.Capabilities.home_leave_mode:
+    # Read with the Home Leave status request, which a unit with a reduced
+    # state block does not answer (#431).
+    if device.airco.Capabilities.home_leave_mode and not device.reduced_status_block:
         entities.append(HomeLeaveAirFlowSelect(device, "cooling"))
         entities.append(HomeLeaveAirFlowSelect(device, "heating"))
 

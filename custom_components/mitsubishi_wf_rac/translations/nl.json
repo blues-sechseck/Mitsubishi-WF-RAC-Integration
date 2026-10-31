@@ -100,6 +100,9 @@
     },
     "silent_operation_unit_off": {
       "message": "De stille werking van de airco op {device} kan alleen worden gewijzigd terwijl deze draait."
+    },
+    "reduced_status_not_supported": {
+      "message": "De airco op {device} beantwoordt geen verzoeken om bedrijfsgegevens of de Home Leave-status, dus deze actie is daarvoor niet beschikbaar."
     }
   },
   "issues": {
@@ -125,6 +128,10 @@
     "service_data_unanswered": {
       "title": "Bedrijfsdata zijn niet beschikbaar van {device_name}",
       "description": "De diagnostische sensoren voor compressor, stroom, temperaturen en EEV-stand worden eens per minuut met een extra verzoek uitgelezen. Dit apparaat accepteert dat verzoek en beantwoordt het, maar heeft er nog nooit ook maar één segment in teruggegeven — die sensoren zouden dus nooit een waarde tonen, hoe het verzoek er ook uitziet.\n\nHome Assistant is gestopt met vragen. De sensoren melden nu niet beschikbaar in plaats van onbekend, en dat is het eerlijke verschil: een meting is niet te laat, er is er geen. U kunt ze op dit apparaat uitschakelen; er gaat niets verloren en het haalt ze uit beeld.\n\nAl het overige blijft ongemoeid — aan/uit, modus, temperatuur, ventilator en lamellen zijn gewone commando's en gebruiken dit kanaal niet. Een in de opties ingestelde bron voor de binnentemperatuur blijft ook werken: die reist op hetzelfde verzoek mee, dat daarvoor nog steeds verstuurd wordt.\n\nDe integratie herladen laat het opnieuw proberen, voor het geval dit tijdelijk was."
+    },
+    "external_temperature_unsupported": {
+      "title": "{device_name} accepteert geen kamertemperatuur",
+      "description": "Dit toestel meldt geen kamertemperatuur en negeert een temperatuur die het wordt toegestuurd. De in de opties van deze integratie ingestelde binnentemperatuurbron heeft daarom geen effect en er wordt niets voor verstuurd. U kunt de bron in de opties verwijderen; deze melding verdwijnt zodra de integratie opnieuw is geladen."
     }
   },
   "options": {

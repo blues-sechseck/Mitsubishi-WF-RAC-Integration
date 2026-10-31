@@ -242,6 +242,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._parser.status_request_carries_state = (
             status_request_mode == STATUS_REQUEST_ECHO
         )
+        # Decided from the first poll of every setup, see
+        # _decide_reduced_status_block().
+        self._reduced_status_block: bool | None = None
 
         # Protected state
         self._airco = Aircon()
@@ -316,6 +319,51 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return self.config_entry.entry_id
 
     @property
+    def reduced_status_block(self) -> bool:
+        """Whether this unit fills only a part of the state block (#431).
+
+        Settled by the first poll of the setup and not changed afterwards;
+        False until then.
+        """
+        return bool(self._reduced_status_block)
+
+    def _decide_reduced_status_block(self) -> None:
+        """Tell a unit with a reduced state block from a normal one, once.
+
+        On every other unit content[5] is the regulating temperature,
+        round(T * 4) + 61, even while the unit is off - so a zero there is not
+        a reading (it would be -15.25 C). The model and the setpoint must be
+        filled for it to count: an all-zero block is a bus hiccup, not a kind
+        of unit.
+
+        Recomputed at every setup and never stored, so a firmware that starts
+        filling the block is picked up by the next reload.
+
+        Such a unit applies the request that only asks (#329, #424, #427,
+        #431), so it is put on the shape that carries its own state - in
+        memory only, as the entry is not told. A unit already given up on
+        stays given up on.
+        """
+        if self._reduced_status_block is not None:
+            return
+        airco = self._airco
+        self._reduced_status_block = (
+            airco.ControllerRoomTempRaw == 0
+            and airco.ModelNrRaw != 0
+            and airco.PresetTemp > 0
+        )
+        if not self._reduced_status_block:
+            return
+        _LOGGER.debug(
+            "[%s] reports a reduced state block: no operation data, no room "
+            "temperature input, no compressor flag",
+            self.device_name,
+        )
+        if self._status_request_mode != STATUS_REQUEST_STOPPED:
+            self._status_request_mode = STATUS_REQUEST_ECHO
+            self._parser.status_request_carries_state = True
+
+    @property
     def external_temperature_override(self) -> float | None:
         """Return the integration-side external temperature override, if any."""
         return self.external_temperature.override
@@ -362,7 +410,9 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         Never raises; the return value says whether a frame went out.
         """
         feed = self.external_temperature
-        if not (force or feed.may_hold_unit):
+        # A unit with a reduced state block ignores byte 5, so nothing of ours
+        # can be standing there - and the frame would be applied.
+        if self.reduced_status_block or not (force or feed.may_hold_unit):
             return False
         if clear:
             feed.set_override(None)
@@ -513,6 +563,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self.service_data.carry_forward(new_airco)
             self.research_data.note_answer(new_airco)
             self._airco = new_airco
+            self._decide_reduced_status_block()
             # Not part of the airconStat blob, present alongside it in the same
             # response. Tolerate absence (.get()) since it's undocumented and
             # could be missing on older firmware.
@@ -688,8 +739,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def maybe_request_service_data(self) -> None:
         """Kick off a background request for active operation-data segments.
 
-        When due, that is - see SERVICE_DATA_MIN_SPACING.
+        When due, that is - see SERVICE_DATA_MIN_SPACING. Never on a unit with a
+        reduced state block: it does not answer, and the request is applied.
         """
+        if self.reduced_status_block:
+            return
         service_data_codes = self._subscribed_service_data_codes()
         research = RESEARCH_CONTEXT in self.async_contexts()
         if not service_data_codes and not research:
@@ -827,17 +881,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             return
         params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
         timestamp_offset = -round(self._service_data_stamp_backdate().total_seconds())
-        # Taken here rather than at the poll: what the answer has to be read
-        # against is the state this very frame was built from, and on the echo
-        # path _async_read_before_echo() has just refreshed it.
-        before = self.foreign_writers.snapshot()
-        # Kept for the poll as well. The module answers our request with its
-        # own cached state, and the frame's trip down the CNS bus to the indoor
-        # unit need not have finished by then - measured on the affected unit,
-        # the settings it cleared showed up a poll later, not in the answer
-        # (#329). Checking only the answer would have reproduced the blind spot
-        # this detector was rewritten to close.
-        self.foreign_writers.note_status_request(before)
         # _carry_forward_service_data() moves this whenever a segment arrives,
         # so comparing it across the request says whether this one was answered
         # - which the state itself cannot, the previous reading being carried
@@ -855,7 +898,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
                 if attempt > 1:
                     _LOGGER.debug("Service data request succeeded on retry")
-                self.foreign_writers.check_request_was_applied(before)
                 if regular_codes:
                     self.service_data.note_whether_anything_answered(answered_before)
                 if research_codes and self._airco is not None:
@@ -919,6 +961,14 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # Entities keep their previous operation-data values on a skipped cycle
         # (see _carry_forward_service_data), so there is nothing to push here.
 
+    def _reduced_status_error(self) -> HomeAssistantError:
+        """The refusal for an operation-data request on a reduced unit."""
+        return HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="reduced_status_not_supported",
+            translation_placeholders={"device": self.device_name},
+        )
+
     async def async_set_silent_operation(self, state: bool) -> None:
         """Switch silent operation, and accept it only once the unit confirms.
 
@@ -928,6 +978,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         0xDD back does - a few times, because the change reaches the indoor
         unit over the bus after the module has already answered.
         """
+        if self.reduced_status_block:
+            raise self._reduced_status_error()
         async with self._silent_operation_lock:
             task = self.service_data.task
             if task is not None and not task.done():
@@ -1122,7 +1174,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
         is_status_request marks a frame that asks for readings instead of
         changing anything: its block carries no set-bits, so what it echoes
-        back is the unit's own state rather than our expectation.
+        back is the unit's own state rather than our expectation. Every such
+        frame is also watched for the unit applying it anyway (#329), here
+        rather than by each caller: a caller that forgot was a frame that
+        switched a unit off without anybody noticing (#427).
 
         retry_when_locked=False hands a refusal straight back instead of
         waiting the foreign write lock out below - that wait runs inside
@@ -1152,6 +1207,18 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             if self._airco is None:
                 raise ValueError("Airco object is empty")
 
+            # Taken here rather than at the poll: what the answer has to be read
+            # against is the state this very frame is built from.
+            before = self.foreign_writers.snapshot() if is_status_request else None
+            if is_status_request:
+                # Kept for the poll as well. The module answers our request
+                # with its own cached state, and the frame's trip down the CNS
+                # bus to the indoor unit need not have finished by then -
+                # measured on the affected unit, the settings it cleared showed
+                # up a poll later, not in the answer (#329). Checking only the
+                # answer would have reproduced the blind spot this detector was
+                # rewritten to close.
+                self.foreign_writers.note_status_request(before)
             airco_stat = self._build_command(params)
             # The earliest `timestamp` any send below can stamp, the same way
             # pywfrac stamps it - for claiming the write if its answer is lost.
@@ -1180,6 +1247,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     # wrote while it held the lock. The block encoded before
                     # the refusal still carries the state from before that,
                     # and sending it would hand their change straight back.
+                    if is_status_request:
+                        # The wait read the unit again: the request is now
+                        # built from, and has to be read against, that state.
+                        before = self.foreign_writers.snapshot()
+                        self.foreign_writers.note_status_request(before)
                     airco_stat = self._build_command(params)
                     response = await self._api.send_airco_command(
                         self._airco_id,
@@ -1233,6 +1305,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 # away, the service layer drops the calls that would show it
                 # is there.
                 self._record_reachable()
+                if is_status_request:
+                    self.foreign_writers.check_request_was_applied(before)
             except (WfRacError, KeyError, TypeError, ValueError) as ex:
                 # A refusal is the one failure known not to have been carried
                 # out. Anything else may have reached the unit and been applied
@@ -1348,6 +1422,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         a setting up to a poll old and undo whatever was done at the unit since
         - including switching a unit off that somebody just turned on.
         """
+        if self.reduced_status_block:
+            raise self._reduced_status_error()
         if self._status_request_mode == STATUS_REQUEST_STOPPED:
             # This unit changes its settings whatever we put in the frame, so
             # the frame is not sent at all any more (#329).
@@ -1367,16 +1443,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 translation_key="status_request_read_failed",
                 translation_placeholders={"device": self.device_name},
             )
-        # The same frame as the operation-data request, so it needs the same
-        # watch: setup sends it once in strict mode, and on a unit that applies
-        # the empty block that switched it off on every start (#427).
-        before = self.foreign_writers.snapshot()
-        self.foreign_writers.note_status_request(before)
         await self.set_airco(
             {AirconCommands.HomeLeaveModeStatusRequest: True},
             is_status_request=True,
         )
-        self.foreign_writers.check_request_was_applied(before)
 
     async def async_read_home_leave_mode_once(self) -> None:
         """Read Tag 248 once at setup, so away heating has its setting.
@@ -1384,11 +1454,13 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         The reading lives in memory only, and without it away heats to
         HOME_LEAVE_TEMP_HEAT rather than what the Smart M-Air app shows.
         Skipped on a module whose status request carries state or is not sent
-        at all (#329): there the request is a write. A failure is not worth
+        at all (#329): there the request is a write. Skipped as well on a unit
+        with a reduced state block, which never answers it. A failure is not worth
         more than a debug line - away still works, on the fallback.
         """
         if (
-            not self._airco.Capabilities.home_leave_mode
+            self.reduced_status_block
+            or not self._airco.Capabilities.home_leave_mode
             or self._status_request_mode == STATUS_REQUEST_STOPPED
             or self._parser.status_request_carries_state
         ):

@@ -100,6 +100,9 @@
     },
     "silent_operation_unit_off": {
       "message": "Oro kondicionieriaus adresu {device} tylų veikimą galima keisti tik jam veikiant."
+    },
+    "reduced_status_not_supported": {
+      "message": "Oro kondicionierius ties {device} neatsako į veikimo duomenų ar „Home Leave“ būsenos užklausas, todėl šis veiksmas jam nepasiekiamas."
     }
   },
   "issues": {
@@ -125,6 +128,10 @@
     "service_data_unanswered": {
       "title": "Veikimo duomenys iš {device_name} neprieinami",
       "description": "Kompresoriaus, srovės, temperatūrų ir EEV padėties diagnostiniai jutikliai nuskaitomi papildoma užklausa kartą per minutę. Šis įrenginys užklausą priima ir į ją atsako, bet niekada nėra grąžinęs nė vieno segmento — tad tie jutikliai vis tiek nebūtų nieko parodę, kad ir kaip užklausa atrodytų.\n\nHome Assistant nustojo klausti. Jutikliai dabar rodo neprieinama, o ne nežinoma, ir tai yra sąžiningas skirtumas: rodmuo ne vėluoja, jo tiesiog nėra. Šiame įrenginyje galite juos išjungti; nieko neprarasite, tik dingsta iš akių.\n\nVisa kita nepaliesta — įjungimas, režimas, temperatūra, ventiliatorius ir mentės yra įprastos komandos ir šio kanalo nenaudoja. Integracijos parinktyse nustatytas vidaus temperatūros šaltinis taip pat toliau veikia: jis keliauja ta pačia užklausa, kuri dėl jo vis dar siunčiama.\n\nIš naujo įkėlus integraciją bandoma dar kartą — tam atvejui, jei tai buvo laikina."
+    },
+    "external_temperature_unsupported": {
+      "title": "{device_name} nepriima patalpos temperatūros",
+      "description": "Šis prietaisas nepraneša patalpos temperatūros ir ignoruoja jam siunčiamą reikšmę, todėl šios integracijos parinktyse nustatytas patalpos temperatūros šaltinis neturi jokio poveikio ir jam niekas nesiunčiama. Šaltinį galite pašalinti parinktyse; šis pranešimas išnyks, kai integracija bus įkelta iš naujo."
     }
   },
   "options": {

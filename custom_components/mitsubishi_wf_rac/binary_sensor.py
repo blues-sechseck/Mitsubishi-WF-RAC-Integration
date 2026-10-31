@@ -34,13 +34,18 @@ async def async_setup_entry(
 
     device: Device = entry.runtime_data.device
 
-    entities = [
+    entities: list[BinarySensorEntity] = [
         ProblemBinarySensor(device),
-        CompressorBinarySensor(device),
         ExternalControlBinarySensor(device),
-        ExternalTemperatureActiveBinarySensor(device),
-        DefrostBinarySensor(device),
     ]
+    # The flags behind these three are zero on a unit with a reduced state
+    # block and its operation data never arrives (#431).
+    if not device.reduced_status_block:
+        entities += [
+            CompressorBinarySensor(device),
+            ExternalTemperatureActiveBinarySensor(device),
+            DefrostBinarySensor(device),
+        ]
     # Occupancy ("vacant") detection is only reported by units whose capability
     # table has VacantProperty=true - includes ZT-2025 (raw=3), which the
     # wire-protocol ModelNr grouping alone would miss (see capabilities.py).

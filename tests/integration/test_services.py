@@ -189,6 +189,7 @@ async def test_options_flow_reloads_itself(hass: HomeAssistant):
     device = MagicMock(
         available=True,
         connection_method=None,
+        reduced_status_block=False,
         update=AsyncMock(),
         # Awaited when hass stops at the end of the test.
         async_hand_back_room_sensor=AsyncMock(),

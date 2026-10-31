@@ -122,30 +122,32 @@ async def async_setup_entry(
         entities.append(EnergyTotalSensor(device))
 
     # Active operation-data entities register their segment code with Device,
-    # which requests only the segments needed by enabled entities.
-    entities += [
-        ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
-        ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY_RAW),
-        ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
-        ServiceDataSensor(device, ATTR_OPERATING_CURRENT_RAW),
-        ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
-        ServiceDataSensor(device, ATTR_HOT_GAS_TEMP_RAW),
-        ServiceDataSensor(device, ATTR_EEV_PULSES),
-        ServiceDataSensor(device, ATTR_EEV_POSITION),
-        ServiceDataSensor(device, ATTR_INDOOR_COIL_TEMP),
-        ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
-        ServiceDataSensor(device, ATTR_INDOOR_COIL_RAW),
-        ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_RAW),
-        ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
-        ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
-        ServiceDataSensor(device, ATTR_PROTECTION_RAW),
-        ServiceDataSensor(device, ATTR_INDOOR_HUMIDITY),
-    ]
+    # which requests only the segments needed by enabled entities. None of
+    # them on a unit with a reduced state block, which never answers (#431).
+    if not device.reduced_status_block:
+        entities += [
+            ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
+            ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY_RAW),
+            ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
+            ServiceDataSensor(device, ATTR_OPERATING_CURRENT_RAW),
+            ServiceDataSensor(device, ATTR_HOT_GAS_TEMP),
+            ServiceDataSensor(device, ATTR_HOT_GAS_TEMP_RAW),
+            ServiceDataSensor(device, ATTR_EEV_PULSES),
+            ServiceDataSensor(device, ATTR_EEV_POSITION),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_TEMP),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_RAW),
+            ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_RAW),
+            ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
+            ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
+            ServiceDataSensor(device, ATTR_PROTECTION_RAW),
+            ServiceDataSensor(device, ATTR_INDOOR_HUMIDITY),
+        ]
 
-    if await is_prerelease_build(hass):
-        entities.append(ResearchDataSensor(device))
-    else:
-        _async_remove_research_data_sensor(hass, device)
+        if await is_prerelease_build(hass):
+            entities.append(ResearchDataSensor(device))
+        else:
+            _async_remove_research_data_sensor(hass, device)
 
     _async_remove_home_leave_mode_sensors(hass, device)
 

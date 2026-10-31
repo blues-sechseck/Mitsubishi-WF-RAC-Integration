@@ -44,8 +44,16 @@ ON_COOL_PAYLOAD, _ = LIVE_CAPTURES["on_cool"]
 
 
 def _stat_with_segments(segments: list[tuple[int, int, int, int]]) -> str:
-    """A parseable airconStat whose trailer carries the given segments."""
-    body = [0] * 21 + [0] * 18 + [0]
+    """A parseable airconStat whose trailer carries the given segments.
+
+    The state block is the live capture's, not zeros: an all-zero answer is
+    what a unit applying the empty request looks like (see
+    ForeignWriterWatch.check_request_was_applied), which these tests are not
+    about.
+    """
+    # The live capture has one trailer segment ahead of its state block.
+    state = list(base64.b64decode(ON_COOL_PAYLOAD)[25:43])
+    body = [0] * 21 + state + [0]
     for segment in segments:
         body += list(segment)
     return base64.b64encode(bytes(b & 0xFF for b in [*body, 0, 0])).decode()
