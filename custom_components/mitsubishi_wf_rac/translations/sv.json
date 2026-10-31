@@ -1,0 +1,568 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "Värd",
+          "port": "Port",
+          "force_update": "Ignorera dubblerad IP-adress"
+        },
+        "description": "Fyll i rätt uppgifter för att lägga till luftkonditioneringen manuellt",
+        "title": "Anslutningsuppgifter för WF-RAC AC",
+        "data_description": {
+          "host": "Den lokala IP-adressen till luftkonditioneringens trådlösa modul. En ändrad adress upptäcks när modulen annonserar sig igen. Ge modulen en fast adress i routern, eller rätta den här om det inte fungerar.",
+          "port": "Porten som modulens lokala API lyssnar på. Låt den vara 51443 om inte din modul annonserar en annan.",
+          "force_update": "Lägg till den här luftkonditioneringen även om en annan post redan använder samma IP-adress. Avsett för att lägga till en enhet på nytt när dess gamla post har försvunnit: modulen tar bara emot en anslutning åt gången, så två poster som hämtar data från den ger fel i loggen."
+        }
+      },
+      "discovery_confirm": {
+        "description": "Luftkonditioneringen med id: {id}, IP: {host} och port: {port} hittades. Porten är normalt 51443 – rätta den nedan om den ser annorlunda ut.",
+        "title": "WF-RAC-luftkonditionering hittad",
+        "data": {
+          "port": "Port"
+        },
+        "data_description": {
+          "port": "Porten som modulen nås på. Den är normalt 51443 – rätta den här om det annonserade värdet ovan ser annorlunda ut."
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Värd",
+          "port": "Port"
+        },
+        "description": "Uppdatera anslutningsuppgifterna för den här luftkonditioneringen.",
+        "title": "Konfigurera om anslutningen till WF-RAC AC",
+        "data_description": {
+          "host": "Den lokala IP-adressen till luftkonditioneringens trådlösa modul. En ändrad adress upptäcks när modulen annonserar sig igen. Ge modulen en fast adress i routern, eller rätta den här om det inte fungerar.",
+          "port": "Porten som modulens lokala API lyssnar på. Låt den vara 51443 om inte din modul annonserar en annan."
+        }
+      }
+    },
+    "error": {
+      "unexpected_error": "Ett oväntat fel inträffade. Se loggen för mer information.",
+      "cannot_connect": "Det gick inte att ansluta till luftkonditioneringen: {reason}",
+      "invalid_host": "Ogiltigt värdnamn eller ogiltig IP-adress",
+      "host_already_configured": "Luftkonditioneringens IP är redan konfigurerad som [{error_name}]",
+      "too_many_devices_registered": "För många enheter är registrerade för den här luftkonditioneringen. Ta bort en enhet (i appen) eller återställ modulen till fabriksinställningar."
+    },
+    "abort": {
+      "existing_instance_updated": "Den befintliga konfigurationen uppdaterades.",
+      "already_configured": "Tjänsten är redan konfigurerad",
+      "reconfigure_successful": "Omkonfigureringen lyckades",
+      "wrong_device": "Det här är en annan luftkonditionering än den som posten skapades för. Peka tillbaka till den ursprungliga enheten, eller lägg till den andra som en egen post."
+    }
+  },
+  "issues": {
+    "too_many_devices": {
+      "title": "För många konton registrerade på {device_name}",
+      "description": "Den här enheten har plats för fyra registrerade konton och alla fyra är upptagna, så Home Assistant kan inte registrera sig. Modulen frigör aldrig en plats själv: registreringar går inte ut, och en ny nekas i stället för att ersätta en äldre. Ta bort den här enheten i Smart M-Air-appen från en telefon som inte längre behövs – varje konto kan bara ta bort sig självt, och flera telefoner som delar ett Smart M-Air-konto upptar tillsammans en enda plats. Ladda sedan om integrationen. Om ingen kan frigöra en plats – en telefon som sedan länge är borta håller kvar en – måste modulen ställas in från början igen."
+    },
+    "request_stops_unit": {
+      "title": "{device_name} ändrar sina egna inställningar när den får en förfrågan om kördata",
+      "description": "Diagnossensorerna för kompressor, ström och temperaturer läses med en extra förfrågan varje minut. Förfrågan innehåller inga inställningar – den frågar bara – men den här modulen tillämpar den ändå, och varje fält som lämnas tomt tolkas som ett värde: enheten stängs av, läget går till auto, fläkt och luftspjäll faller tillbaka till första läget och börvärdet sjunker till det lägsta som enheten tillåter.\n\nHome Assistant har ändrat förfrågan så att den bär enhetens egna inställningar, lästa ett ögonblick innan den skickas, så att ramen bekräftar dem i stället för att rensa dem. Det är samma form som tillverkarens egen app använder. De inställningar som förfrågan rensade har skrivits tillbaka. Så länge Home Assistant tror att enheten är avstängd skickas ingen förfrågan alls, så de här sensorerna behåller sitt senaste värde tills enheten körs igen.\n\nDet finns inget mer att göra – håll utkik några minuter. Om enheten fortfarande ändrar sina inställningar av sig själv slutar Home Assistant skicka förfrågan helt och säger till här."
+    },
+    "status_request_unsupported": {
+      "title": "Kördata kan inte läsas från {device_name}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Be {device_name} om kördata igen?",
+            "description": "Den här enheten ändrade sina egna inställningar varje gång den fick en förfrågan om kördata, även när förfrågan bar tillbaka enhetens aktuella inställningar, så Home Assistant har slutat skicka den förfrågan. Enheten har lämnats tillbaka till sin egen rumsgivare: en inomhustemperaturkälla som angetts i integrationens alternativ skickas inte längre till den, och klimatkortet visar den temperatur som enheten själv mäter.\n\nDet här kostar: diagnossensorerna som matas av den förfrågan (kompressorfrekvens, driftström, hetgastemperatur, EEV-position och värmeväxlartemperaturerna) uppdateras inte längre. Allt annat påverkas inte: på/av, läge, temperatur, fläkt och luftspjäll skickas som vanliga kommandon.\n\nDetekteringen kan också utlösas av att någon använder fjärrkontrollen samtidigt. Skicka in den här reparationen för att försöka igen: integrationen laddas om och bevakar det på nytt. Om enheten stängs av eller ändrar sina inställningar igen kommer det här meddelandet tillbaka – rapportera det då, med din moduls firmwareversion."
+          }
+        }
+      }
+    },
+    "service_data_unanswered": {
+      "title": "Kördata är inte tillgängliga från {device_name}",
+      "description": "Diagnossensorerna för kompressor, ström, temperaturer och EEV-position läses med en extra förfrågan varje minut. Den här enheten tar emot förfrågan och svarar på den, men har aldrig returnerat ett enda segment i den – så de här sensorerna skulle aldrig visa något värde, oavsett hur förfrågan ser ut.\n\nHome Assistant har slutat fråga. Sensorerna visar nu otillgänglig i stället för okänd, vilket är den ärliga skillnaden: ett värde är inte försenat, det finns inget. Du kan inaktivera dem på den här enheten; inget går förlorat, och de försvinner ur sikte.\n\nAllt annat påverkas inte – på/av, läge, temperatur, fläkt och luftspjäll är vanliga kommandon och använder inte den här kanalen. En inomhustemperaturkälla som angetts i integrationens alternativ fortsätter också att fungera: den färdas med samma förfrågan, som fortfarande skickas för dess skull.\n\nOm du laddar om integrationen försöker den igen, ifall det här var tillfälligt."
+    },
+    "external_temperature_unsupported": {
+      "title": "{device_name} tar inte emot en rumstemperatur",
+      "description": "Den här enheten rapporterar ingen rumstemperatur och ignorerar en som skickas till den, så inomhustemperaturkällan som angetts i den här integrationens alternativ har ingen effekt, och inget skickas för den. Du kan ta bort källan i alternativen; det här meddelandet försvinner när integrationen har laddats om."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Nedan finns alternativen du kan ändra för den här luftkonditioneringen.",
+        "data": {
+          "availability_retry_limit": "Gräns för nya försök",
+          "firmware_update_check": "Sök efter firmwareuppdateringar"
+        },
+        "data_description": {
+          "availability_retry_limit": "Antal misslyckade hämtningar i följd innan luftkonditioneringen markeras som otillgänglig. Minimivärdet tre motsvarar ungefär tre minuter med 60 sekunders hämtningsintervall – tillräckligt för att klara modulens timvisa WiFi-återanslutning. Höj det vid en svag länk.",
+          "firmware_update_check": "Lägger till en firmwareuppdateringsentitet som jämför modulens version med tillverkarens server. Det här är den enda utgående internetanslutningen integrationen gör – låt den vara avstängd för att hålla allt helt lokalt."
+        },
+        "title": "WF-RAC-alternativ",
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "Inomhustemperaturkälla",
+            "description": "Ge enheten en rumstemperatur uppmätt ute i rummet, i stället för den som den läser av vid sitt eget returluftsgaller.",
+            "data": {
+              "external_temperature_source": "Sensor",
+              "overshoot_cool": "Översläpp vid kyla",
+              "overshoot_dry": "Översläpp vid avfuktning",
+              "overshoot_heat": "Översläpp vid värme"
+            },
+            "data_description": {
+              "external_temperature_source": "Enheten reglerar efter den här sensorn. Lämna tomt för att låta enheten gå tillbaka till sin egen sensor. Otillgängliga eller okända tillstånd gör detsamma i nästa ram. I värmeläge lägger de flesta enheter själva till 2 °C på inställningen, vilket syns när en sensor sitter ute i rummet – README förklarar hur du stänger av det på enheten.",
+              "overshoot_cool": "Hur långt rummet går förbi din inställning innan enheten stannar. Ställ in 22 °C och rummet landar på 21,5 °C: ange 0,5. Börjar på 0,5 eftersom det är vad de hittills uppmätta enheterna behöver – kontrollera var ditt eget rum landar och justera. Om det i stället stannar för tidigt och aldrig blir tillräckligt kallt, ange ett negativt tal. Kvarts grader är det finaste steg som når enheten. Gäller bara i kylläge – avfuktning har ett eget fält, och i auto får enheten din avläsning okorrigerad.",
+              "overshoot_dry": "Detsamma för avfuktning, som också kyler och har samma tecken. Börjar på 0: den enda enhet som mättes i det här läget landade på sin inställning, med ett bredare band än vid kyla. Om din går förbi den, ställ in ett mål, låt rummet stabiliseras och ange hur långt förbi rummet gick.",
+              "overshoot_heat": "Detsamma för värme, och bara i värmeläge: positivt om rummet hamnar över din inställning, negativt om det stannar under den."
+            }
+          },
+          "setpoint_offsets": {
+            "name": "Börvärdesjusteringar",
+            "description": "Ändra inställningen som skickas till enheten medan kortet fortsätter visa din. Med en källa i bruk är översläppet ovan det bättre verktyget, och om du anger båda gäller båda.",
+            "data": {
+              "target_offset": "Justering av måltemp.",
+              "target_offset_cool": "Justering av måltemp. (kyla)",
+              "target_offset_heat": "Justering av måltemp. (värme)"
+            },
+            "data_description": {
+              "target_offset": "Positivt sänker inställningen som skickas till enheten, negativt höjer den – kortet visar din i båda fallen. De flesta enheter avrundar en halv grad uppåt till nästa hela, så 0,5 här fungerar ofta som 1. Med en inomhustemperaturkälla i bruk är översläppet vid kyla ovan verktyget för en enhet som går för långt – det är finare och låter börvärdet stämma med appen.",
+              "target_offset_cool": "Lämna tomt för att använda den allmänna justeringen av måltemperaturen.",
+              "target_offset_heat": "Lämna tomt för att använda den allmänna justeringen av måltemperaturen."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Sensorjusteringar",
+            "description": "Korrigera värdena som visas i Home Assistant. Gäller bara visningen – ingen av dem ändrar vad enheten gör.",
+            "data": {
+              "indoor_offset": "Justering av inomhustemp.-sensor",
+              "outdoor_offset": "Justering av utomhustemp.-sensor"
+            },
+            "data_description": {
+              "indoor_offset": "Läggs till enhetens egen inomhusavläsning innan den visas. Gäller bara visningen – det ändrar inte vad enheten gör.",
+              "outdoor_offset": "Detsamma för utomhustemperaturen som enheten rapporterar."
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "Det gick inte att nå luftkonditioneringen på {device}."
+    },
+    "update_failed": {
+      "message": "Hämtningen från luftkonditioneringen på {device} misslyckades: {error}"
+    },
+    "command_failed": {
+      "message": "Det gick inte att skicka kommandot till luftkonditioneringen på {device}: {error}"
+    },
+    "command_unencodable": {
+      "message": "Luftkonditioneringen på {device} rapporterade en inställning som inte kan skickas tillbaka, så inget skickades. Ställ in fläktläget först och försök sedan igen."
+    },
+    "command_cancelled": {
+      "message": "Kommandot till luftkonditioneringen på {device} avbröts eftersom integrationen stängs ned."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C är under minimivärdet {min_temp} °C för hvac_mode {hvac_mode}. Ta med hvac_mode i samma åtgärdsanrop för att kontrollera mot det läge du byter till i stället."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C är över maxvärdet {max_temp} °C för hvac_mode {hvac_mode}. Ta med hvac_mode i samma åtgärdsanrop för att kontrollera mot det läge du byter till i stället."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "Den här modellen rapporterar inte funktionen Home Leave-läge."
+    },
+    "external_temperature_source_configured": {
+      "message": "Inomhustemperaturen styrs av den konfigurerade källentiteten."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Värdena för Home Leave-läge är ännu okända. Anropa först klimatentitetens åtgärd \"Request Home Leave Mode status\" en gång – enheten tar inte med dem i en vanlig hämtning."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} är inte en sensor för total energiförbrukning."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Home Leave-läge finns bara vid kyla eller värme, inte i {hvac_mode}. Växla enheten till kyla eller värme först, eller använd Home Leave-lägesväljaren för att ange riktningen."
+    },
+    "status_request_read_failed": {
+      "message": "Det gick inte att läsa tillståndet för luftkonditioneringen på {device}, så statusförfrågan skickades inte."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant skickar inte längre statusförfrågningar till luftkonditioneringen på {device}, eftersom enheten ändrar sina egna inställningar som svar på dem."
+    },
+    "silent_operation_not_applied": {
+      "message": "Luftkonditioneringen på {device} bekräftade inte ändringen av tyst drift. Om tyst drift ställdes in med IR-fjärrkontrollen kan den bara stängas av med fjärrkontrollen."
+    },
+    "silent_operation_unit_off": {
+      "message": "Tyst drift på luftkonditioneringen på {device} kan bara ändras medan den är igång."
+    },
+    "reduced_status_not_supported": {
+      "message": "Luftkonditioneringen på {device} svarar inte på förfrågningar om kördata eller Home Leave-status, så den här åtgärden är inte tillgänglig för den."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "indoor": {
+        "name": "Inne"
+      },
+      "outdoor": {
+        "name": "Ute"
+      },
+      "target": {
+        "name": "Mål"
+      },
+      "airco_id": {
+        "name": "Luftkonditionerings-ID"
+      },
+      "operator_id": {
+        "name": "Operatörs-ID"
+      },
+      "device_id": {
+        "name": "Enhets-ID"
+      },
+      "host": {
+        "name": "IP-adress"
+      },
+      "connected_accounts": {
+        "name": "Anslutna konton"
+      },
+      "error": {
+        "name": "Fel"
+      },
+      "updated_by": {
+        "name": "Uppdaterad av"
+      },
+      "account_expires": {
+        "name": "Kontot går ut"
+      },
+      "led_status": {
+        "name": "LED-status"
+      },
+      "auto_heating": {
+        "name": "Automatisk värme"
+      },
+      "model_nr": {
+        "name": "Modellnummer"
+      },
+      "cool_hot_judge": {
+        "name": "Kyl-/värmebedömning",
+        "state": {
+          "cooling": "Kyla",
+          "heating": "Värme"
+        }
+      },
+      "energy_usage": {
+        "name": "Energiförbrukning (aktuell körning)"
+      },
+      "energy_usage_total": {
+        "name": "Total energiförbrukning"
+      },
+      "compressor_frequency": {
+        "name": "Kompressorfrekvens"
+      },
+      "compressor_frequency_raw": {
+        "name": "Kompressorfrekvens (rå)"
+      },
+      "operating_current": {
+        "name": "Driftström"
+      },
+      "operating_current_raw": {
+        "name": "Driftström (rå)"
+      },
+      "hot_gas_temp": {
+        "name": "Hetgastemperatur"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Hetgastemperatur (rå)"
+      },
+      "eev_pulses": {
+        "name": "EEV-pulser"
+      },
+      "eev_position": {
+        "name": "EEV-position"
+      },
+      "indoor_coil_temp": {
+        "name": "Inomhusvärmeväxlarens temperatur"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "Inomhusvärmeväxlarens utloppstemperatur"
+      },
+      "indoor_coil_raw": {
+        "name": "Inomhusvärmeväxlarens temperatur (rå)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "Inomhusvärmeväxlarens utloppstemperatur (rå)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Utomhusvärmeväxlarens temperatur (rå)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Utloppsöverhettning (rå)"
+      },
+      "protection_raw": {
+        "name": "Skyddsnummer (rå)"
+      },
+      "indoor_humidity": {
+        "name": "Luftfuktighet"
+      },
+      "research_data": {
+        "name": "Forskningsdata"
+      }
+    },
+    "update": {
+      "firmware_update": {
+        "name": "Firmwareuppdatering"
+      }
+    },
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "auto": "Auto",
+              "quiet": "Tyst",
+              "low": "Låg",
+              "medium": "Medel",
+              "high": "Hög"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "up_down_auto": "Upp/ner auto",
+              "highest": "Högst",
+              "middle": "Mitten",
+              "normal": "Normal",
+              "lowest": "Lägst",
+              "3d_auto": "3D auto"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "left_right_auto": "Vänster/höger auto",
+              "left_left": "Vänster-vänster",
+              "left_center": "Vänster-mitt",
+              "center_center": "Mitt-mitt",
+              "center_right": "Mitt-höger",
+              "right_right": "Höger-höger",
+              "left_right": "Vänster-höger",
+              "right_left": "Höger-vänster",
+              "3d_auto": "3D auto"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Horisontell svängriktning",
+        "state": {
+          "left_right_auto": "Vänster/höger auto",
+          "left_left": "Vänster-vänster",
+          "left_center": "Vänster-mitt",
+          "center_center": "Mitt-mitt",
+          "center_right": "Mitt-höger",
+          "right_right": "Höger-höger",
+          "left_right": "Vänster-höger",
+          "right_left": "Höger-vänster",
+          "3d_auto": "3D auto"
+        }
+      },
+      "vertical_swing": {
+        "name": "Vertikal svängriktning",
+        "state": {
+          "up_down_auto": "Upp/ner auto",
+          "highest": "Högst",
+          "middle": "Mitten",
+          "normal": "Normal",
+          "lowest": "Lägst",
+          "3d_auto": "3D auto"
+        }
+      },
+      "fan_speed": {
+        "name": "Fläkthastighet",
+        "state": {
+          "auto": "Auto",
+          "quiet": "Tyst",
+          "low": "Låg",
+          "medium": "Medel",
+          "high": "Hög"
+        }
+      },
+      "home_leave_mode": {
+        "name": "Home Leave-läge",
+        "state": {
+          "off": "Av",
+          "away_cool": "Kyla under frånvaro",
+          "away_heat": "Värme under frånvaro"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Home Leave luftflöde vid kyla",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Home Leave luftflöde vid värme",
+        "state": {
+          "auto": "Auto",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Home Leave utomhustemperaturgräns för kyla"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Home Leave önskad rumstemperatur vid kyla"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Home Leave utomhustemperaturgräns för värme"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Home Leave önskad rumstemperatur vid värme"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      },
+      "occupancy": {
+        "name": "Närvaro"
+      },
+      "compressor": {
+        "name": "Kompressorbehov"
+      },
+      "external_control": {
+        "name": "Extern styrning"
+      },
+      "external_temperature_active": {
+        "name": "Överstyrning av inomhustemperatur"
+      },
+      "defrost": {
+        "name": "Avfrostning"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Nollställ total energiförbrukning"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Tyst drift"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Ställ in horisontellt svängläge",
+      "description": "Ställer in det horisontella (vänster/höger) svängläget.",
+      "fields": {
+        "swing_mode": {
+          "name": "Horisontellt svängläge",
+          "description": "Vilket horisontellt svängläge som ska ställas in."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Ställ in vertikalt svängläge",
+      "description": "Ställer in det vertikala (upp/ner) svängläget.",
+      "fields": {
+        "swing_mode": {
+          "name": "Vertikalt svängläge",
+          "description": "Vilket vertikalt svängläge som ska ställas in."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Begär status för Home Leave-läge",
+      "description": "Ber enheten rapportera sina aktuella gränsvärden och luftflöden för Home Leave-läge. Anropa en gång så att number-/select-entiteterna har ett värde att visa och redigera – annars utelämnar enheten dem i en vanlig hämtning. Stöds bara på modeller med funktionen HomeLeaveMode."
+    },
+    "set_home_leave_mode": {
+      "name": "Ställ in Home Leave-läge",
+      "description": "Skriver nya gränsvärden och luftflöden för Home Leave-läge för kyla och värme. Stöds bara på modeller med funktionen HomeLeaveMode.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Temperaturgräns kyla",
+          "description": "Temperaturgräns för utomhus-/rumstemperatur över vilken Home Leave-läge för kyla aktiveras, i °C."
+        },
+        "temp_setting_cooling": {
+          "name": "Måltemperatur kyla",
+          "description": "Måltemperatur medan Home Leave-läge för kyla är aktivt, i °C."
+        },
+        "air_flow_cooling": {
+          "name": "Luftflöde kyla",
+          "description": "Fläkthastighet medan Home Leave-läge för kyla är aktivt."
+        },
+        "temp_rule_heating": {
+          "name": "Temperaturgräns värme",
+          "description": "Temperaturgräns för utomhus-/rumstemperatur under vilken Home Leave-läge för värme aktiveras, i °C."
+        },
+        "temp_setting_heating": {
+          "name": "Måltemperatur värme",
+          "description": "Måltemperatur medan Home Leave-läge för värme är aktivt, i °C."
+        },
+        "air_flow_heating": {
+          "name": "Luftflöde värme",
+          "description": "Fläkthastighet medan Home Leave-läge för värme är aktivt."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "Ställ in inomhustemperatur",
+      "description": "Förbereder en rumstemperatur som luftkonditioneringen ska reglera efter i stället för den som dess egen inomhussensor läser av. Värdet skickas inte av den här åtgärden; det följer med nästa ram som ändå skickas, så det börjar gälla inom en minut. Medan en överstyrning är förberedd ber integrationen enheten om ett segment kördata per cykel, vilket är den ram som bär den. Utelämna temperaturen för att gå tillbaka till den interna rumssensorn.",
+      "fields": {
+        "temperature": {
+          "name": "Temperatur",
+          "description": "Rumstemperatur i °C. Lämna tomt för att använda enhetens egen sensor."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Ställ in total energiförbrukning",
+      "description": "Skriver över den ackumulerade totala energiförbrukningen för en enhet. Använd 0 för att nollställa den, eller en avläsning från en mätare du förde tidigare för att ta över den siffran. Påverkar bara integrationens egen summa – enhetens räknare kan inte skrivas.",
+      "fields": {
+        "value": {
+          "name": "Värde",
+          "description": "Ny summa i kWh."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Vänster/höger auto",
+        "left_left": "Vänster-vänster",
+        "left_center": "Vänster-mitt",
+        "center_center": "Mitt-mitt",
+        "center_right": "Mitt-höger",
+        "right_right": "Höger-höger",
+        "left_right": "Vänster-höger",
+        "right_left": "Höger-vänster"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Upp/ner auto",
+        "highest": "Högst",
+        "middle": "Mitten",
+        "normal": "Normal",
+        "lowest": "Lägst",
+        "3d_auto": "3D auto"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Auto",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
+      }
+    }
+  }
+}

@@ -1,0 +1,568 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "Ana bilgisayar",
+          "port": "Bağlantı noktası",
+          "force_update": "Yinelenen IP adresini yoksay"
+        },
+        "description": "Klimayı elle eklemek için lütfen doğru bilgileri girin",
+        "title": "WF-RAC klima bağlantı bilgileri",
+        "data_description": {
+          "host": "Klimanın kablosuz modülünün yerel IP adresi. Adres değişirse, modül kendini yeniden duyurduğunda yeni adres alınır; modüle yönlendiricinizde sabit bir adres verin ya da bu gerçekleşmezse adresi buradan düzeltin.",
+          "port": "Modülün yerel API'sinin dinlediği bağlantı noktası. Modülünüz farklı bir değer duyurmuyorsa 51443 olarak bırakın.",
+          "force_update": "Başka bir kayıt aynı IP adresini kullanıyor olsa bile bu klimayı ekler. Eski kaydı kaybolmuş bir cihazı yeniden eklemek içindir: modül aynı anda yalnızca bir bağlantı kabul eder, bu yüzden onu sorgulayan iki kayıt günlükte hata üretir."
+        }
+      },
+      "discovery_confirm": {
+        "description": "Kimliği {id}, IP adresi {host} ve bağlantı noktası {port} olan klima bulundu. Bağlantı noktası normalde 51443'tür; farklı görünüyorsa aşağıdan düzeltin.",
+        "title": "WF-RAC klima bulundu",
+        "data": {
+          "port": "Bağlantı noktası"
+        },
+        "data_description": {
+          "port": "Modüle ulaşmak için kullanılacak bağlantı noktası. Normalde 51443'tür; yukarıda duyurulan değer farklı görünüyorsa buradan düzeltin."
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Ana bilgisayar",
+          "port": "Bağlantı noktası"
+        },
+        "description": "Bu klimanın bağlantı bilgilerini güncelleyin.",
+        "title": "WF-RAC klima bağlantısını yeniden yapılandır",
+        "data_description": {
+          "host": "Klimanın kablosuz modülünün yerel IP adresi. Adres değişirse, modül kendini yeniden duyurduğunda yeni adres alınır; modüle yönlendiricinizde sabit bir adres verin ya da bu gerçekleşmezse adresi buradan düzeltin.",
+          "port": "Modülün yerel API'sinin dinlediği bağlantı noktası. Modülünüz farklı bir değer duyurmuyorsa 51443 olarak bırakın."
+        }
+      }
+    },
+    "error": {
+      "unexpected_error": "Beklenmeyen bir hata oluştu. Ayrıntılar için lütfen günlüğe bakın.",
+      "cannot_connect": "Klimaya bağlanılamadı: {reason}",
+      "invalid_host": "Geçersiz ana bilgisayar adı veya IP adresi",
+      "host_already_configured": "Klima IP adresi zaten [{error_name}] olarak yapılandırılmış",
+      "too_many_devices_registered": "Bu klima için çok fazla cihaz kayıtlı. Lütfen (uygulamadan) bir cihazı silin veya modülü fabrika ayarlarına sıfırlayın."
+    },
+    "abort": {
+      "existing_instance_updated": "Mevcut yapılandırma güncellendi.",
+      "already_configured": "Hizmet zaten yapılandırılmış",
+      "reconfigure_successful": "Yeniden yapılandırma başarılı",
+      "wrong_device": "Bu, bu kaydın kurulduğu klimadan farklı bir klima. Adresi yeniden asıl cihaza çevirin ya da diğerini ayrı bir kayıt olarak ekleyin."
+    }
+  },
+  "issues": {
+    "too_many_devices": {
+      "title": "{device_name} üzerinde çok fazla hesap kayıtlı",
+      "description": "Bu cihaz dört kayıtlı hesaba yer açar ve dördü de dolu, bu yüzden Home Assistant kendini kaydedemiyor. Modül hiçbir yeri kendiliğinden boşaltmaz: kayıtların süresi dolmaz ve yeni bir kayıt, eskisinin yerine geçmek yerine reddedilir. Smart M-Air uygulamasında bu cihazı artık ihtiyacı olmayan bir telefondan kaldırın - her hesap yalnızca kendini kaldırabilir ve aynı Smart M-Air hesabını paylaşan birkaç telefon toplamda tek yer kaplar. Ardından bu entegrasyonu yeniden yükleyin. Kimse yer açamıyorsa - örneğin çoktan elden çıkmış bir telefon bir yeri tutuyorsa - modülün baştan kurulması gerekir."
+    },
+    "request_stops_unit": {
+      "title": "{device_name}, çalışma verileri istendiğinde kendi ayarlarını değiştiriyor",
+      "description": "Kompresör, akım ve sıcaklıklara ait tanılama sensörleri, dakikada bir ek bir istekle okunur. Bu istek hiçbir ayar taşımaz - yalnızca sorar - ancak bu modül onu yine de uygular ve boş bıraktığı her alan bir değer olarak okunur: cihaz kapanır, mod otomatiğe geçer, fan ve lameller ilk konuma iner, hedef sıcaklık da cihazın izin verdiği en düşük değere düşer.\n\nHome Assistant bu isteği, gönderilmeden hemen önce okunan bu cihazın kendi ayarlarını taşıyacak şekilde değiştirdi; böylece çerçeve ayarları silmek yerine doğrular. Üreticinin kendi uygulaması da bu biçimi kullanır. İstekle silinen ayarlar geri yazıldı. Home Assistant bu cihazın kapalı olduğunu düşündüğü sürece hiç istek gönderilmez; bu sensörler cihaz yeniden çalışana kadar son değerlerini korur.\n\nBaşka bir şey yapmanız gerekmez - birkaç dakika izleyin. Cihaz yine de kendi ayarlarını değiştirirse Home Assistant isteği tamamen göndermeyi bırakır ve bunu burada bildirir."
+    },
+    "status_request_unsupported": {
+      "title": "{device_name} cihazından çalışma verileri okunamıyor",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{device_name} cihazından çalışma verileri yeniden istensin mi?",
+            "description": "Bu cihaz, çalışma verileri istendiğinde - istek mevcut ayarlarını geri taşısa bile - kendi ayarlarını değiştirdi, bu yüzden Home Assistant bu isteği göndermeyi bıraktı. Cihaz kendi oda sensörüne geri verildi: entegrasyon seçeneklerinde ayarlanan bir iç sıcaklık kaynağı artık ona iletilmiyor ve klima kartı cihazın ölçtüğü sıcaklığı gösteriyor.\n\nBunun bedeli: bu istekle beslenen tanılama sensörleri (kompresör frekansı, çalışma akımı, sıcak gaz sıcaklığı, EEV konumu ve eşanjör sıcaklıkları) artık güncellenmez. Geri kalan her şey etkilenmez: güç, mod, sıcaklık, fan ve lameller sıradan komutlar olarak gönderilir.\n\nTespiti, aynı anda uzaktan kumandayı kullanan biri de tetikleyebilir. Yeniden denemek için bu onarımı gönderin: entegrasyon yeniden yüklenir ve durumu yeniden izler. Cihaz yine kapanır ya da ayarlarını değiştirirse bu mesaj geri gelir - o zaman lütfen modülünüzün ürün yazılımı sürümüyle birlikte bildirin."
+          }
+        }
+      }
+    },
+    "service_data_unanswered": {
+      "title": "{device_name} cihazından çalışma verileri alınamıyor",
+      "description": "Kompresör, akım, sıcaklıklar ve EEV konumuna ait tanılama sensörleri, dakikada bir ek bir istekle okunur. Bu cihaz isteği kabul eder ve yanıtlar, ancak içinde henüz tek bir bölüm bile döndürmedi - dolayısıyla isteğin nasıl göründüğünden bağımsız olarak bu sensörler hiçbir zaman bir değer göstermeyecekti.\n\nHome Assistant artık sormuyor. Sensörler \"bilinmiyor\" yerine \"kullanılamıyor\" gösteriyor; dürüst fark da bu: okuma gecikmiş değil, hiç yok. Bunları bu cihazda devre dışı bırakabilirsiniz; hiçbir şey kaybolmaz, yalnızca görünümden kalkarlar.\n\nGeri kalan her şey etkilenmez - güç, mod, sıcaklık, fan ve lameller sıradan komutlardır ve bu kanalı kullanmaz. Entegrasyon seçeneklerinde ayarlanan iç sıcaklık kaynağı da çalışmaya devam eder: aynı istekle taşınır ve bunun için istek hâlâ gönderilir.\n\nGeçici bir durumsa diye entegrasyonu yeniden yüklemek yeniden denemesini sağlar."
+    },
+    "external_temperature_unsupported": {
+      "title": "{device_name} oda sıcaklığını kabul etmiyor",
+      "description": "Bu cihaz oda sıcaklığı bildirmiyor ve kendisine gönderileni yok sayıyor; bu yüzden bu entegrasyonun seçeneklerinde ayarlanan iç sıcaklık kaynağının etkisi yok ve bunun için hiçbir şey gönderilmiyor. Kaynağı seçeneklerden kaldırabilirsiniz; entegrasyon yeniden yüklendiğinde bu mesaj kaybolur."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "description": "Aşağıda bu klima için değiştirebileceğiniz seçenekler yer alıyor.",
+        "data": {
+          "availability_retry_limit": "Yeniden deneme sınırı",
+          "firmware_update_check": "Ürün yazılımı güncellemelerini denetle"
+        },
+        "data_description": {
+          "availability_retry_limit": "Klima kullanılamıyor olarak işaretlenmeden önceki art arda başarısız sorgu sayısı. Üç olan en düşük değer, 60 saniyelik sorgu aralığında yaklaşık üç dakikadır - modülün saatlik Wi-Fi yeniden bağlanmasını atlatmaya yeter. Zayıf bağlantıda artırın.",
+          "firmware_update_check": "Modülün sürümünü üreticinin sunucusuyla karşılaştıran bir Ürün yazılımı güncellemesi varlığı ekler. Entegrasyonun yaptığı tek giden internet bağlantısı budur - tamamen yerel kalmak için kapalı bırakın."
+        },
+        "title": "WF-RAC seçenekleri",
+        "sections": {
+          "indoor_temperature_source": {
+            "name": "İç sıcaklık kaynağı",
+            "description": "Cihaza, kendi dönüş havası ızgarasında okuduğu sıcaklık yerine odada ölçülen bir oda sıcaklığı verir.",
+            "data": {
+              "external_temperature_source": "Sensör",
+              "overshoot_cool": "Soğutma aşımı",
+              "overshoot_dry": "Nem alma aşımı",
+              "overshoot_heat": "Isıtma aşımı"
+            },
+            "data_description": {
+              "external_temperature_source": "Cihaz bu sensöre göre düzenleme yapar. Cihazı kendi sensörüne geri vermek için boş bırakın. Kullanılamıyor veya bilinmiyor durumları bir sonraki çerçevede aynı etkiyi yapar. Isıtma modunda çoğu cihaz ayara kendiliğinden 2 °C ekler; odadaki bir sensör bunu görünür kılar - bunun cihazda nasıl kapatılacağı README dosyasında anlatılıyor.",
+              "overshoot_cool": "Cihaz durmadan önce odanın ayarınızı ne kadar aştığı. 22 °C ayarlarsanız ve oda 21,5 °C'de dengeleniyorsa 0,5 girin. 0,5 ile başlar, çünkü şimdiye kadar ölçülen cihazların ihtiyacı budur - kendi odanızın nerede dengelendiğine bakın ve ayarlayın. Bunun yerine oda yetersiz kalıyor ve yeterince soğumuyorsa negatif bir sayı girin. Çeyrek derece, cihaza ulaşan en küçük adımdır. Yalnızca soğutma modunda geçerlidir - nem almanın kendi alanı var ve otomatikte cihaza değeriniz düzeltilmeden verilir.",
+              "overshoot_dry": "Nem alma için aynısı; o da soğutur ve aynı işareti taşır. 0 ile açılır: bu modda ölçülen tek cihaz ayarına oturdu, soğutmadakinden daha geniş bir bantla. Sizinki aşıyorsa bir hedef ayarlayın, odanın dengelenmesini bekleyin ve odanın hedefi ne kadar aştığını girin.",
+              "overshoot_heat": "Isıtma için aynısı ve yalnızca ısıtma modunda: oda ayarınızın üzerinde sonlanıyorsa pozitif, altında kalıyorsa negatif."
+            }
+          },
+          "setpoint_offsets": {
+            "name": "Hedef sıcaklık sapmaları",
+            "description": "Kart sizin ayarınızı göstermeye devam ederken cihaza gönderilen ayarı değiştirir. Bir kaynak kullanılıyorsa yukarıdaki aşım daha iyi bir ayardır; ikisi birlikte ayarlanırsa ikisi de uygulanır.",
+            "data": {
+              "target_offset": "Hedef sıcaklık sapması",
+              "target_offset_cool": "Hedef sıcaklık sapması (soğutma)",
+              "target_offset_heat": "Hedef sıcaklık sapması (ısıtma)"
+            },
+            "data_description": {
+              "target_offset": "Pozitif değer cihaza gönderilen ayarı düşürür, negatif değer yükseltir - kart her iki durumda da sizin değerinizi göstermeye devam eder. Çoğu cihaz yarım dereceyi bir sonraki tam dereceye yuvarlar, bu yüzden buradaki 0,5 çoğu zaman 1 gibi çalışır. Bir iç sıcaklık kaynağı kullanılıyorsa hedefi aşan bir cihaz için yukarıdaki soğutma aşımı daha uygun bir ayardır - daha hassastır ve hedef sıcaklığı uygulamayla aynı bırakır.",
+              "target_offset_cool": "Genel hedef sıcaklık sapmasını kullanmak için boş bırakın.",
+              "target_offset_heat": "Genel hedef sıcaklık sapmasını kullanmak için boş bırakın."
+            }
+          },
+          "sensor_offsets": {
+            "name": "Sensör sapmaları",
+            "description": "Home Assistant'ta gösterilen okumaları düzeltir. Yalnızca görüntü içindir - hiçbiri cihazın davranışını değiştirmez.",
+            "data": {
+              "indoor_offset": "İç sıcaklık sensörü sapması",
+              "outdoor_offset": "Dış sıcaklık sensörü sapması"
+            },
+            "data_description": {
+              "indoor_offset": "Cihazın kendi iç okumasına, gösterilmeden önce eklenir. Yalnızca görüntü içindir - cihazın davranışını değiştirmez.",
+              "outdoor_offset": "Aynısı, cihazın bildirdiği dış sıcaklık için."
+            }
+          }
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "cannot_connect": {
+      "message": "{device} adresindeki klimaya ulaşılamadı."
+    },
+    "update_failed": {
+      "message": "{device} adresindeki klimanın sorgulanması başarısız oldu: {error}"
+    },
+    "command_failed": {
+      "message": "{device} adresindeki klimaya komut gönderilemedi: {error}"
+    },
+    "command_unencodable": {
+      "message": "{device} adresindeki klima geri gönderilemeyen bir ayar bildirdi, bu yüzden hiçbir şey gönderilmedi. Önce fan modunu ayarlayın, sonra yeniden deneyin."
+    },
+    "command_cancelled": {
+      "message": "{device} adresindeki klimaya giden komut, entegrasyon kapandığı için iptal edildi."
+    },
+    "temperature_below_minimum": {
+      "message": "{temperature} °C, hvac_mode {hvac_mode} için en düşük değer olan {min_temp} °C'nin altında. Geçtiğiniz moda göre denetlenmesi için hvac_mode değerini aynı eylem çağrısına ekleyin."
+    },
+    "temperature_above_maximum": {
+      "message": "{temperature} °C, hvac_mode {hvac_mode} için en yüksek değer olan {max_temp} °C'nin üzerinde. Geçtiğiniz moda göre denetlenmesi için hvac_mode değerini aynı eylem çağrısına ekleyin."
+    },
+    "home_leave_mode_not_supported": {
+      "message": "Bu model Home Leave modu özelliğini bildirmiyor."
+    },
+    "external_temperature_source_configured": {
+      "message": "İç sıcaklık, yapılandırılmış kaynak varlık tarafından belirleniyor."
+    },
+    "home_leave_mode_status_unknown": {
+      "message": "Home Leave modu değerleri henüz bilinmiyor. Önce klima varlığının \"Home Leave modu durumunu iste\" eylemini bir kez çağırın - cihaz bu değerleri sıradan bir sorguya eklemiyor."
+    },
+    "entity_not_energy_total_sensor": {
+      "message": "{entity_id} bir Toplam enerji kullanımı sensörü değil."
+    },
+    "preset_away_needs_cool_or_heat": {
+      "message": "Home Leave modu yalnızca soğutma veya ısıtma sırasında kullanılabilir, {hvac_mode} modunda değil. Önce cihazı soğutma veya ısıtmaya alın ya da yönü belirtmek için Home Leave modu seçimini kullanın."
+    },
+    "status_request_read_failed": {
+      "message": "{device} adresindeki klimanın durumu okunamadı, bu yüzden durum isteği gönderilmedi."
+    },
+    "status_request_not_sent": {
+      "message": "Home Assistant, {device} adresindeki klimaya artık durum isteği göndermiyor, çünkü bu cihaz bunlara karşılık kendi ayarlarını değiştiriyor."
+    },
+    "silent_operation_not_applied": {
+      "message": "{device} adresindeki klima Sessiz çalışma değişikliğini onaylamadı. Sessiz çalışma kızılötesi uzaktan kumandayla ayarlandıysa yalnızca uzaktan kumandayla kapatılabilir."
+    },
+    "silent_operation_unit_off": {
+      "message": "{device} adresindeki klimanın Sessiz çalışması yalnızca cihaz çalışırken değiştirilebilir."
+    },
+    "reduced_status_not_supported": {
+      "message": "{device} adresindeki klima çalışma verisi veya Home Leave durumu isteklerini yanıtlamıyor, bu yüzden bu eylem onun için kullanılamıyor."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "indoor": {
+        "name": "İç"
+      },
+      "outdoor": {
+        "name": "Dış"
+      },
+      "target": {
+        "name": "Hedef"
+      },
+      "airco_id": {
+        "name": "Klima kimliği"
+      },
+      "operator_id": {
+        "name": "Operatör kimliği"
+      },
+      "device_id": {
+        "name": "Cihaz kimliği"
+      },
+      "host": {
+        "name": "IP adresi"
+      },
+      "connected_accounts": {
+        "name": "Bağlı hesaplar"
+      },
+      "error": {
+        "name": "Hata"
+      },
+      "updated_by": {
+        "name": "Güncelleyen"
+      },
+      "account_expires": {
+        "name": "Hesabın bitiş tarihi"
+      },
+      "led_status": {
+        "name": "LED durumu"
+      },
+      "auto_heating": {
+        "name": "Otomatik ısıtma"
+      },
+      "model_nr": {
+        "name": "Model numarası"
+      },
+      "cool_hot_judge": {
+        "name": "Soğutma/ısıtma tespiti",
+        "state": {
+          "cooling": "Soğutma",
+          "heating": "Isıtma"
+        }
+      },
+      "energy_usage": {
+        "name": "Enerji kullanımı (mevcut çalışma)"
+      },
+      "energy_usage_total": {
+        "name": "Toplam enerji kullanımı"
+      },
+      "compressor_frequency": {
+        "name": "Kompresör frekansı"
+      },
+      "compressor_frequency_raw": {
+        "name": "Kompresör frekansı (ham)"
+      },
+      "operating_current": {
+        "name": "Çalışma akımı"
+      },
+      "operating_current_raw": {
+        "name": "Çalışma akımı (ham)"
+      },
+      "hot_gas_temp": {
+        "name": "Sıcak gaz sıcaklığı"
+      },
+      "hot_gas_temp_raw": {
+        "name": "Sıcak gaz sıcaklığı (ham)"
+      },
+      "eev_pulses": {
+        "name": "EEV darbeleri"
+      },
+      "eev_position": {
+        "name": "EEV konumu"
+      },
+      "indoor_coil_temp": {
+        "name": "İç eşanjör sıcaklığı"
+      },
+      "indoor_coil_outlet_temp": {
+        "name": "İç eşanjör çıkış sıcaklığı"
+      },
+      "indoor_coil_raw": {
+        "name": "İç eşanjör sıcaklığı (ham)"
+      },
+      "indoor_coil_outlet_raw": {
+        "name": "İç eşanjör çıkış sıcaklığı (ham)"
+      },
+      "outdoor_coil_raw": {
+        "name": "Dış eşanjör sıcaklığı (ham)"
+      },
+      "discharge_superheat_raw": {
+        "name": "Deşarj aşırı ısınması (ham)"
+      },
+      "protection_raw": {
+        "name": "Koruma numarası (ham)"
+      },
+      "indoor_humidity": {
+        "name": "Nem"
+      },
+      "research_data": {
+        "name": "Araştırma verileri"
+      }
+    },
+    "update": {
+      "firmware_update": {
+        "name": "Ürün yazılımı güncellemesi"
+      }
+    },
+    "climate": {
+      "mitsubishi_wf_rac": {
+        "state_attributes": {
+          "fan_mode": {
+            "state": {
+              "auto": "Otomatik",
+              "quiet": "Sessiz",
+              "low": "Düşük",
+              "medium": "Orta",
+              "high": "Yüksek"
+            }
+          },
+          "swing_mode": {
+            "state": {
+              "up_down_auto": "Yukarı/aşağı otomatik",
+              "highest": "En yüksek",
+              "middle": "Orta",
+              "normal": "Normal",
+              "lowest": "En düşük",
+              "3d_auto": "3D otomatik"
+            }
+          },
+          "swing_horizontal_mode": {
+            "state": {
+              "left_right_auto": "Sol/sağ otomatik",
+              "left_left": "Sol-sol",
+              "left_center": "Sol-orta",
+              "center_center": "Orta-orta",
+              "center_right": "Orta-sağ",
+              "right_right": "Sağ-sağ",
+              "left_right": "Sol-sağ",
+              "right_left": "Sağ-sol",
+              "3d_auto": "3D otomatik"
+            }
+          }
+        }
+      }
+    },
+    "select": {
+      "horizontal_swing": {
+        "name": "Yatay salınım yönü",
+        "state": {
+          "left_right_auto": "Sol/sağ otomatik",
+          "left_left": "Sol-sol",
+          "left_center": "Sol-orta",
+          "center_center": "Orta-orta",
+          "center_right": "Orta-sağ",
+          "right_right": "Sağ-sağ",
+          "left_right": "Sol-sağ",
+          "right_left": "Sağ-sol",
+          "3d_auto": "3D otomatik"
+        }
+      },
+      "vertical_swing": {
+        "name": "Dikey salınım yönü",
+        "state": {
+          "up_down_auto": "Yukarı/aşağı otomatik",
+          "highest": "En yüksek",
+          "middle": "Orta",
+          "normal": "Normal",
+          "lowest": "En düşük",
+          "3d_auto": "3D otomatik"
+        }
+      },
+      "fan_speed": {
+        "name": "Fan hızı",
+        "state": {
+          "auto": "Otomatik",
+          "quiet": "Sessiz",
+          "low": "Düşük",
+          "medium": "Orta",
+          "high": "Yüksek"
+        }
+      },
+      "home_leave_mode": {
+        "name": "Home Leave modu",
+        "state": {
+          "off": "Kapalı",
+          "away_cool": "Evde yokken soğutma",
+          "away_heat": "Evde yokken ısıtma"
+        }
+      },
+      "home_leave_cooling_air_flow": {
+        "name": "Home Leave soğutma hava akışı",
+        "state": {
+          "auto": "Otomatik",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      },
+      "home_leave_heating_air_flow": {
+        "name": "Home Leave ısıtma hava akışı",
+        "state": {
+          "auto": "Otomatik",
+          "1": "1",
+          "2": "2",
+          "3": "3",
+          "4": "4"
+        }
+      }
+    },
+    "number": {
+      "home_leave_cooling_temp_rule": {
+        "name": "Home Leave soğutma dış sıcaklık eşiği"
+      },
+      "home_leave_cooling_temp_setting": {
+        "name": "Home Leave soğutma hedef oda sıcaklığı"
+      },
+      "home_leave_heating_temp_rule": {
+        "name": "Home Leave ısıtma dış sıcaklık eşiği"
+      },
+      "home_leave_heating_temp_setting": {
+        "name": "Home Leave ısıtma hedef oda sıcaklığı"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Sorun"
+      },
+      "occupancy": {
+        "name": "Doluluk"
+      },
+      "compressor": {
+        "name": "Kompresör talebi"
+      },
+      "external_control": {
+        "name": "Harici kontrol"
+      },
+      "external_temperature_active": {
+        "name": "İç sıcaklık geçersiz kılma"
+      },
+      "defrost": {
+        "name": "Buz çözme"
+      }
+    },
+    "button": {
+      "reset_energy_total": {
+        "name": "Toplam enerji kullanımını sıfırla"
+      }
+    },
+    "switch": {
+      "silent_operation": {
+        "name": "Sessiz çalışma"
+      }
+    }
+  },
+  "services": {
+    "set_horizontal_swing_mode": {
+      "name": "Yatay salınım modunu ayarla",
+      "description": "Yatay (sol/sağ) salınım modunu ayarlar.",
+      "fields": {
+        "swing_mode": {
+          "name": "Yatay salınım modu",
+          "description": "Ayarlanacak yatay salınım modu."
+        }
+      }
+    },
+    "set_vertical_swing_mode": {
+      "name": "Dikey salınım modunu ayarla",
+      "description": "Dikey (yukarı/aşağı) salınım modunu ayarlar.",
+      "fields": {
+        "swing_mode": {
+          "name": "Dikey salınım modu",
+          "description": "Ayarlanacak dikey salınım modu."
+        }
+      }
+    },
+    "request_home_leave_mode_status": {
+      "name": "Home Leave modu durumunu iste",
+      "description": "Cihazdan mevcut Home Leave modu eşiklerini ve hava akışını bildirmesini ister. Sayı/seçim varlıklarının gösterecek ve düzenleyecek bir değeri olması için bir kez çağırın - cihaz aksi halde bunları sıradan bir sorguya eklemez. Yalnızca HomeLeaveMode özelliğine sahip modellerde desteklenir."
+    },
+    "set_home_leave_mode": {
+      "name": "Home Leave modunu ayarla",
+      "description": "Soğutma ve ısıtma için yeni Home Leave modu eşiklerini ve hava akışını yazar. Yalnızca HomeLeaveMode özelliğine sahip modellerde desteklenir.",
+      "fields": {
+        "temp_rule_cooling": {
+          "name": "Soğutma sıcaklık eşiği",
+          "description": "Soğutma Home Leave modunun devreye girdiği, °C cinsinden dış/oda sıcaklığı eşiği (üzerinde)."
+        },
+        "temp_setting_cooling": {
+          "name": "Soğutma hedef sıcaklığı",
+          "description": "Soğutma Home Leave modu etkinken hedef sıcaklık, °C cinsinden."
+        },
+        "air_flow_cooling": {
+          "name": "Soğutma hava akışı",
+          "description": "Soğutma Home Leave modu etkinken fan hızı."
+        },
+        "temp_rule_heating": {
+          "name": "Isıtma sıcaklık eşiği",
+          "description": "Isıtma Home Leave modunun devreye girdiği, °C cinsinden dış/oda sıcaklığı eşiği (altında)."
+        },
+        "temp_setting_heating": {
+          "name": "Isıtma hedef sıcaklığı",
+          "description": "Isıtma Home Leave modu etkinken hedef sıcaklık, °C cinsinden."
+        },
+        "air_flow_heating": {
+          "name": "Isıtma hava akışı",
+          "description": "Isıtma Home Leave modu etkinken fan hızı."
+        }
+      }
+    },
+    "set_external_temperature": {
+      "name": "İç sıcaklığı ayarla",
+      "description": "Klimanın kendi iç sensörünün okuduğu sıcaklık yerine, üzerinden düzenleme yapacağı bir oda sıcaklığı hazırlar. Değer bu eylemle gönderilmez; zaten gidecek olan bir sonraki çerçeveyle birlikte taşınır, bu yüzden bir dakika içinde etkili olur. Bir geçersiz kılma hazırken entegrasyon her döngüde cihazdan bir çalışma verisi bölümü ister; değeri taşıyan çerçeve budur. Dahili oda sensörüne dönmek için sıcaklığı boş bırakın.",
+      "fields": {
+        "temperature": {
+          "name": "Sıcaklık",
+          "description": "°C cinsinden oda sıcaklığı. Cihazın kendi sensörünü kullanmak için boş bırakın."
+        }
+      }
+    },
+    "set_energy_total": {
+      "name": "Toplam enerji kullanımını ayarla",
+      "description": "Bir cihaz için biriken Toplam enerji kullanımının üzerine yazar. Sıfırlamak için 0 girin ya da bu değeri devralmak için daha önce tuttuğunuz bir sayaç değerini kullanın. Yalnızca entegrasyonun kendi toplamını etkiler - cihazın sayacına yazılamaz.",
+      "fields": {
+        "value": {
+          "name": "Değer",
+          "description": "kWh cinsinden yeni toplam."
+        }
+      }
+    }
+  },
+  "selector": {
+    "horizontal_swing_mode": {
+      "options": {
+        "left_right_auto": "Sol/sağ otomatik",
+        "left_left": "Sol-sol",
+        "left_center": "Sol-orta",
+        "center_center": "Orta-orta",
+        "center_right": "Orta-sağ",
+        "right_right": "Sağ-sağ",
+        "left_right": "Sol-sağ",
+        "right_left": "Sağ-sol"
+      }
+    },
+    "vertical_swing_mode": {
+      "options": {
+        "up_down_auto": "Yukarı/aşağı otomatik",
+        "highest": "En yüksek",
+        "middle": "Orta",
+        "normal": "Normal",
+        "lowest": "En düşük",
+        "3d_auto": "3D otomatik"
+      }
+    },
+    "home_leave_air_flow": {
+      "options": {
+        "0": "Otomatik",
+        "1": "1",
+        "2": "2",
+        "3": "3",
+        "4": "4"
+      }
+    }
+  }
+}
