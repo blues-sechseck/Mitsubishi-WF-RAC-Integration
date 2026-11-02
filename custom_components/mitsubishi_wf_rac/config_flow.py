@@ -518,6 +518,26 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # One case on both sides: this id comes from the hostname and every
         # other path from the airconId the unit reports.
         await self.async_set_unique_id(node_name)
+        configured = self.hass.config_entries.async_entry_for_domain_unique_id(
+            DOMAIN, node_name
+        )
+        if (
+            configured is not None
+            and configured.data.get(CONF_HOST) != host
+            and not await self._async_answers_at(configured, host)
+        ):
+            # An announcement is not proof the unit lives there: on networks
+            # that bridge mDNS between segments, a module that moved to
+            # another VLAN has been seen re-announced at its old address.
+            # Writing that in takes a working unit offline until someone
+            # reconfigures it by hand, so the entry keeps the address that
+            # works.
+            _LOGGER.debug(
+                "Not moving [%s] to %s: nothing answers there as this unit",
+                configured.title,
+                host,
+            )
+            return self.async_abort(reason="already_configured")
         # The address only, so a module that moved gets followed: modules have
         # been seen announcing 5353 where the API port belongs.
         self._abort_if_unique_id_configured(updates={CONF_HOST: host})
@@ -533,6 +553,37 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._discovery_info = info
 
         return await self.async_step_discovery_confirm()
+
+    async def _async_answers_at(
+        self, entry: config_entries.ConfigEntry, host: str
+    ) -> bool:
+        """Return True if the entry's unit answers at host as itself.
+
+        Asks for the airco id only, with the account the entry already
+        holds: no registration, so no account slot is spent on an address
+        that may be wrong. The entry's port, not the announced one - see
+        test_a_rediscovery_refreshes_the_address_but_not_the_port.
+        """
+        repository = Repository(
+            async_get_clientsession(self.hass),
+            host,
+            entry.data.get(CONF_PORT, DEFAULT_PORT),
+            entry.data[CONF_OPERATOR_ID],
+            entry.data[CONF_DEVICE_ID],
+            cert_path=self.hass.config.path(AC_CERT_FILENAME),
+        )
+        try:
+            airco_id = await repository.get_airco_id()
+        except (
+            WfRacError,
+            KeyError,
+            TypeError,
+            ValueError,
+            AttributeError,
+            OSError,
+        ):
+            return False
+        return bool(airco_id) and airco_id.lower() == entry.unique_id
 
 
 class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
