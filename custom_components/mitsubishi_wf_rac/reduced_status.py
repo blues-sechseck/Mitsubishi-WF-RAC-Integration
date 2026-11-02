@@ -3,10 +3,11 @@
 Some units fill only the model, power/mode, fan and setpoint bytes of the
 state block and leave the rest at zero (#431). Everything this integration
 builds on those bytes - the operation-data channel, the injected room
-temperature, the compressor flag - has nothing to work with there. This module
-holds the two pieces that are not entity or coordinator behaviour: the repair
-for a configured temperature source, and the registry cleanup that keeps
-entities from an earlier run from lingering as permanently unknown.
+temperature, the compressor flag, the cool/heat judge byte - has nothing to
+work with there. This module holds the two pieces that are not entity or
+coordinator behaviour: the repair for a configured temperature source, and the
+registry cleanup that keeps entities from an earlier run from lingering as
+permanently unknown.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
 
-from .const import DOMAIN, SERVICE_DATA_SENSOR_TYPES
+from .const import ATTR_COOL_HOT_JUDGE, DOMAIN, SERVICE_DATA_SENSOR_TYPES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def unsupported_entity_unique_ids(airco_id_lower: str) -> dict[str, list[str]]:
         "sensor": [
             *(f"{prefix}-{kind}-sensor" for kind in SERVICE_DATA_SENSOR_TYPES),
             f"{prefix}-research-data",
+            f"{prefix}-{ATTR_COOL_HOT_JUDGE}-sensor",
         ],
         "switch": [f"{prefix}-silent-operation"],
         "binary_sensor": [
