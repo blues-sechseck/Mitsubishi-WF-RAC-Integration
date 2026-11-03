@@ -115,11 +115,14 @@ async def async_setup_entry(
         DiagnosticsSensor(device, ATTR_LED_STATUS),
         DiagnosticsSensor(device, ATTR_AUTO_HEATING, True),
         DiagnosticsSensor(device, ATTR_MODEL_NR),
-        DiagnosticsSensor(device, ATTR_COOL_HOT_JUDGE),
     ]
     if device.airco.Electric is not None:
         entities.append(EnergySensor(device))
         entities.append(EnergyTotalSensor(device))
+    # content[8] is always 0 in a reduced state block, cooling included, so the
+    # sensor would read "heating" permanently (#427).
+    if not device.reduced_status_block:
+        entities.append(DiagnosticsSensor(device, ATTR_COOL_HOT_JUDGE))
 
     # Active operation-data entities register their segment code with Device,
     # which requests only the segments needed by enabled entities. None of

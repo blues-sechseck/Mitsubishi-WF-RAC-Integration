@@ -440,6 +440,7 @@ async def test_setup_on_a_reduced_unit(hass: HomeAssistant):
     assert f"{DOMAIN}-{AIRCO_ID}-external-control" in remaining
     assert f"{DOMAIN}-{AIRCO_ID}-home-leave-mode" in remaining
     assert f"{DOMAIN}-{AIRCO_ID}-occupancy" in remaining
+    assert f"{DOMAIN}-{AIRCO_ID}-cool_hot_judge-sensor" not in remaining
     assert not remaining & {
         uid for uids in unsupported_entity_unique_ids(AIRCO_ID).values() for uid in uids
     }
@@ -506,6 +507,9 @@ async def test_a_normal_unit_keeps_its_entities_and_gets_no_repair(hass: HomeAss
 
     assert all(registry.async_get(entity_id) is not None for entity_id in stale)
     assert _issue(hass, entry) is None
+    assert registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{DOMAIN}-{AIRCO_ID}-cool_hot_judge-sensor"
+    )
 
 
 # --- the options form ----------------------------------------------------------
