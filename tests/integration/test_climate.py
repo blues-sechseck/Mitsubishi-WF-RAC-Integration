@@ -106,7 +106,7 @@ async def test_update_state_re_adds_target_offset(device):
 
     entity._update_state()
 
-    assert entity._attr_target_temperature == 23
+    assert entity.target_temperature == 23
 
 
 async def test_target_offset_zero_is_identity(device):
@@ -119,7 +119,7 @@ async def test_target_offset_zero_is_identity(device):
 
     device.airco.PresetTemp = 23
     entity._update_state()
-    assert entity._attr_target_temperature == 23
+    assert entity.target_temperature == 23
 
 
 #
@@ -211,7 +211,7 @@ async def test_round_trip_symmetry_per_mode(device, hvac_mode, override_key, off
     device.airco.OperationMode = HVAC_TRANSLATION[hvac_mode]
     entity._update_state()
 
-    assert entity._attr_target_temperature == 23
+    assert entity.target_temperature == 23
 
 
 async def test_round_trip_symmetry_survives_unit_being_off(device):
@@ -233,7 +233,7 @@ async def test_round_trip_symmetry_survives_unit_being_off(device):
     device.airco.Operation = False
     entity._update_state()
 
-    assert entity._attr_target_temperature == 21
+    assert entity.target_temperature == 21
 
 
 #
@@ -269,7 +269,7 @@ async def test_target_sensor_matches_climate_entity(
     sensor._update_state()
 
     assert sensor._attr_native_value == 22 + offset
-    assert sensor._attr_native_value == climate._attr_target_temperature
+    assert sensor._attr_native_value == climate.target_temperature
 
 
 def _service_entity(device) -> AircoClimate:
@@ -333,7 +333,7 @@ async def test_update_state_uses_indoor_temp_without_override(device):
 
     entity._update_state()
 
-    assert entity._attr_current_temperature == 23.5
+    assert entity.current_temperature == 23.5
 
 
 async def test_update_state_shows_the_value_the_unit_is_being_fed(device):
@@ -352,7 +352,7 @@ async def test_update_state_shows_the_value_the_unit_is_being_fed(device):
     _mark_reached_the_unit(device, 20.0)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.0
+    assert entity.current_temperature == 20.0
 
 
 async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device):
@@ -367,7 +367,7 @@ async def test_update_state_keeps_indoor_temp_until_the_override_is_sent(device)
     await entity.async_set_external_temperature(temperature=20.0)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 23.5
+    assert entity.current_temperature == 23.5
 
 
 async def test_update_state_shows_a_source_even_before_the_unit_uses_it(device):
@@ -385,7 +385,7 @@ async def test_update_state_shows_a_source_even_before_the_unit_uses_it(device):
     device.set_external_temperature_override(20.0)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.0
+    assert entity.current_temperature == 20.0
     # The override is still correctly reported as not in effect.
     assert device.external_temperature_applied is False
 
@@ -406,12 +406,12 @@ async def test_update_state_follows_the_newest_value_while_one_is_in_flight(devi
     await entity.async_set_external_temperature(temperature=20.25)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.25
+    assert entity.current_temperature == 20.25
 
     _mark_reached_the_unit(device, 20.25)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 20.25
+    assert entity.current_temperature == 20.25
 
 
 async def test_update_state_keeps_the_offset_while_the_unit_is_off_or_fan_only(device):
@@ -434,7 +434,7 @@ async def test_update_state_keeps_the_offset_while_the_unit_is_off_or_fan_only(d
         device.airco.OperationMode = mode
         entity._update_state()
 
-        assert entity._attr_current_temperature == 23.5
+        assert entity.current_temperature == 23.5
 
 
 async def test_set_external_temperature_none_clears_override(device):
@@ -481,7 +481,7 @@ async def test_current_temperature_shows_the_room_not_the_bent_value(device):
     _mark_reached_the_unit(device, 21.0)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 22.0
+    assert entity.current_temperature == 22.0
 
 
 @pytest.mark.parametrize("overshoot", [0.0, 1.0])
@@ -500,7 +500,7 @@ async def test_current_temperature_does_not_move_with_the_overshoot(device, over
     _mark_reached_the_unit(device, 22.0 - overshoot)
     entity._update_state()
 
-    assert entity._attr_current_temperature == 22.0
+    assert entity.current_temperature == 22.0
 
 
 def _with_external_temperature_source(device: Device) -> str:
@@ -937,7 +937,7 @@ async def test_a_setpoint_at_the_offset_edge_reaches_the_unit_unclamped(device):
 
     device.airco.PresetTemp = sent[AirconCommands.PresetTemp]
     entity._update_state()
-    assert entity._attr_target_temperature == 17.0
+    assert entity.target_temperature == 17.0
 
 
 async def test_a_mode_switching_call_is_not_measured_against_another_modes_offset(
@@ -1012,7 +1012,7 @@ async def test_an_off_unit_writes_the_setpoint_with_the_underlying_modes_offset(
 
     device.airco.PresetTemp = sent[AirconCommands.PresetTemp]
     entity._update_state()
-    assert entity._attr_target_temperature == 24.0
+    assert entity.target_temperature == 24.0
 
 
 async def test_leaving_home_leave_lands_on_the_normal_setpoint_the_card_shows(device):
@@ -1037,7 +1037,7 @@ async def test_leaving_home_leave_lands_on_the_normal_setpoint_the_card_shows(de
 
     device.airco.PresetTemp = sent[AirconCommands.PresetTemp]
     entity._update_state()
-    assert entity._attr_target_temperature == NORMAL_TEMP
+    assert entity.target_temperature == NORMAL_TEMP
 
 
 @pytest.mark.parametrize(
@@ -1063,3 +1063,21 @@ async def test_leaving_home_leave_never_lands_back_in_it(device, hvac_mode, rang
 
     sent = device.async_queue_command.call_args.args[0]
     assert sent[AirconCommands.PresetTemp] == HOME_LEAVE_SETPOINT_CEILING
+
+
+def test_temperatures_use_native_attrs_when_gate_is_open(device, monkeypatch):
+    monkeypatch.setattr(climate_module, "_NATIVE_TEMPERATURE_ATTRS", True)
+    device.airco.PresetTemp = 22
+    entity = AircoClimate(device)
+
+    entity._update_state()
+
+    assert entity._attr_native_target_temperature == 22
+    assert entity._attr_native_current_temperature == device.airco.IndoorTemp
+    assert "_attr_target_temperature" not in vars(entity)
+    assert "_attr_current_temperature" not in vars(entity)
+
+    entity._mark_state_unknown()
+
+    assert entity._attr_native_target_temperature is None
+    assert entity._attr_native_current_temperature is None

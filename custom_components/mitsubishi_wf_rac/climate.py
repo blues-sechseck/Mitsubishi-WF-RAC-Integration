@@ -28,6 +28,8 @@ from homeassistant.components.climate.const import (
 from homeassistant.const import (
     ATTR_TEMPERATURE,
     ATTR_UNIT_OF_MEASUREMENT,
+    MAJOR_VERSION,
+    MINOR_VERSION,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     UnitOfTemperature,
@@ -138,6 +140,13 @@ def _stored_external_temperature_is_set(stored: ExtraStoredData | None) -> bool:
     return stored.as_dict().get("external_temperature_override") is not None
 
 
+# Home Assistant 2026.11 deprecates the unit/target/current temperature attrs
+# in favour of their native_* twins and warns about the old names, even when
+# a class merely defines one. Older releases only know the old names. Can go
+# once hacs.json's minimum Home Assistant version reaches 2026.11.
+_NATIVE_TEMPERATURE_ATTRS = (MAJOR_VERSION, MINOR_VERSION) >= (2026, 11)
+
+
 class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     """Representation of a climate entity."""
 
@@ -147,7 +156,13 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
     _external_temperature_from_source: bool = False
 
     _attr_supported_features: ClimateEntityFeature = SUPPORT_FLAGS
-    _attr_temperature_unit: str = UnitOfTemperature.CELSIUS
+    # Annotations only: no value, so nothing is defined on the class.
+    _attr_native_target_temperature: float | None
+    _attr_native_current_temperature: float | None
+    if _NATIVE_TEMPERATURE_ATTRS:
+        _attr_native_temperature_unit: str = UnitOfTemperature.CELSIUS
+    else:
+        _attr_temperature_unit: str = UnitOfTemperature.CELSIUS
     _attr_hvac_modes: list[HVACMode] = SUPPORTED_HVAC_MODES
     _attr_fan_modes: list[str] = SUPPORTED_FAN_MODES
     _attr_fan_mode: str | None = FAN_AUTO
@@ -774,6 +789,17 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
             ),
         )
 
+    def _set_temperatures(
+        self, *, target: float | None = None, current: float | None = None
+    ) -> None:
+        """Store the setpoint and room reading under the right attribute names."""
+        if _NATIVE_TEMPERATURE_ATTRS:
+            self._attr_native_target_temperature = target
+            self._attr_native_current_temperature = current
+        else:
+            self._attr_target_temperature = target
+            self._attr_current_temperature = current
+
     def _mark_state_unknown(self) -> None:
         # All of it, not just hvac_mode: _update_state() writes the setpoint
         # and the room reading before it reaches the fields that can fail, so
@@ -781,8 +807,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         # and a stale action next to a state the entity itself calls unknown.
         self._attr_hvac_mode = None
         self._attr_hvac_action = None
-        self._attr_target_temperature = None
-        self._attr_current_temperature = None
+        self._set_temperatures()
         self._attr_fan_mode = None
         self._attr_swing_mode = None
         self._attr_swing_horizontal_mode = None
@@ -803,7 +828,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         # holds the offset-lowered value that was actually sent to the device.
         target_offset = self._resolve_target_offset(mode_from_operation)
 
-        self._attr_target_temperature = airco.PresetTemp + target_offset
+        target = airco.PresetTemp + target_offset
         # While the unit is regulating on a temperature someone supplied, that
         # value is the room and the card shows it - see
         # Device.external_temperature_room_value. What the unit reports back
@@ -816,11 +841,12 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         # the loop just then.
         room = self.coordinator.external_temperature_room_value
         if room is not None:
-            self._attr_current_temperature = room
+            current = room
         else:
-            self._attr_current_temperature = airco.IndoorTemp + (
+            current = airco.IndoorTemp + (
                 0.0 if self.coordinator.external_temperature_applied else indoor_offset
             )
+        self._set_temperatures(target=target, current=current)
         # Named rather than left to index past the end of the list: the library
         # says so itself when it could not read the unit's fan step, and a sixth
         # fan mode here would otherwise turn that marker into a real one and
