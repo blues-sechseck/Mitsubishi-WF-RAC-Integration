@@ -564,6 +564,12 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         that may be wrong. The entry's port, not the announced one - see
         test_a_rediscovery_refreshes_the_address_but_not_the_port.
         """
+        owner = self._find_entry_matching(CONF_HOST, lambda h: h == host)
+        if owner is not None and owner.entry_id != entry.entry_id:
+            # Another configured unit holds that address, so it cannot be
+            # this one. Not asking also keeps the request off a unit that is
+            # being polled: the modules serve one connection at a time.
+            return False
         repository = Repository(
             async_get_clientsession(self.hass),
             host,
