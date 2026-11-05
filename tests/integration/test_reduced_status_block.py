@@ -498,6 +498,8 @@ async def test_removing_the_entry_removes_the_repair(hass: HomeAssistant):
 
 
 async def test_a_normal_unit_keeps_its_entities_and_gets_no_repair(hass: HomeAssistant):
+    # A final build drops the beta-only research sensor on every unit.
+    hass.data[f"{DOMAIN}_prerelease_build"] = True
     entry = _entry({CONF_EXTERNAL_TEMPERATURE_SOURCE: SOURCE})
     registry = er.async_get(hass)
     entry.add_to_hass(hass)
