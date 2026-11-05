@@ -1828,13 +1828,14 @@ async def test_a_real_command_records_its_time_for_the_backdate_guard(
     assert device._last_command_at is not None
 
 
-async def test_a_refused_write_waits_out_the_lock_that_refused_it(device):
+async def test_a_refused_write_waits_out_the_lock_that_refused_it(device, freezer):
     """A retry at a fixed delay lands inside the same lock as often as not,
     and a request spent on a refusal that was certain is a request wasted.
     The unit reports when the lock lapses, against a clock our own request
     just set (the module has no RTC), so the retry can be placed right after
     it.
     """
+    freezer.move_to("2026-10-18 12:08:15.5+00:00")
     # Someone else took the lock 40 seconds ago: 20 of its 60 are left.
     device._api.get_aircon_stats.return_value = _stats_response_with_expires(
         OFF_PAYLOAD, int(dt_util.utcnow().timestamp()) - 40 + 60
@@ -1842,7 +1843,7 @@ async def test_a_refused_write_waits_out_the_lock_that_refused_it(device):
 
     delay = await device._async_write_lock_delay()
 
-    assert 20 <= delay <= 22
+    assert delay == 20.5
 
 
 async def test_a_refused_write_is_never_held_longer_than_a_lock_can_run(device):
