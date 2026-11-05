@@ -1165,16 +1165,20 @@ async def test_a_rediscovery_refreshes_the_address_but_not_the_port(
     )
     entry.add_to_hass(hass)
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_ZEROCONF},
-        data=_zeroconf_info(host="192.168.1.60", port=5353),
-    )
+    repo = _mock_repository(airco_id="ac-living-room")
+    with _patch_repository(repo) as repository_class:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(host="192.168.1.60", port=5353),
+        )
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_HOST] == "192.168.1.60"
     assert entry.data[CONF_PORT] == 51443
+    # The new address was tried on the entry's port, not the announced one.
+    assert repository_class.call_args.args[1:3] == ("192.168.1.60", 51443)
 
 
 async def test_a_shouted_hostname_still_matches_the_entry(hass: HomeAssistant):
@@ -1188,14 +1192,110 @@ async def test_a_shouted_hostname_still_matches_the_entry(hass: HomeAssistant):
     entry = _existing_entry(hass, host="192.168.1.50")
     hass.config_entries.async_update_entry(entry, unique_id="ac-living-room")
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_ZEROCONF},
-        data=_zeroconf_info(host="192.168.1.99", hostname="AC-Living-Room.local."),
-    )
+    with _patch_repository(_mock_repository(airco_id="AC-Living-Room")):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(host="192.168.1.99", hostname="AC-Living-Room.local."),
+        )
 
     assert result["type"] is FlowResultType.ABORT
     assert entry.data["host"] == "192.168.1.99"
+
+
+@pytest.mark.parametrize(
+    "repo",
+    [
+        pytest.param(
+            AsyncMock(get_airco_id=AsyncMock(side_effect=WfRacError("refused"))),
+            id="nothing-answers",
+        ),
+        pytest.param(_mock_repository(airco_id="another-unit"), id="another-unit"),
+        pytest.param(_mock_repository(airco_id=""), id="no-airco-id"),
+    ],
+)
+async def test_a_rediscovery_at_an_address_the_unit_is_not_at_keeps_the_entry(
+    hass: HomeAssistant, repo: AsyncMock
+):
+    """An announcement alone does not move a configured unit.
+
+    Where mDNS is bridged between network segments, a module that moved to
+    another segment has been seen re-announced at the address it had there.
+    Taking that at face value replaces an address that works with one that
+    does not, and the unit stays unavailable until it is reconfigured by
+    hand.
+    """
+    entry = _existing_entry(hass, host="192.168.1.50")
+    hass.config_entries.async_update_entry(entry, unique_id="ac-living-room")
+
+    with _patch_repository(repo):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(host="192.168.2.50"),
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "192.168.1.50"
+    repo.update_account_info.assert_not_called()
+
+
+async def test_a_rediscovery_at_another_units_address_asks_nothing(
+    hass: HomeAssistant,
+):
+    """An address another configured unit holds cannot be this unit's.
+
+    The modules serve one connection at a time, so asking there would also
+    compete with that unit's own polling.
+    """
+    entry = _existing_entry(hass, host="192.168.1.50")
+    hass.config_entries.async_update_entry(entry, unique_id="ac-living-room")
+    other = MockConfigEntry(
+        domain=DOMAIN,
+        version=7,
+        unique_id="ac-bedroom",
+        data={
+            "name": "Bedroom AC",
+            "host": "192.168.1.51",
+            "port": 51443,
+            CONF_AIRCO_ID: "ac-bedroom",
+            CONF_OPERATOR_ID: "operator-1",
+            CONF_DEVICE_ID: "device-1",
+        },
+        options={CONF_FIRMWARE_UPDATE_CHECK: False},
+    )
+    other.add_to_hass(hass)
+
+    with _patch_repository(_mock_repository()) as repository_class:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(host="192.168.1.51"),
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "192.168.1.50"
+    assert other.data[CONF_HOST] == "192.168.1.51"
+    repository_class.assert_not_called()
+
+
+async def test_a_rediscovery_at_the_same_address_asks_nothing(hass: HomeAssistant):
+    """Every announcement of an unchanged address must not reach the unit."""
+    entry = _existing_entry(hass, host="192.168.1.50")
+    hass.config_entries.async_update_entry(entry, unique_id="ac-living-room")
+
+    with _patch_repository(_mock_repository()) as repository_class:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(host="192.168.1.50"),
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    repository_class.assert_not_called()
 
 
 async def test_the_manual_flow_registers_the_unit_as_the_unique_id(hass: HomeAssistant):

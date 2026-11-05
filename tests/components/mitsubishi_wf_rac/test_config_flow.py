@@ -350,6 +350,27 @@ async def test_zeroconf_flow_already_configured(
     assert mock_config_entry.data[CONF_PORT] == PORT
 
 
+@pytest.mark.usefixtures("mock_setup_entry")
+async def test_zeroconf_flow_already_configured_unreachable_at_new_host(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_repository: MagicMock,
+) -> None:
+    """A rediscovery at an address the airco does not answer keeps the entry."""
+    mock_config_entry.add_to_hass(hass)
+    mock_repository.get_airco_id.side_effect = WfRacConnectionError("refused")
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_ZEROCONF},
+        data=_discovery_info(host="192.168.1.9"),
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert mock_config_entry.data[CONF_HOST] == HOST
+
+
 @pytest.mark.usefixtures("mock_repository", "mock_setup_entry")
 async def test_a_shouted_hostname_still_matches_the_entry(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
