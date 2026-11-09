@@ -618,14 +618,16 @@ contributes nothing `[HW]`. There is no finer counter in the protocol — an
 external energy meter is the only accurate option for a frequently cycling
 unit.
 
-On a multi-split the counter is **per indoor unit**, not a shared outdoor-unit
-total, so the values of two units may be summed. `[HW]` (Verified on a
-two-unit multi-split: one unit cleared its counter at its own power-on while
-the sibling's kept running unchanged; the two accumulated at different rates
-over the same interval; and one kept counting while the other was off for
-seven hours. Do not conclude the opposite from a single side-by-side run —
-two units cooling in parallel accumulate at nearly the same rate and look
-like one shared meter.)
+On a multi-split each indoor unit's counter carries the **whole outdoor unit's
+consumption** while that indoor unit runs, not its own share, so summing the
+counters of two units counts it twice. `[HW]` (Heating, two indoor units on one
+outdoor unit, three windows with both running: each counter rose by 1.25, 2.0
+and 2.0 kWh while the outdoor unit's operating current integrated to 1.38, 2.19
+and 2.25 kWh. The steps of both counters arrive at the same rate, offset only by
+when each unit was switched on.) Each counter still freezes while its own unit
+is off and clears at its own power-on, so no single one covers the time only the
+other unit runs; for a complete figure, meter the outdoor unit's supply. Cooling
+has not been checked separately.
 
 ### 5.3 Requesting anything else — a parameter channel, used generically
 
