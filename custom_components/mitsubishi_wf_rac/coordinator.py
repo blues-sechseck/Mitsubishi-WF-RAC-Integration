@@ -954,9 +954,18 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self.device_name,
                     ex,
                 )
-            except (WfRacError, KeyError, TypeError, ValueError):
+            except (WfRacError, KeyError, TypeError, ValueError) as ex:
                 # Unreachable or unparseable: the poll itself reports that, and
-                # this request is an optional extra on top of it.
+                # this request is an optional extra on top of it. Still logged:
+                # with an external temperature source this request is what
+                # carries the override, and a lost one shows up only as the
+                # unit falling back to its own sensor.
+                _LOGGER.debug(
+                    "Service data request failed for [%s], skipping this cycle: %s: %s",
+                    self.device_name,
+                    type(ex.__cause__ or ex).__name__,
+                    ex,
+                )
                 return
         # Entities keep their previous operation-data values on a skipped cycle
         # (see _carry_forward_service_data), so there is nothing to push here.
