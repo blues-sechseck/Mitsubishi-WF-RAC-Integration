@@ -2391,6 +2391,30 @@ async def test_service_data_request_gives_up_after_the_retry(
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
 
+async def test_service_data_request_logs_a_lost_connection(device, monkeypatch, caplog):
+    # This request carries an active room-temperature override, so a lost one
+    # must leave a trace even though the poll stays healthy.
+    caplog.set_level("DEBUG", logger=coordinator_module.__name__)
+    _activate_service_data_contexts(device, monkeypatch)
+    _shorten_service_data_timing(monkeypatch)
+    device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
+    cause = ConnectionResetError("reset by peer")
+    error = WfRacConnectionError("Aircon returned error: reset by peer")
+    error.__cause__ = cause
+    device._api.send_airco_command = AsyncMock(side_effect=error)
+
+    await device.update()
+    await asyncio.sleep(0.1)
+
+    # Not retried: unlike a refusal, a dead connection is the poll's to report.
+    assert device._api.send_airco_command.await_count == 1
+    lost = [r for r in caplog.records if "Service data request failed" in r.message]
+    assert len(lost) == 1
+    assert lost[0].levelname == "DEBUG"
+    assert "ConnectionResetError" in lost[0].message
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
 async def test_update_service_data_request_is_rate_limited(device, monkeypatch):
     _activate_service_data_contexts(device, monkeypatch)
     _shorten_service_data_timing(monkeypatch)
