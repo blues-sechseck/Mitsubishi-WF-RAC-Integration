@@ -62,6 +62,8 @@ def _prove(channel, *codes: int) -> None:
 
 
 def _suspend(channel, code: int) -> None:
+    # A refusal only counts once the unit has answered something.
+    _prove(channel, SERVICE_DATA_SILENT_OPERATION)
     for _ in range(SERVICE_DATA_REFUSALS_TO_SUSPEND):
         channel.note_refused((code,))
 
