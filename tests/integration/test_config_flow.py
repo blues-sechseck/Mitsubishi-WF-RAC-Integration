@@ -1282,10 +1282,12 @@ async def test_a_rediscovery_probe_sends_nothing_the_entry_holds(
     assert entry.data[CONF_HOST] == ("192.168.2.50" if moved else "192.168.1.50")
     # The probe really went out; an empty list would pass the check below.
     assert aioclient_mock.call_count >= 1
+    # Whole JSON strings, quotes included: the throwaway ids may well contain
+    # the stored ones as a substring ("homeassistant-device-1f..").
     for _method, _url, body, _headers in aioclient_mock.mock_calls:
         sent = json.dumps(body)
-        assert entry.data[CONF_OPERATOR_ID] not in sent
-        assert entry.data[CONF_DEVICE_ID] not in sent
+        assert json.dumps(entry.data[CONF_OPERATOR_ID]) not in sent
+        assert json.dumps(entry.data[CONF_DEVICE_ID]) not in sent
 
 
 async def test_a_rediscovery_at_another_units_address_asks_nothing(
