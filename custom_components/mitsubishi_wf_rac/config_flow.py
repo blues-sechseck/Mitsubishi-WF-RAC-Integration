@@ -559,9 +559,12 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> bool:
         """Return True if the entry's unit answers at host as itself.
 
-        Asks for the airco id only, with the account the entry already
-        holds: no registration, so no account slot is spent on an address
-        that may be wrong. The entry's port, not the announced one - see
+        The address is unverified, only an mDNS announcement vouches for it,
+        so the probe goes out with throwaway identifiers and nothing the
+        entry holds leaves Home Assistant. getDeviceInfo does not read them.
+        It asks for the airco id only and does not register, so no account
+        slot is spent on an address that may be wrong. The entry's port, not
+        the announced one - see
         test_a_rediscovery_refreshes_the_address_but_not_the_port.
         """
         owner = self._find_entry_matching(CONF_HOST, lambda h: h == host)
@@ -574,8 +577,8 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             async_get_clientsession(self.hass),
             host,
             entry.data.get(CONF_PORT, DEFAULT_PORT),
-            entry.data[CONF_OPERATOR_ID],
-            entry.data[CONF_DEVICE_ID],
+            f"hassio-{str(uuid4())[7:]}",
+            f"homeassistant-device-{uuid4().hex[21:]}",
             cert_path=self.hass.config.path(AC_CERT_FILENAME),
         )
         try:
