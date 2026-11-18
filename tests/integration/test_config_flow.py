@@ -4,6 +4,7 @@ options flow. Repository (the HTTP layer) is patched out - no real network.
 
 import json
 from pathlib import Path
+import re
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -1239,6 +1240,52 @@ async def test_a_rediscovery_at_an_address_the_unit_is_not_at_keeps_the_entry(
     assert result["reason"] == "already_configured"
     assert entry.data[CONF_HOST] == "192.168.1.50"
     repo.update_account_info.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("answering_airco_id", "moved"),
+    [("another-unit", False), ("ac-living-room", True)],
+    ids=["another-unit", "the-unit-itself"],
+)
+async def test_a_rediscovery_probe_sends_nothing_the_entry_holds(
+    hass: HomeAssistant, aioclient_mock, answering_airco_id: str, moved: bool
+):
+    """The probe goes to an address only an announcement vouches for.
+
+    Whatever answers there must not learn the account the entry uses on its
+    real unit. Checked on the wire, so it holds however the library places
+    the identifiers in a request.
+    """
+    entry = _existing_entry(hass, host="192.168.1.50")
+    hass.config_entries.async_update_entry(entry, unique_id="ac-living-room")
+    aioclient_mock.post(
+        re.compile(r"https?://192\.168\.2\.50:51443/beaver/command/getDeviceInfo"),
+        json={
+            "apiVer": "1.0",
+            "command": "getDeviceInfo",
+            "contents": {
+                "airconId": answering_airco_id,
+                "macAddress": "AA:BB:CC:DD:EE:FF",
+                "apMode": 0,
+            },
+        },
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_ZEROCONF},
+        data=_zeroconf_info(host="192.168.2.50"),
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == ("192.168.2.50" if moved else "192.168.1.50")
+    # The probe really went out; an empty list would pass the check below.
+    assert aioclient_mock.call_count >= 1
+    for _method, _url, body, _headers in aioclient_mock.mock_calls:
+        sent = json.dumps(body)
+        assert entry.data[CONF_OPERATOR_ID] not in sent
+        assert entry.data[CONF_DEVICE_ID] not in sent
 
 
 async def test_a_rediscovery_at_another_units_address_asks_nothing(
