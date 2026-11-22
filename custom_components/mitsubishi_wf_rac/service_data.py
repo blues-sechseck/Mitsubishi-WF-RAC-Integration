@@ -39,6 +39,7 @@ from pywfrac import (
     SERVICE_DATA_SILENT_OPERATION,
     Aircon,
     ServiceDataRefusals,
+    defrost_detected,
     defrost_possible,
     hot_start_possible,
 )
@@ -159,17 +160,32 @@ SERVICE_DATA_INTERVALS: Final[dict[int, timedelta]] = {
 # not; demanding the full interval would skip every second poll for it.
 SERVICE_DATA_DUE_TOLERANCE: Final = MIN_TIME_BETWEEN_UPDATES / 2
 
+
+def _defrost_worth_asking(airco: Aircon | None) -> bool:
+    """Whether 0x0C is worth asking: a defrost is possible or was detected.
+
+    The detection comes from the indoor coil, which can see a defrost the
+    possibility bound does not cover (a coil reading says so even at an
+    outdoor temperature above the bound), and 0x0C is kept as the comparison
+    value for exactly those moments.
+    """
+    return defrost_possible(airco) or defrost_detected(airco) is True
+
+
 # Codes that are only worth asking while a condition holds, as a predicate on
 # the last reading. Codes without an entry are always eligible.
 SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {
-    SERVICE_DATA_DEFROST: defrost_possible,
+    SERVICE_DATA_DEFROST: _defrost_worth_asking,
     SERVICE_DATA_HOT_START: hot_start_possible,
 }
 
 # Codes whose condition above reads another code, which therefore has to be
 # requested whenever the first one is subscribed, enabled sensor or not.
 SERVICE_DATA_DEPENDS_ON: Final[dict[int, tuple[int, ...]]] = {
-    SERVICE_DATA_DEFROST: (SERVICE_DATA_COMPRESSOR_FREQ,),
+    SERVICE_DATA_DEFROST: (
+        SERVICE_DATA_COMPRESSOR_FREQ,
+        SERVICE_DATA_INDOOR_COIL_RAW,
+    ),
 }
 
 
@@ -177,7 +193,10 @@ SERVICE_DATA_DEPENDS_ON: Final[dict[int, tuple[int, ...]]] = {
 # of its own: every operation-data request takes the unit's 60-second write
 # lock and locks other clients out. They are asked only inside a request that
 # goes out anyway, for an enabled sensor or an armed temperature override.
-SERVICE_DATA_PIGGYBACK_CODES: Final = (SERVICE_DATA_HOT_START, SERVICE_DATA_DEFROST)
+SERVICE_DATA_PIGGYBACK_CODES: Final = (
+    SERVICE_DATA_HOT_START,
+    SERVICE_DATA_INDOOR_COIL_RAW,
+)
 
 
 def service_data_interval(code: int) -> timedelta:

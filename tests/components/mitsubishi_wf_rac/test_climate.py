@@ -467,20 +467,32 @@ async def test_commands_issued_together_become_one_command(
             id="hot-start-while-cooling",
         ),
         pytest.param(
-            {**RUNNING_HEAT, "HotStart": True, "Defrosting": True},
+            {**RUNNING_HEAT, "HotStart": True, "IndoorCoilRaw": 15},
             HVACAction.DEFROSTING,
             id="defrost-before-hot-start",
         ),
         pytest.param(
-            {**RUNNING_HEAT, "Defrosting": True}, HVACAction.DEFROSTING, id="defrost"
+            {**RUNNING_HEAT, "IndoorCoilRaw": 15},
+            HVACAction.DEFROSTING,
+            id="defrost",
         ),
         pytest.param(
-            {**RUNNING_HEAT, "CompressorRunning": True, "Defrosting": False},
+            {**RUNNING_HEAT, "CompressorRunning": True, "IndoorCoilRaw": 189},
             HVACAction.HEATING,
             id="defrost-over",
         ),
         pytest.param(
-            {**RUNNING_COOL, "CompressorRunning": True, "Defrosting": True},
+            {**RUNNING_HEAT, "CompressorRunning": True, "IndoorCoilRaw": None},
+            HVACAction.HEATING,
+            id="defrost-no-coil-reading",
+        ),
+        pytest.param(
+            {**RUNNING_HEAT, "CompressorRunning": True, "Defrosting": True},
+            HVACAction.HEATING,
+            id="outdoor-flag-alone-is-not-a-defrost",
+        ),
+        pytest.param(
+            {**RUNNING_COOL, "CompressorRunning": True, "IndoorCoilRaw": 15},
             HVACAction.COOLING,
             id="defrost-while-cooling",
         ),

@@ -15,6 +15,7 @@ import pytest
 from pywfrac import (
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_HUMIDITY,
+    SERVICE_DATA_INDOOR_COIL_RAW,
     SERVICE_DATA_SILENT_OPERATION,
     AirconCommands,
     WfRacWriteRefusedError,
@@ -219,11 +220,22 @@ async def test_research_codes_ride_along_with_the_regular_ones(
         lambda: {SERVICE_DATA_COMPRESSOR_FREQ, RESEARCH_CONTEXT},
     )
     platform_device.service_data._refusals.note_answered(SERVICE_DATA_COMPRESSOR_FREQ)
+    platform_device.service_data._refusals.note_answered(SERVICE_DATA_INDOOR_COIL_RAW)
 
     sent = await _cycles(platform_device, 5)
 
-    # No cycle is taken from the regular code any more.
-    assert sent == [(SERVICE_DATA_COMPRESSOR_FREQ, RESEARCH_SERVICE_DATA_CODES[0])] * 5
+    # No cycle is taken from the regular codes any more.
+    assert (
+        sent
+        == [
+            (
+                SERVICE_DATA_COMPRESSOR_FREQ,
+                SERVICE_DATA_INDOOR_COIL_RAW,
+                RESEARCH_SERVICE_DATA_CODES[0],
+            )
+        ]
+        * 5
+    )
 
 
 async def test_research_alone_asks_every_cycle(

@@ -46,6 +46,9 @@ async def async_get_config_entry_diagnostics(
         # report shows whether the unit has been declining commands.
         "result_codes": device.result_codes,
         "aircon": asdict(device.airco),
+        # In memory since the last reload: the raw frames around every defrost
+        # the indoor coil showed, to check the detection against other units.
+        "defrost_trace": device.defrost_trace.as_dict(),
     }
     if await is_prerelease_build(hass):
         diagnostics["research"] = {

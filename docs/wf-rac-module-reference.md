@@ -800,7 +800,7 @@ This table is the decoded subset. The whole code space has since been swept and
 | `0xAD` | Relative humidity [%] | `OP2`; `30` ⇒ no sensor (or range floor), `0` ⇒ broken sensor wire, `0xFF` ⇒ no value | `10 1e ff` ⇒ 30 on an SRK20ZS-WF, which has no humidity sensor |
 | `0xB1` | TDSH [°C] | `OP2 / 2` | `00` in both — never moved |
 | `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32`, **only for `OP2 >= 0x12`** | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
-| `0x13` | Outdoor EEV [pulses] | `OP2` | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
+| `0x13` | Outdoor EEV [pulses] | `OP3 << 8 \| OP2` (`OP3 = ff` ⇒ no value, `OP2` alone); full stroke assumed 500 pulses, not confirmed per model | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
 | `0x05` | Internal setpoint [°C] | `OP2 / 2`, `sel` = `0x13` | `2e` ⇒ **23.0 °C** while 22.5 °C was the value sent |
 | `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
 | `0x81` | THI-R1 [°C] | thermistor curve, see §5.4 | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
@@ -975,8 +975,12 @@ outdoor selector the bridge cannot send (§5.3).
 as `10 ff ff` `[HW]`, and that is not an empty answer: the flag is
 `OP1 & 0x01`, the bit MHI-AC-Ctrl reads it from, and a CNS capture of an idle
 unit shows the same `10 ff` `[EXT]`. So `10` means "not defrosting". It held
-through cooling, standstill and six heating runs on two units. A defrost cycle
-should read `11 ff ff`; we have not caught one yet.
+through cooling, standstill and six heating runs on two units, and also
+through real reverse-cycle defrosts on three units across two firmware
+branches `[HW]`. A `11 ff ff` answer has never been seen, so the flag is only a
+comparison value. The defrost shows in the indoor coil thermistor (`0x81`)
+instead: while heating, its byte collapses to about 8-21, against 140-190 in
+normal heating `[HW]`.
 
 #### The rest of the code space
 

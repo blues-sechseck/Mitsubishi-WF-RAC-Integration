@@ -323,12 +323,19 @@ async def test_an_untested_research_code_waits_for_proven_regular_codes(
         lambda: {SERVICE_DATA_COMPRESSOR_FREQ, RESEARCH_CONTEXT},
     )
 
+    # The coil reading the climate entity rides along is not the suspect here.
+    _prove(platform_device.service_data, SERVICE_DATA_INDOOR_COIL_RAW)
+
     sent = await requests(2)
 
-    # First the regular code on its own, until the unit has answered it...
-    assert sent[0] == (SERVICE_DATA_COMPRESSOR_FREQ,)
-    # ...then one untested research code beside it, a single suspect.
-    assert sent[1] == (SERVICE_DATA_COMPRESSOR_FREQ, RESEARCH_SERVICE_DATA_CODES[0])
+    # First the regular codes, until the unit has answered them...
+    assert sent[0] == (SERVICE_DATA_COMPRESSOR_FREQ, SERVICE_DATA_INDOOR_COIL_RAW)
+    # ...then one untested research code beside them, a single suspect.
+    assert sent[1] == (
+        SERVICE_DATA_COMPRESSOR_FREQ,
+        SERVICE_DATA_INDOOR_COIL_RAW,
+        RESEARCH_SERVICE_DATA_CODES[0],
+    )
 
 
 async def test_a_code_the_unit_refuses_no_longer_takes_the_request_down(
@@ -341,13 +348,15 @@ async def test_a_code_the_unit_refuses_no_longer_takes_the_request_down(
         lambda: {SERVICE_DATA_COMPRESSOR_FREQ, SERVICE_DATA_HUMIDITY},
     )
     requests.refuse.add(SERVICE_DATA_HUMIDITY)
+    _prove(platform_device.service_data, SERVICE_DATA_INDOOR_COIL_RAW)
 
     sent = await requests(6)
 
-    assert sent[0] == (SERVICE_DATA_COMPRESSOR_FREQ, SERVICE_DATA_HUMIDITY)
+    regular = (SERVICE_DATA_COMPRESSOR_FREQ, SERVICE_DATA_INDOOR_COIL_RAW)
+    assert sent[0] == (*regular, SERVICE_DATA_HUMIDITY)
     # Both are suspects after the shared refusal and go one at a time.
-    assert sent[1] == (SERVICE_DATA_COMPRESSOR_FREQ,)
-    assert sent[-1] == (SERVICE_DATA_COMPRESSOR_FREQ,)
+    assert sent[1] == regular
+    assert sent[-1] == regular
     assert platform_device.service_data._refusals.is_suspended(SERVICE_DATA_HUMIDITY)
     assert not [r for r in caplog.records if r.levelno >= logging.INFO]
     assert any("0xAD" in r.message for r in caplog.records)
