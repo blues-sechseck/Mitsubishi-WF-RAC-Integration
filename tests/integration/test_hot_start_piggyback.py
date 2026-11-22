@@ -2,7 +2,6 @@
 
 from pywfrac import (
     SERVICE_DATA_COMPRESSOR_FREQ,
-    SERVICE_DATA_DEFROST,
     SERVICE_DATA_HOT_START,
     SERVICE_DATA_INDOOR_COIL_RAW,
     Aircon,
@@ -29,7 +28,7 @@ def test_hot_start_is_scheduled_every_minute_and_only_while_heating():
     assert service_data_module.SERVICE_DATA_DERIVED_FROM["HotStart"] == "HotStartRaw"
     assert set(SERVICE_DATA_PIGGYBACK_CODES) == {
         SERVICE_DATA_HOT_START,
-        SERVICE_DATA_DEFROST,
+        SERVICE_DATA_INDOOR_COIL_RAW,
     }
 
 
@@ -39,16 +38,15 @@ async def test_nothing_is_subscribed_without_an_enabled_sensor(platform_device):
 
 async def test_piggyback_codes_join_once_another_code_is_subscribed(platform_device):
     remove = platform_device.async_add_listener(
-        lambda: None, SERVICE_DATA_INDOOR_COIL_RAW
+        lambda: None, SERVICE_DATA_COMPRESSOR_FREQ
     )
     try:
         assert platform_device._subscribed_service_data_codes() == tuple(
             sorted(
                 (
-                    SERVICE_DATA_INDOOR_COIL_RAW,
-                    SERVICE_DATA_HOT_START,
-                    SERVICE_DATA_DEFROST,
                     SERVICE_DATA_COMPRESSOR_FREQ,
+                    SERVICE_DATA_HOT_START,
+                    SERVICE_DATA_INDOOR_COIL_RAW,
                 )
             )
         )

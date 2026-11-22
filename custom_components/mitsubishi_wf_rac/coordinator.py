@@ -53,6 +53,7 @@ from .const import (
     STATUS_REQUEST_STOPPED,
     STATUS_REQUEST_STRICT,
 )
+from .defrost_trace import DefrostTrace
 from .external_temperature import ExternalTemperatureFeed
 from .firmware_check import fetch_latest_firmware
 from .foreign_writers import ForeignWriterWatch
@@ -274,6 +275,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self.foreign_writers = ForeignWriterWatch(self)
         self.service_data = ServiceDataChannel(self)
         self.research_data = ResearchData()
+        self.defrost_trace = DefrostTrace()
         self._silent_operation_lock = asyncio.Lock()
         self.external_temperature = ExternalTemperatureFeed(self)
         self._consecutive_failures = 0
@@ -562,6 +564,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             self._carry_forward_home_leave_mode(new_airco)
             self.service_data.carry_forward(new_airco)
             self.research_data.note_answer(new_airco)
+            self.defrost_trace.record(new_airco, response["airconStat"], "poll")
             self._airco = new_airco
             self._decide_reduced_status_block()
             # Not part of the airconStat blob, present alongside it in the same
@@ -681,6 +684,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # cycle exactly as an unprompted poll once did.
             self._carry_forward_home_leave_mode(fresh)
             self.service_data.carry_forward(fresh)
+            self.defrost_trace.record(fresh, response["airconStat"], "poll")
             self._airco = fresh
             expires = response["expires"]
         except (WfRacError, KeyError, TypeError, ValueError):
@@ -830,6 +834,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         try:
             response = await self._api.get_aircon_stats(self._airco_id)
             new_airco = self._parser.translate_bytes(response["airconStat"])
+            raw_frame = response["airconStat"]
         except (WfRacError, KeyError, TypeError, ValueError) as ex:
             _LOGGER.debug(
                 "Could not read [%s] before echoing its state back, "
@@ -840,6 +845,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             return False
         self._carry_forward_home_leave_mode(new_airco)
         self.service_data.carry_forward(new_airco)
+        self.defrost_trace.record(new_airco, raw_frame, "poll")
         self._airco = new_airco
         return True
 
@@ -1293,6 +1299,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 new_airco = self._parser.translate_bytes(response)
                 self._carry_forward_home_leave_mode(new_airco)
                 self.service_data.carry_forward(new_airco)
+                self.defrost_trace.record(
+                    new_airco,
+                    response,
+                    "service_data" if is_status_request else "command",
+                )
                 self._airco = new_airco
                 # An accepted write proves the account is registered.
                 self._clear_registration_full_issue()

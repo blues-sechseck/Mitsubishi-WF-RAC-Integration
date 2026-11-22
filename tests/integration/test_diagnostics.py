@@ -69,6 +69,11 @@ async def test_diagnostics_redacts_sensitive_data_and_is_json_serializable(hass)
         IndoorCoilTemp=None,
         ProtectionRaw=7,
     )
+    device.defrost_trace.record(
+        Aircon(Operation=True, OperationMode=2, IndoorCoilRaw=15),
+        "QUJD",
+        "poll",
+    )
     entry.runtime_data = MitsubishiWfRacData(device)
 
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
@@ -93,6 +98,9 @@ async def test_diagnostics_redacts_sensitive_data_and_is_json_serializable(hass)
         "port": 51443,
     }
     assert diagnostics["config_entry"]["version"] == 5
+    trace = diagnostics["defrost_trace"]
+    assert trace["episodes_detected"] == 1
+    assert trace["episodes"][0][0]["airconStat"] == "QUJD"
     assert set(diagnostics["aircon"]) == {field.name for field in fields(Aircon)}
     assert diagnostics["aircon"]["HomeLeaveModeForHeating"] is None
     assert diagnostics["aircon"]["OperatingCurrent"] is None

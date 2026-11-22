@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from pywfrac import SERVICE_DATA_DEFROST, defrost_possible, describe_error_code
+from pywfrac import SERVICE_DATA_DEFROST, defrost_detected, describe_error_code
 
 # HA 2026.10 keeps BinarySensorDeviceClass in binary_sensor.const without an
 # explicit re-export; that module does not exist on the floor in hacs.json.
@@ -186,14 +186,14 @@ class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
 
 
 class DefrostBinarySensor(WfRacEntity, BinarySensorEntity):
-    """Whether the outdoor unit is defrosting its coil.
+    """Whether the unit is in a reverse-cycle defrost.
 
-    An outdoor-unit value, so on a multi-split an idle indoor unit shows it
-    too. The unit is only asked while a defrost is possible (see
-    defrost_possible()); outside that the answer is known without asking and
-    the sensor says off - including when an "on" reading is still being carried
-    from before the condition ended. Unknown means the compressor reading is
-    missing, or it is possible and the unit's answer is missing or expired.
+    Judged from the indoor coil thermistor while heating (see
+    defrost_detected()): in a defrost the coil turns into the evaporator and
+    its reading collapses. Unknown while the unit is off or the coil reading is
+    missing or expired. The outdoor unit's own defrost flag (0x0C) is asked
+    alongside as a comparison value only; it has answered "not defrosting"
+    throughout real defrosts.
     """
 
     _attr_device_class = BinarySensorDeviceClass.RUNNING
@@ -216,10 +216,4 @@ class DefrostBinarySensor(WfRacEntity, BinarySensorEntity):
         self._attr_is_on = None
 
     def _update_state(self) -> None:
-        airco = self.coordinator.airco
-        if airco.CompressorFrequency is None:
-            self._attr_is_on = None
-        elif not defrost_possible(airco):
-            self._attr_is_on = False
-        else:
-            self._attr_is_on = airco.Defrosting
+        self._attr_is_on = defrost_detected(self.coordinator.airco)

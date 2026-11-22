@@ -1529,11 +1529,11 @@ async def test_service_data_request_uses_active_segment_codes(device, monkeypatc
 
     set_airco.assert_awaited_once_with(
         {
-            # The compressor reading is the defrost code's dependency, which
-            # rides along with every request.
+            # The indoor coil reading is read by the climate entity and rides
+            # along with every request.
             AirconCommands.ServiceDataStatusRequest: (
-                SERVICE_DATA_COMPRESSOR_FREQ,
                 SERVICE_DATA_EEV_PULSES,
+                SERVICE_DATA_INDOOR_COIL_RAW,
                 SERVICE_DATA_HOT_GAS_TEMP,
             )
         },
@@ -1574,7 +1574,7 @@ async def test_raw_service_data_sensor_requests_its_segment_code(
     set_airco.assert_awaited_once_with(
         {
             AirconCommands.ServiceDataStatusRequest: tuple(
-                sorted({code, SERVICE_DATA_COMPRESSOR_FREQ})
+                sorted({code, SERVICE_DATA_INDOOR_COIL_RAW})
             )
         },
         log_failure=False,
@@ -3689,3 +3689,46 @@ async def test_a_failed_home_leave_read_at_setup_stays_quiet(device):
     )
 
     await device.async_read_home_leave_mode_once()
+
+
+HEATING_AT_DEFROST_END_PAYLOAD = (
+    "AAAAAACYAAAAAAAAAAAAAAAAAf////9HEYEEEQEqmAAAAAEABAQAAAAAAA2AIJj/gBBe/5QQBQAM"
+    "EP//DQD//xEQAP8TEE4BfBAA/4EgEf+FEA7/hxAQ/5AQCP+xEAD/lP8="
+)
+
+
+async def test_poll_samples_the_frame_for_the_defrost_trace(device):
+    device._api.get_aircon_stats.return_value = _stats_response(
+        HEATING_AT_DEFROST_END_PAYLOAD
+    )
+
+    assert await device.update() is True
+
+    data = device.defrost_trace.as_dict()
+    assert data["episodes_detected"] == 1
+    sample = data["episodes"][0][-1]
+    assert sample["airconStat"] == HEATING_AT_DEFROST_END_PAYLOAD
+    assert sample["source"] == "poll"
+    assert sample["IndoorCoilRaw"] == 17
+    assert sample["OperationStatusRaw"] == 0x01
+    assert sample["defrost_detected"] is True
+    assert data["defrost_flag_answers"] == {"0x10": 1}
+
+
+async def test_operation_data_and_command_replies_are_sampled_too(device):
+    device._api.send_airco_command = AsyncMock(
+        return_value=HEATING_AT_DEFROST_END_PAYLOAD
+    )
+
+    await device.set_airco(
+        {},
+        log_failure=False,
+        timestamp_offset=-55,
+        is_status_request=True,
+        retry_when_locked=False,
+    )
+    await device.set_airco({AirconCommands.PresetTemp: 21.0})
+
+    (episode,) = device.defrost_trace.as_dict()["episodes"]
+    assert [s["source"] for s in episode] == ["service_data", "command"]
+    assert {s["airconStat"] for s in episode} == {HEATING_AT_DEFROST_END_PAYLOAD}
