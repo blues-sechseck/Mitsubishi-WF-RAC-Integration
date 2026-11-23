@@ -390,7 +390,7 @@ Since the MHI frame is `SB0 SB1 SB2 DB0 DB1 …`, that gives:
 | `6` | `DB4` | error code | `[HW]` |
 | `7` | `DB5` | bit `0x10` echoes `command[8]` from the last command frame — not a device state (§5.3) | `[HW]` |
 | `8` | `DB6` | operation-data type/echo; bit `0x08` = "cool/hot judge" off | `[HW]` |
-| `9` | `DB7` | bit `0x02` = **compressor running** (see §4.6) | `[HW]` |
+| `9` | `DB7` | bit `0x02` = **compressor running** (see §4.6); bit `0x01` = **defrost**, set through the whole cycle including the compressor stops at its start and end (`0x01` stopped, `0x03` running in reverse) | `[HW]` |
 | `10` | raw 20 | `bit0` occupancy/`Vacant`, `bit2` self-clean reset | `[HW]` |
 | `11` | raw 21 | left-right vane position (low 5 bits) | `[HW]` |
 | `12` | raw 22 | 3D-auto/`Entrust`, LR-vane enable, self-clean flags — **forced to `1` on legacy-signature units, see §6.7** | `[HW]` `[FW]` |
@@ -978,9 +978,10 @@ unit shows the same `10 ff` `[EXT]`. So `10` means "not defrosting". It held
 through cooling, standstill and six heating runs on two units, and also
 through real reverse-cycle defrosts on three units across two firmware
 branches `[HW]`. A `11 ff ff` answer has never been seen, so the flag is only a
-comparison value. The defrost shows in the indoor coil thermistor (`0x81`)
-instead: while heating, its byte collapses to about 8-21, against 140-190 in
-normal heating `[HW]`.
+comparison value. The defrost shows in `DB7` bit `0x01` (table above) and, later, in the
+indoor coil thermistor (`0x81`): while heating, its byte collapses to about
+8-21, against 140-190 in normal heating `[HW]`. The integration uses the bit
+and keeps the coil as a fallback.
 
 #### The rest of the code space
 

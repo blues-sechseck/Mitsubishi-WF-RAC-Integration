@@ -53,7 +53,7 @@ from .const import (
     STATUS_REQUEST_STOPPED,
     STATUS_REQUEST_STRICT,
 )
-from .defrost_trace import DefrostTrace
+from .defrost_trace import DefrostTrace, create_store
 from .external_temperature import ExternalTemperatureFeed
 from .firmware_check import fetch_latest_firmware
 from .foreign_writers import ForeignWriterWatch
@@ -275,7 +275,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self.foreign_writers = ForeignWriterWatch(self)
         self.service_data = ServiceDataChannel(self)
         self.research_data = ResearchData()
-        self.defrost_trace = DefrostTrace()
+        self.defrost_trace = DefrostTrace(create_store(hass, config_entry.entry_id))
         self._silent_operation_lock = asyncio.Lock()
         self.external_temperature = ExternalTemperatureFeed(self)
         self._consecutive_failures = 0
@@ -480,6 +480,10 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         entities on an entry that no longer updates.
         """
         self.external_temperature.release_carrier()
+        try:
+            await self.defrost_trace.async_flush()
+        except Exception:  # pylint: disable=broad-except
+            _LOGGER.debug("Could not store the defrost trace", exc_info=True)
         # A flush that has taken its parameters lets go of
         # _consolidation_task, so that alone leaves nothing to cancel: the
         # send finishes afterwards and publishes to entities that are gone,

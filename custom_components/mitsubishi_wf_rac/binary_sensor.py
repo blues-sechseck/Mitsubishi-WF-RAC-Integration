@@ -188,10 +188,11 @@ class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
 class DefrostBinarySensor(WfRacEntity, BinarySensorEntity):
     """Whether the unit is in a reverse-cycle defrost.
 
-    Judged from the indoor coil thermistor while heating (see
-    defrost_detected()): in a defrost the coil turns into the evaporator and
-    its reading collapses. Unknown while the unit is off or the coil reading is
-    missing or expired. The outdoor unit's own defrost flag (0x0C) is asked
+    Judged while heating from the status byte bit that flags a defrost, with
+    the indoor coil thermistor as fallback (see defrost_detected()): in a
+    defrost the coil turns into the evaporator and its reading collapses, but
+    later than the bit. Unknown while the unit is off or neither signal is
+    available. The outdoor unit's own defrost flag (0x0C) is asked
     alongside as a comparison value only; it has answered "not defrosting"
     throughout real defrosts.
     """

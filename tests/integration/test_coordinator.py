@@ -3712,6 +3712,9 @@ async def test_poll_samples_the_frame_for_the_defrost_trace(device):
     assert sample["IndoorCoilRaw"] == 17
     assert sample["OperationStatusRaw"] == 0x01
     assert sample["defrost_detected"] is True
+    assert sample["defrost_status_bit"] is True
+    assert sample["defrost_from_indoor_coil"] is True
+    assert data["signals_while_heating"]["bit_and_coil"] == 1
     assert data["defrost_flag_answers"] == {"0x10": 1}
 
 
@@ -3732,3 +3735,16 @@ async def test_operation_data_and_command_replies_are_sampled_too(device):
     (episode,) = device.defrost_trace.as_dict()["episodes"]
     assert [s["source"] for s in episode] == ["service_data", "command"]
     assert {s["airconStat"] for s in episode} == {HEATING_AT_DEFROST_END_PAYLOAD}
+
+
+async def test_shutdown_flushes_the_defrost_trace(device, hass_storage):
+    device._api.get_aircon_stats.return_value = _stats_response(
+        HEATING_AT_DEFROST_END_PAYLOAD
+    )
+    assert await device.update() is True
+
+    await device.async_shutdown()
+
+    saved = hass_storage[f"{DOMAIN}.defrost_trace.{device.entry_id}"]["data"]
+    assert saved["episodes_detected"] == 1
+    assert saved["signals_while_heating"]["bit_and_coil"] == 1

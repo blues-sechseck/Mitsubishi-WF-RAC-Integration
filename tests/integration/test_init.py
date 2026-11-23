@@ -6,7 +6,7 @@ them at runtime any more - the migration's job is to leave no trace of them.
 """
 
 import base64
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -15,6 +15,7 @@ from pywfrac import WfRacConnectionError, WfRacError
 from custom_components.mitsubishi_wf_rac import (
     async_migrate_entry,
     async_remove_entry,
+    async_setup_entry,
     create_device_from_entry,
 )
 from custom_components.mitsubishi_wf_rac.config_flow import WfRacConfigFlow
@@ -32,6 +33,7 @@ from custom_components.mitsubishi_wf_rac.const import (
     STATUS_REQUEST_STOPPED_LEGACY,
 )
 from custom_components.mitsubishi_wf_rac.coordinator import registration_full_issue_id
+from custom_components.mitsubishi_wf_rac.defrost_trace import create_store
 from custom_components.mitsubishi_wf_rac.foreign_writers import (
     status_request_unsupported_issue_id,
 )
@@ -225,6 +227,57 @@ async def test_remove_entry_releases_the_account_of_a_never_migrated_entry(
 
     assert "192.168.1.50" in repository.call_args.args
     api.del_account_info.assert_awaited_once_with("airco-1")
+
+
+async def test_remove_entry_deletes_the_stored_defrost_trace(
+    hass: HomeAssistant, hass_storage
+):
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    other = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    store = create_store(hass, entry.entry_id)
+    await store.async_save({"episodes_detected": 2})
+    await create_store(hass, other.entry_id).async_save({"episodes_detected": 1})
+    key = f"{DOMAIN}.defrost_trace.{entry.entry_id}"
+    assert key in hass_storage
+
+    with patch(
+        "custom_components.mitsubishi_wf_rac.coordinator.Repository",
+        return_value=AsyncMock(),
+    ):
+        await async_remove_entry(hass, entry)
+
+    assert key not in hass_storage
+    # An entry that is still there keeps its own.
+    assert f"{DOMAIN}.defrost_trace.{other.entry_id}" in hass_storage
+
+
+async def test_setup_loads_the_stored_defrost_trace(hass: HomeAssistant):
+    entry = _entry(hass, _CURRENT_VERSION, {**_DATA, CONF_HOST: "192.168.1.50"}, {})
+    order: list[str] = []
+    device = MagicMock(
+        available=True,
+        connection_method=None,
+        reduced_status_block=False,
+        update=AsyncMock(side_effect=lambda: order.append("update") or True),
+        async_hand_back_room_sensor=AsyncMock(),
+        async_read_home_leave_mode_once=AsyncMock(),
+        defrost_trace=MagicMock(
+            async_load=AsyncMock(side_effect=lambda: order.append("load"))
+        ),
+    )
+    with (
+        patch(
+            "custom_components.mitsubishi_wf_rac.create_device_from_entry",
+            AsyncMock(return_value=device),
+        ),
+        patch(
+            "homeassistant.config_entries.ConfigEntries.async_forward_entry_setups",
+            AsyncMock(),
+        ),
+    ):
+        assert await async_setup_entry(hass, entry)
+
+    assert order == ["load", "update"]
 
 
 async def test_remove_entry_keeps_the_account_another_entry_still_uses(

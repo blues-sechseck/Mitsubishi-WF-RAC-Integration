@@ -1,15 +1,21 @@
 """The defrost trace kept for the diagnostics download."""
 
-from pywfrac import Aircon
+from datetime import timedelta
 
-from custom_components.mitsubishi_wf_rac import defrost_trace as trace_module
+import pytest
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pywfrac import OPERATION_STATUS_DEFROST_BIT, Aircon
+
 from custom_components.mitsubishi_wf_rac.defrost_trace import (
     KEPT_EPISODES,
     MAX_EPISODE_SAMPLES,
     POST_SAMPLES,
     PRE_SAMPLES,
     DefrostTrace,
+    create_store,
 )
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
 
 def _airco(coil=150, *, status=0x02, defrost_flag=None, **kwargs) -> Aircon:
@@ -71,6 +77,8 @@ def test_sample_carries_the_raw_frame_and_the_decoded_fields():
         "HotStartRaw": 0,
         "OperationStatusRaw": 0x01,
         "defrost_detected": True,
+        "defrost_status_bit": True,
+        "defrost_from_indoor_coil": True,
     }
 
 
@@ -178,8 +186,143 @@ def test_counters():
     assert data["operation_status_values"] == {"0x02": 3, "0x01": 2, "0x03": 1}
     assert data["samples_with_indoor_coil"] == 5
     assert data["samples_without_indoor_coil"] == 1
-    assert data["operation_status_bit_0x01_while_detected"] == 1
+    assert data["signals_while_heating"] == {
+        "bit_and_coil": 1,
+        "bit_only": 1,
+        "coil_only": 1,
+    }
     assert data["episodes_detected"] == 1
+
+
+def test_samples_record_each_signal_on_its_own():
+    trace = DefrostTrace()
+    trace.record(_airco(150, status=0x01), "bit", "poll")
+    trace.record(_airco(15, status=0x02), "coil", "poll")
+
+    (episode,) = trace.as_dict()["episodes"]
+
+    assert [
+        (s["defrost_status_bit"], s["defrost_from_indoor_coil"], s["defrost_detected"])
+        for s in episode
+    ] == [(True, False, True), (False, True, True)]
+
+
+def test_the_status_bit_alone_opens_an_episode():
+    trace = DefrostTrace()
+    _feed(trace, [150] * 3)
+    trace.record(_airco(150, status=0x01), "stopped", "poll")
+
+    data = trace.as_dict()
+
+    assert data["episodes_detected"] == 1
+    assert data["signals_while_heating"]["bit_only"] == 1
+
+
+def _fill(trace: DefrostTrace) -> None:
+    _feed(trace, [150] * 3)
+    trace.record(_airco(15, status=0x01, defrost_flag=0x10), "a", "poll")
+    trace.record(_airco(150, status=0x01), "b", "poll")
+    _feed(trace, [150] * POST_SAMPLES)
+    trace.record(_airco(15, status=0x02), "open", "poll")
+
+
+async def test_persistence_round_trip(hass: HomeAssistant, hass_storage):
+    store = create_store(hass, "entry-1")
+    trace = DefrostTrace(store)
+    _fill(trace)
+    before = trace.as_dict()
+
+    await trace.async_flush()
+
+    assert "mitsubishi_wf_rac.defrost_trace.entry-1" in hass_storage
+    restored = DefrostTrace(create_store(hass, "entry-1"))
+    await restored.async_load()
+    after = restored.as_dict()
+    # The episode that was still open comes back closed.
+    assert before["open_episode"] is True
+    assert after["open_episode"] is False
+    assert {k: v for k, v in after.items() if k != "open_episode"} == {
+        k: v for k, v in before.items() if k != "open_episode"
+    }
+    # And it keeps working: a new sample does not touch the restored ones.
+    restored.record(_airco(150), "new", "poll")
+    assert restored.as_dict()["episodes"] == after["episodes"]
+
+
+async def test_a_delayed_save_is_scheduled_when_an_episode_opens(
+    hass: HomeAssistant, hass_storage, freezer
+):
+    trace = DefrostTrace(create_store(hass, "entry-2"))
+    trace.record(_airco(150), "idle", "poll")
+    trace.record(_airco(15), "defrost", "poll")
+
+    await hass.async_block_till_done()
+    assert "mitsubishi_wf_rac.defrost_trace.entry-2" not in hass_storage
+
+    freezer.tick(timedelta(seconds=120))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    saved = hass_storage["mitsubishi_wf_rac.defrost_trace.entry-2"]["data"]
+    assert saved["episodes_detected"] == 1
+    assert "open_episode" not in saved
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        None,
+        [],
+        "garbage",
+        {"episodes": "x", "episodes_detected": "many"},
+        {"episodes": [None, ["a"], 3], "signals_while_heating": [1]},
+        {
+            "defrost_flag_answers": {"0x10": "a", 5: 2},
+            "operation_status_values": [],
+            "samples_with_indoor_coil": -3,
+            "signals_while_heating": {"bit_only": True, "coil_only": "2"},
+        },
+    ],
+)
+async def test_a_garbled_store_starts_empty(hass: HomeAssistant, hass_storage, stored):
+    hass_storage["mitsubishi_wf_rac.defrost_trace.entry-3"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": "mitsubishi_wf_rac.defrost_trace.entry-3",
+        "data": stored,
+    }
+    trace = DefrostTrace(create_store(hass, "entry-3"))
+
+    await trace.async_load()
+
+    data = trace.as_dict()
+    assert data["episodes"] == []
+    assert data["episodes_detected"] == 0
+    assert data["defrost_flag_answers"] == {}
+    assert data["signals_while_heating"] == {
+        "bit_and_coil": 0,
+        "bit_only": 0,
+        "coil_only": 0,
+    }
+
+
+async def test_a_store_that_cannot_be_read_starts_empty(hass: HomeAssistant):
+    class _Broken(Store[dict]):
+        async def async_load(self):
+            raise ValueError("boom")
+
+    trace = DefrostTrace(_Broken(hass, 1, "mitsubishi_wf_rac.defrost_trace.x"))
+
+    await trace.async_load()
+
+    assert trace.as_dict()["episodes"] == []
+
+
+async def test_without_a_store_load_and_flush_do_nothing():
+    trace = DefrostTrace()
+    await trace.async_load()
+    await trace.async_flush()
+    assert trace.as_dict()["episodes_detected"] == 0
 
 
 def test_constants_are_what_the_report_format_promises():
@@ -189,4 +332,4 @@ def test_constants_are_what_the_report_format_promises():
         120,
         5,
     )
-    assert trace_module.OPERATION_STATUS_DEFROST_BIT == 0x01
+    assert OPERATION_STATUS_DEFROST_BIT == 0x01

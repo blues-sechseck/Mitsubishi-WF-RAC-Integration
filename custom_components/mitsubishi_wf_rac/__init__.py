@@ -46,6 +46,7 @@ from .coordinator import (
     Device,
     registration_full_issue_id,
 )
+from .defrost_trace import async_remove_stored_trace
 from .foreign_writers import (
     report_status_request_unsupported,
     request_stops_unit_issue_id,
@@ -280,6 +281,8 @@ async def async_setup_entry(
             data={**entry.data, CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED},
         )
     _device = await create_device_from_entry(entry, hass)
+    # Before the first poll, so that its frames land after the stored ones.
+    await _device.defrost_trace.async_load()
 
     # update() reports a failure in its return value rather than raising, so
     # an unreachable device gets HA's retry-with-backoff here.
@@ -468,6 +471,7 @@ async def async_remove_entry(
     if temp_device is not None and await temp_device.update():
         await temp_device.async_hand_back_room_sensor(force=True)
 
+    await async_remove_stored_trace(hass, entry.entry_id)
     ir.async_delete_issue(hass, DOMAIN, registration_full_issue_id(entry.entry_id))
     ir.async_delete_issue(hass, DOMAIN, request_stops_unit_issue_id(entry.entry_id))
     ir.async_delete_issue(

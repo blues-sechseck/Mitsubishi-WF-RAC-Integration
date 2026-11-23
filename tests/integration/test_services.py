@@ -194,6 +194,7 @@ async def test_options_flow_reloads_itself(hass: HomeAssistant):
         # Awaited when hass stops at the end of the test.
         async_hand_back_room_sensor=AsyncMock(),
         async_read_home_leave_mode_once=AsyncMock(),
+        defrost_trace=MagicMock(async_load=AsyncMock()),
     )
     with (
         patch(
