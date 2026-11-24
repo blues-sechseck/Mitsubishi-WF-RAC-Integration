@@ -49,6 +49,7 @@ def test_sample_carries_the_raw_frame_and_the_decoded_fields():
         EevPulses=115,
         DefrostingRaw=0x10,
         HotStartRaw=0,
+        StatusDb5Raw=0x10,
     )
 
     trace.record(airco, "QUJD", "service_data")
@@ -76,6 +77,7 @@ def test_sample_carries_the_raw_frame_and_the_decoded_fields():
         "DefrostingRaw": 0x10,
         "HotStartRaw": 0,
         "OperationStatusRaw": 0x01,
+        "StatusDb5Raw": 0x10,
         "defrost_detected": True,
         "defrost_status_bit": True,
         "defrost_from_indoor_coil": True,
@@ -194,6 +196,26 @@ def test_counters():
     assert data["episodes_detected"] == 1
 
 
+def test_status_db5_is_counted_against_power_state_and_status_byte():
+    trace = DefrostTrace()
+    trace.record(_airco(150, StatusDb5Raw=0x10), "a", "poll")
+    trace.record(_airco(150, StatusDb5Raw=0x10), "b", "poll")
+    trace.record(_airco(150, StatusDb5Raw=0x00), "c", "poll")
+    trace.record(
+        Aircon(Operation=False, StatusDb5Raw=0x10, OperationStatusRaw=0x01), "d", "poll"
+    )
+    trace.record(Aircon(Operation=True, StatusDb5Raw=0x00), "e", "poll")
+    # No DB5 in the frame: not counted.
+    trace.record(_airco(150), "f", "poll")
+
+    assert trace.as_dict()["status_db5_by_state"] == {
+        "0x10 on 0x02": 2,
+        "0x00 on 0x02": 1,
+        "0x10 off 0x01": 1,
+        "0x00 on --": 1,
+    }
+
+
 def test_samples_record_each_signal_on_its_own():
     trace = DefrostTrace()
     trace.record(_airco(150, status=0x01), "bit", "poll")
@@ -220,6 +242,7 @@ def test_the_status_bit_alone_opens_an_episode():
 
 def _fill(trace: DefrostTrace) -> None:
     _feed(trace, [150] * 3)
+    trace.record(_airco(150, StatusDb5Raw=0x10), "db5", "poll")
     trace.record(_airco(15, status=0x01, defrost_flag=0x10), "a", "poll")
     trace.record(_airco(150, status=0x01), "b", "poll")
     _feed(trace, [150] * POST_SAMPLES)
@@ -240,6 +263,7 @@ async def test_persistence_round_trip(hass: HomeAssistant, hass_storage):
     after = restored.as_dict()
     # The episode that was still open comes back closed.
     assert before["open_episode"] is True
+    assert after["status_db5_by_state"] == {"0x10 on 0x02": 1}
     assert after["open_episode"] is False
     assert {k: v for k, v in after.items() if k != "open_episode"} == {
         k: v for k, v in before.items() if k != "open_episode"
@@ -304,6 +328,24 @@ async def test_a_garbled_store_starts_empty(hass: HomeAssistant, hass_storage, s
         "bit_only": 0,
         "coil_only": 0,
     }
+
+
+async def test_a_store_without_the_db5_counter_restores_with_it_empty(
+    hass: HomeAssistant, hass_storage
+):
+    hass_storage["mitsubishi_wf_rac.defrost_trace.entry-4"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": "mitsubishi_wf_rac.defrost_trace.entry-4",
+        "data": {"episodes_detected": 2, "operation_status_values": {"0x02": 4}},
+    }
+    trace = DefrostTrace(create_store(hass, "entry-4"))
+
+    await trace.async_load()
+
+    data = trace.as_dict()
+    assert data["episodes_detected"] == 2
+    assert data["status_db5_by_state"] == {}
 
 
 async def test_a_store_that_cannot_be_read_starts_empty(hass: HomeAssistant):
