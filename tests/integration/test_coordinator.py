@@ -3715,7 +3715,6 @@ async def test_poll_samples_the_frame_for_the_defrost_trace(device):
     assert sample["defrost_status_bit"] is True
     assert sample["defrost_from_indoor_coil"] is True
     assert data["signals_while_heating"]["bit_and_coil"] == 1
-    assert data["defrost_flag_answers"] == {"0x10": 1}
 
 
 async def test_operation_data_and_command_replies_are_sampled_too(device):

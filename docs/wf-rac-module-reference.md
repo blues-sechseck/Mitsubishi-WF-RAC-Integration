@@ -971,17 +971,19 @@ though. On our units it read `0` even through a probable anti-frost stop, where
 the table says `8` `[HW]`: either these units do not fill it, or it needs the
 outdoor selector the bridge cannot send (§5.3).
 
-**`0x0C` answers, and the answer is the defrost flag.** The segment comes back
+**`0x0C` answers, but the answer never shows a defrost.** The segment comes back
 as `10 ff ff` `[HW]`, and that is not an empty answer: the flag is
 `OP1 & 0x01`, the bit MHI-AC-Ctrl reads it from, and a CNS capture of an idle
 unit shows the same `10 ff` `[EXT]`. So `10` means "not defrosting". It held
-through cooling, standstill and six heating runs on two units, and also
-through real reverse-cycle defrosts on three units across two firmware
-branches `[HW]`. A `11 ff ff` answer has never been seen, so the flag is only a
-comparison value. The defrost shows in `DB7` bit `0x01` (table above) and, later, in the
+through cooling, standstill and six heating runs on two units, and also in
+every frame of real reverse-cycle defrosts on three units across two firmware
+branches `[HW]`; an `11 ff ff` answer has never been seen. The defrost shows in
+`DB7` bit `0x01` (table above) from the first frame of the cycle to its end,
+confirmed on both firmware branches `[HW]`, and, 2-3 minutes later, in the
 indoor coil thermistor (`0x81`): while heating, its byte collapses to about
-8-21, against 140-190 in normal heating `[HW]`. The integration uses the bit
-and keeps the coil as a fallback.
+8-21, against 140-190 in normal heating, and stays low for about a minute after
+the end `[HW]`. The integration uses the bit and keeps the coil as a fallback
+for frames without a status byte; it does not request `0x0C`.
 
 #### The rest of the code space
 

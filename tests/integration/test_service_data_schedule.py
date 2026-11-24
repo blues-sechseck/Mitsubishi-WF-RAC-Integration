@@ -15,7 +15,6 @@ from pywfrac import (
     SERVICE_DATA_BUDGET,
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
-    SERVICE_DATA_DEFROST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
     SERVICE_DATA_HOT_START,
@@ -72,7 +71,8 @@ def _suspend(channel, code: int) -> None:
 
 
 def test_the_table_only_names_codes_the_parser_decodes():
-    assert set(SERVICE_DATA_INTERVALS) == set(SERVICE_DATA_CODES)
+    # 0x0C is decoded but not asked: the status bit shows the defrost.
+    assert set(SERVICE_DATA_INTERVALS) == set(SERVICE_DATA_CODES) - {0x0C}
 
 
 def test_most_overdue_ratio_goes_first_and_never_read_codes_lead(
@@ -109,7 +109,7 @@ def test_the_codes_left_out_of_a_full_request_lead_the_next(platform_device):
     channel = platform_device.service_data
     # None read yet. Defrost and hot start are held back by their conditions,
     # so they are not among the codes competing for the slots here.
-    held_back = {SERVICE_DATA_DEFROST, SERVICE_DATA_HOT_START}
+    held_back = {SERVICE_DATA_HOT_START}
     codes = [c for c in SERVICE_DATA_INTERVALS if c not in held_back]
     assert len(codes) == SERVICE_DATA_BUDGET + 1
     _prove(channel, *codes)
@@ -125,7 +125,7 @@ def test_the_codes_left_out_of_a_full_request_lead_the_next(platform_device):
 
 def test_with_ten_or_fewer_due_codes_everything_goes_sorted(platform_device):
     channel = platform_device.service_data
-    held_back = {SERVICE_DATA_DEFROST, SERVICE_DATA_HOT_START}
+    held_back = {SERVICE_DATA_HOT_START}
     codes = sorted(c for c in SERVICE_DATA_CODES if c not in held_back)[
         :SERVICE_DATA_BUDGET
     ]
