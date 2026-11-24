@@ -467,14 +467,34 @@ async def test_commands_issued_together_become_one_command(
             id="hot-start-while-cooling",
         ),
         pytest.param(
-            {**RUNNING_HEAT, "HotStart": True, "IndoorCoilRaw": 15},
+            {
+                **RUNNING_HEAT,
+                "HotStart": True,
+                "IndoorCoilRaw": 15,
+                "OperationStatusRaw": None,
+            },
             HVACAction.DEFROSTING,
             id="defrost-before-hot-start",
         ),
         pytest.param(
-            {**RUNNING_HEAT, "IndoorCoilRaw": 15},
+            {**RUNNING_HEAT, "IndoorCoilRaw": 15, "OperationStatusRaw": None},
             HVACAction.DEFROSTING,
-            id="defrost",
+            id="defrost-coil-fallback",
+        ),
+        pytest.param(
+            {**RUNNING_HEAT, "IndoorCoilRaw": 189, "OperationStatusRaw": 0x01},
+            HVACAction.DEFROSTING,
+            id="defrost-status-bit",
+        ),
+        pytest.param(
+            {
+                **RUNNING_HEAT,
+                "CompressorRunning": True,
+                "IndoorCoilRaw": 15,
+                "OperationStatusRaw": 0x02,
+            },
+            HVACAction.HEATING,
+            id="cold-coil-after-the-defrost-ended",
         ),
         pytest.param(
             {**RUNNING_HEAT, "CompressorRunning": True, "IndoorCoilRaw": 189},

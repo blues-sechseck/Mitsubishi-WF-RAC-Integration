@@ -885,8 +885,8 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         CoolHotJudge reflects the unit's own AUTO logic and is inverted - the
         parser reads (content[8] & 8) == 0, so a true CoolHotJudge is HEATING.
         CompressorRunning separates "on" from "running", so a satisfied
-        setpoint reports IDLE. Defrosting (the status byte bit, with the indoor coil as
-        fallback, see defrost_detected()) and the hot start (fan held back
+        setpoint reports IDLE. Defrosting (the status byte bit, the indoor coil as
+        fallback when the unit gives no status byte, see defrost_detected()) and the hot start (fan held back
         until the indoor coil is warm) can both happen with the
         compressor stopped, so they are checked before it. A missing value
         (None) falls through to the logic below.

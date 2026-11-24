@@ -1,13 +1,13 @@
 """Trace of defrosts, for the diagnostics download.
 
-The outdoor unit's own defrost flag (0x0C) has answered "not defrosting"
-through real defrosts, so detection rests on two other signals: bit 0x01 of
-the status byte (content[9]) and the indoor coil thermistor, see
-pywfrac.defrost_detected(). Which units and firmware branches show each is not
-known yet. This keeps the raw frames around every detected defrost, and every
-sample records what each signal said on its own, so a report shows which one
-fired and which one was late or silent. The counters in signals_while_heating
-sum that up over all heating frames in which at least one signal was set.
+Detection is bit 0x01 of the status byte (content[9]); the indoor coil
+thermistor is only the fallback when the unit gives no status byte, see
+pywfrac.defrost_detected(). The coil lags the bit by 2-3 minutes at the start
+and stays cold for about a minute after the end. This keeps the raw frames
+around every detected defrost, and every sample records what each signal said
+on its own, so a report shows which one fired and which one was late or
+silent. The counters in signals_while_heating sum that up over all heating
+frames in which at least one signal was set.
 The status byte content[7] (CNS DB5) has no known meaning, so it is counted
 against the power state and content[9] to show when its bits come.
 
@@ -23,7 +23,6 @@ from collections import Counter, deque
 from typing import Any, Final
 
 from pywfrac import (
-    SERVICE_DATA_DEFROST,
     Aircon,
     defrost_detected,
     defrost_from_indoor_coil,
@@ -57,7 +56,6 @@ _DECODED_FIELDS: Final = (
     "IndoorCoilOutletRaw",
     "OutdoorCoilRaw",
     "EevPulses",
-    "DefrostingRaw",
     "HotStartRaw",
     "OperationStatusRaw",
     "StatusDb5Raw",
@@ -87,7 +85,6 @@ class DefrostTrace:
         self._post_left = 0
         self._closed: deque[list[dict[str, Any]]] = deque(maxlen=KEPT_EPISODES)
         self._episodes_detected = 0
-        self._defrost_answers: Counter[str] = Counter()
         self._status_values: Counter[str] = Counter()
         self._status_db5_by_state: Counter[str] = Counter()
         self._with_coil = 0
@@ -173,11 +170,6 @@ class DefrostTrace:
         elif coil is True:
             self._signals_while_heating["coil_only"] += 1
             self._schedule_save()
-        # Only a 0x0C segment that arrived in this very frame; the carried
-        # value would count the same answer once per poll.
-        segment = airco.ServiceDataRaw.get(SERVICE_DATA_DEFROST)
-        if segment is not None:
-            self._defrost_answers[f"0x{segment[0]:02X}"] += 1
 
     def _episodes(self) -> list[list[dict[str, Any]]]:
         episodes = [list(episode) for episode in self._closed]
@@ -189,7 +181,6 @@ class DefrostTrace:
         """The trace for the diagnostics download."""
         return {
             "episodes_detected": self._episodes_detected,
-            "defrost_flag_answers": dict(self._defrost_answers),
             "operation_status_values": dict(self._status_values),
             "status_db5_by_state": dict(self._status_db5_by_state),
             "samples_with_indoor_coil": self._with_coil,
@@ -216,7 +207,6 @@ class DefrostTrace:
                 ):
                     self._closed.append(episode[:MAX_EPISODE_SAMPLES])
         self._episodes_detected = _count_of(stored.get("episodes_detected"))
-        self._defrost_answers = _counter_of(stored.get("defrost_flag_answers"))
         self._status_values = _counter_of(stored.get("operation_status_values"))
         self._status_db5_by_state = _counter_of(stored.get("status_db5_by_state"))
         self._with_coil = _count_of(stored.get("samples_with_indoor_coil"))

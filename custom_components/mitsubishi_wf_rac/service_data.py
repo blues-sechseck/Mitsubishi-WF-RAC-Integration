@@ -25,7 +25,6 @@ from pywfrac import (
     SERVICE_DATA_CODE_BY_FIELD,
     SERVICE_DATA_CODES,
     SERVICE_DATA_COMPRESSOR_FREQ,
-    SERVICE_DATA_DEFROST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
     SERVICE_DATA_HOT_GAS_TEMP,
@@ -39,8 +38,6 @@ from pywfrac import (
     SERVICE_DATA_SILENT_OPERATION,
     Aircon,
     ServiceDataRefusals,
-    defrost_detected,
-    defrost_possible,
     hot_start_possible,
 )
 
@@ -146,7 +143,6 @@ SERVICE_DATA_INTERVALS: Final[dict[int, timedelta]] = {
     SERVICE_DATA_HOT_GAS_TEMP: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_OUTDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_MEDIUM,
     SERVICE_DATA_HUMIDITY: SERVICE_DATA_INTERVAL_MEDIUM,
-    SERVICE_DATA_DEFROST: SERVICE_DATA_INTERVAL_MEDIUM,
     # A hot start lasts one to four minutes, so anything slower can miss it.
     SERVICE_DATA_HOT_START: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW: SERVICE_DATA_INTERVAL_SLOW,
@@ -161,32 +157,15 @@ SERVICE_DATA_INTERVALS: Final[dict[int, timedelta]] = {
 SERVICE_DATA_DUE_TOLERANCE: Final = MIN_TIME_BETWEEN_UPDATES / 2
 
 
-def _defrost_worth_asking(airco: Aircon | None) -> bool:
-    """Whether 0x0C is worth asking: a defrost is possible or was detected.
-
-    The detection comes from the indoor coil, which can see a defrost the
-    possibility bound does not cover (a coil reading says so even at an
-    outdoor temperature above the bound), and 0x0C is kept as the comparison
-    value for exactly those moments.
-    """
-    return defrost_possible(airco) or defrost_detected(airco) is True
-
-
 # Codes that are only worth asking while a condition holds, as a predicate on
 # the last reading. Codes without an entry are always eligible.
 SERVICE_DATA_ONLY_WHEN: Final[dict[int, Callable[[Aircon | None], bool]]] = {
-    SERVICE_DATA_DEFROST: _defrost_worth_asking,
     SERVICE_DATA_HOT_START: hot_start_possible,
 }
 
 # Codes whose condition above reads another code, which therefore has to be
 # requested whenever the first one is subscribed, enabled sensor or not.
-SERVICE_DATA_DEPENDS_ON: Final[dict[int, tuple[int, ...]]] = {
-    SERVICE_DATA_DEFROST: (
-        SERVICE_DATA_COMPRESSOR_FREQ,
-        SERVICE_DATA_INDOOR_COIL_RAW,
-    ),
-}
+SERVICE_DATA_DEPENDS_ON: Final[dict[int, tuple[int, ...]]] = {}
 
 
 # Codes the climate entity's hvac_action reads. It must never cause a request
@@ -211,8 +190,6 @@ def service_data_expiry(code: int) -> timedelta:
 
 # Fields fed exclusively by those segments.
 SERVICE_DATA_FIELDS = (
-    "Defrosting",
-    "DefrostingRaw",
     "HotStart",
     "HotStartRaw",
     "SilentOperation",
@@ -375,7 +352,6 @@ class ResearchData:
 # answer 30 converts to no value, and for counting a segment as an answer at
 # all: the raw field is set whenever the segment arrived.
 SERVICE_DATA_DERIVED_FROM = {
-    "Defrosting": "DefrostingRaw",
     "HotStart": "HotStartRaw",
     "IndoorHumidity": "IndoorHumidityRaw",
     "IndoorCoilTemp": "IndoorCoilRaw",

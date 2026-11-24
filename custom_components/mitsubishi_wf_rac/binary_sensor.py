@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from pywfrac import SERVICE_DATA_DEFROST, defrost_detected, describe_error_code
+from pywfrac import SERVICE_DATA_INDOOR_COIL_RAW, defrost_detected, describe_error_code
 
 # HA 2026.10 keeps BinarySensorDeviceClass in binary_sensor.const without an
 # explicit re-export; that module does not exist on the floor in hacs.json.
@@ -188,13 +188,12 @@ class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):
 class DefrostBinarySensor(WfRacEntity, BinarySensorEntity):
     """Whether the unit is in a reverse-cycle defrost.
 
-    Judged while heating from the status byte bit that flags a defrost, with
-    the indoor coil thermistor as fallback (see defrost_detected()): in a
-    defrost the coil turns into the evaporator and its reading collapses, but
-    later than the bit. Unknown while the unit is off or neither signal is
-    available. The outdoor unit's own defrost flag (0x0C) is asked
-    alongside as a comparison value only; it has answered "not defrosting"
-    throughout real defrosts.
+    Judged while heating from the status byte bit that flags a defrost; the
+    indoor coil thermistor is the fallback when the unit gives no status byte
+    (see defrost_detected()). In a defrost the coil turns into the evaporator
+    and its reading collapses, but 2-3 minutes after the bit and it stays cold
+    for about a minute after the end. Unknown while the unit is off or neither
+    signal is available. The coil code is the one this sensor requests.
     """
 
     _attr_device_class = BinarySensorDeviceClass.RUNNING
@@ -204,7 +203,7 @@ class DefrostBinarySensor(WfRacEntity, BinarySensorEntity):
 
     def __init__(self, device: Device) -> None:
         """Initialize the binary sensor."""
-        super().__init__(device, context=SERVICE_DATA_DEFROST)
+        super().__init__(device, context=SERVICE_DATA_INDOOR_COIL_RAW)
         self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-defrost"
         self._apply_state()
 

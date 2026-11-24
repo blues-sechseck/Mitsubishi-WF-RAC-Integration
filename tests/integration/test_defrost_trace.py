@@ -18,22 +18,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 
-def _airco(coil=150, *, status=0x02, defrost_flag=None, **kwargs) -> Aircon:
-    airco = Aircon(
+def _airco(coil=150, *, status=0x02, **kwargs) -> Aircon:
+    return Aircon(
         Operation=True,
         OperationMode=2,
         IndoorCoilRaw=coil,
         OperationStatusRaw=status,
         **kwargs,
     )
-    if defrost_flag is not None:
-        airco.ServiceDataRaw[0x0C] = (defrost_flag, 0xFF, 0xFF)
-    return airco
 
 
 def _feed(trace: DefrostTrace, coils, source="poll") -> None:
     for coil in coils:
-        trace.record(_airco(coil), f"frame-{coil}", source)
+        trace.record(_airco(coil, status=None), f"frame-{coil}", source)
 
 
 def test_sample_carries_the_raw_frame_and_the_decoded_fields():
@@ -47,14 +44,13 @@ def test_sample_carries_the_raw_frame_and_the_decoded_fields():
         IndoorCoilOutletRaw=40,
         OutdoorCoilRaw=60,
         EevPulses=115,
-        DefrostingRaw=0x10,
         HotStartRaw=0,
         StatusDb5Raw=0x10,
     )
 
     trace.record(airco, "QUJD", "service_data")
     trace.record(_airco(150), "x", "poll")
-    trace.record(_airco(15), "y", "poll")
+    trace.record(_airco(15, status=None), "y", "poll")
 
     (episode,) = trace.as_dict()["episodes"]
     first = episode[0]
@@ -74,7 +70,6 @@ def test_sample_carries_the_raw_frame_and_the_decoded_fields():
         "IndoorCoilOutletRaw": 40,
         "OutdoorCoilRaw": 60,
         "EevPulses": 115,
-        "DefrostingRaw": 0x10,
         "HotStartRaw": 0,
         "OperationStatusRaw": 0x01,
         "StatusDb5Raw": 0x10,
@@ -153,9 +148,9 @@ def test_episode_is_capped():
 def test_only_the_last_closed_episodes_are_kept_plus_the_open_one():
     trace = DefrostTrace()
     for number in range(KEPT_EPISODES + 3):
-        trace.record(_airco(15 + number), f"d{number}", "poll")
+        trace.record(_airco(15 + number, status=None), f"d{number}", "poll")
         _feed(trace, [150] * POST_SAMPLES)
-    trace.record(_airco(14), "open", "poll")
+    trace.record(_airco(14, status=None), "open", "poll")
 
     data = trace.as_dict()
 
@@ -170,9 +165,9 @@ def test_only_the_last_closed_episodes_are_kept_plus_the_open_one():
 
 def test_counters():
     trace = DefrostTrace()
-    trace.record(_airco(150, defrost_flag=0x10), "a", "poll")
-    trace.record(_airco(150, defrost_flag=0x10), "b", "poll")
-    trace.record(_airco(15, status=0x01, defrost_flag=0x11), "c", "poll")
+    trace.record(_airco(150), "a", "poll")
+    trace.record(_airco(150), "b", "poll")
+    trace.record(_airco(15, status=0x01), "c", "poll")
     trace.record(_airco(15, status=0x02), "d", "poll")
     trace.record(_airco(None, status=0x03), "e", "poll")
     # Not heating: bit set but nothing detected, so it is not counted.
@@ -184,7 +179,7 @@ def test_counters():
 
     data = trace.as_dict()
 
-    assert data["defrost_flag_answers"] == {"0x10": 2, "0x11": 1}
+    assert "defrost_flag_answers" not in data
     assert data["operation_status_values"] == {"0x02": 3, "0x01": 2, "0x03": 1}
     assert data["samples_with_indoor_coil"] == 5
     assert data["samples_without_indoor_coil"] == 1
@@ -219,14 +214,14 @@ def test_status_db5_is_counted_against_power_state_and_status_byte():
 def test_samples_record_each_signal_on_its_own():
     trace = DefrostTrace()
     trace.record(_airco(150, status=0x01), "bit", "poll")
-    trace.record(_airco(15, status=0x02), "coil", "poll")
+    trace.record(_airco(15, status=None), "coil", "poll")
 
     (episode,) = trace.as_dict()["episodes"]
 
     assert [
         (s["defrost_status_bit"], s["defrost_from_indoor_coil"], s["defrost_detected"])
         for s in episode
-    ] == [(True, False, True), (False, True, True)]
+    ] == [(True, False, True), (None, True, True)]
 
 
 def test_the_status_bit_alone_opens_an_episode():
@@ -243,10 +238,10 @@ def test_the_status_bit_alone_opens_an_episode():
 def _fill(trace: DefrostTrace) -> None:
     _feed(trace, [150] * 3)
     trace.record(_airco(150, StatusDb5Raw=0x10), "db5", "poll")
-    trace.record(_airco(15, status=0x01, defrost_flag=0x10), "a", "poll")
+    trace.record(_airco(15, status=0x01), "a", "poll")
     trace.record(_airco(150, status=0x01), "b", "poll")
     _feed(trace, [150] * POST_SAMPLES)
-    trace.record(_airco(15, status=0x02), "open", "poll")
+    trace.record(_airco(15, status=None), "open", "poll")
 
 
 async def test_persistence_round_trip(hass: HomeAssistant, hass_storage):
@@ -278,7 +273,7 @@ async def test_a_delayed_save_is_scheduled_when_an_episode_opens(
 ):
     trace = DefrostTrace(create_store(hass, "entry-2"))
     trace.record(_airco(150), "idle", "poll")
-    trace.record(_airco(15), "defrost", "poll")
+    trace.record(_airco(15, status=None), "defrost", "poll")
 
     await hass.async_block_till_done()
     assert "mitsubishi_wf_rac.defrost_trace.entry-2" not in hass_storage
@@ -322,7 +317,7 @@ async def test_a_garbled_store_starts_empty(hass: HomeAssistant, hass_storage, s
     data = trace.as_dict()
     assert data["episodes"] == []
     assert data["episodes_detected"] == 0
-    assert data["defrost_flag_answers"] == {}
+    assert "defrost_flag_answers" not in data
     assert data["signals_while_heating"] == {
         "bit_and_coil": 0,
         "bit_only": 0,
