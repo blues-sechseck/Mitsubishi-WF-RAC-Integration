@@ -8,6 +8,8 @@ known yet. This keeps the raw frames around every detected defrost, and every
 sample records what each signal said on its own, so a report shows which one
 fired and which one was late or silent. The counters in signals_while_heating
 sum that up over all heating frames in which at least one signal was set.
+The status byte content[7] (CNS DB5) has no known meaning, so it is counted
+against the power state and content[9] to show when its bits come.
 
 The closed episodes and the counters are stored, so they survive restarts and
 reloads (a defrost is an hours-apart event and the report is read afterwards).
@@ -58,6 +60,7 @@ _DECODED_FIELDS: Final = (
     "DefrostingRaw",
     "HotStartRaw",
     "OperationStatusRaw",
+    "StatusDb5Raw",
 )
 
 
@@ -86,6 +89,7 @@ class DefrostTrace:
         self._episodes_detected = 0
         self._defrost_answers: Counter[str] = Counter()
         self._status_values: Counter[str] = Counter()
+        self._status_db5_by_state: Counter[str] = Counter()
         self._with_coil = 0
         self._without_coil = 0
         self._signals_while_heating: dict[str, int] = dict.fromkeys(SIGNAL_KEYS, 0)
@@ -155,6 +159,11 @@ class DefrostTrace:
         status = airco.OperationStatusRaw
         if status is not None:
             self._status_values[f"0x{status:02X}"] += 1
+        db5 = airco.StatusDb5Raw
+        if db5 is not None:
+            power = "on" if airco.Operation else "off"
+            shown = "--" if status is None else f"0x{status:02X}"
+            self._status_db5_by_state[f"0x{db5:02X} {power} {shown}"] += 1
         if bit is True and coil is True:
             self._signals_while_heating["bit_and_coil"] += 1
             self._schedule_save()
@@ -182,6 +191,7 @@ class DefrostTrace:
             "episodes_detected": self._episodes_detected,
             "defrost_flag_answers": dict(self._defrost_answers),
             "operation_status_values": dict(self._status_values),
+            "status_db5_by_state": dict(self._status_db5_by_state),
             "samples_with_indoor_coil": self._with_coil,
             "samples_without_indoor_coil": self._without_coil,
             "signals_while_heating": dict(self._signals_while_heating),
@@ -208,6 +218,7 @@ class DefrostTrace:
         self._episodes_detected = _count_of(stored.get("episodes_detected"))
         self._defrost_answers = _counter_of(stored.get("defrost_flag_answers"))
         self._status_values = _counter_of(stored.get("operation_status_values"))
+        self._status_db5_by_state = _counter_of(stored.get("status_db5_by_state"))
         self._with_coil = _count_of(stored.get("samples_with_indoor_coil"))
         self._without_coil = _count_of(stored.get("samples_without_indoor_coil"))
         signals = stored.get("signals_while_heating")
