@@ -123,6 +123,14 @@ request:
 | `timestamp` | number | present **and non-zero** |
 | `contents` | object | required by every handler except `getDeviceInfo` |
 
+**Keep `operatorId` and `deviceId` at 36 characters or fewer.** The bridge
+MCU's JSON parser gives both fields a 37-byte buffer, a UUID plus its
+terminator `[FW]` (MCU 200). A 47-character `operatorId` makes the module abort
+before the handler runs and answer with syntactically broken JSON: empty ID
+fields and `"timestamp":,` with no value; the same requests with a 36-character
+UUID pass. `[UR]` (`WF-RAC-HTTPS` 025/200,
+[homebridge-mhi-wfrac#44](https://github.com/JobDoesburg/homebridge-mhi-wfrac/pull/44))
+
 **`timestamp` sets the module's clock.** `[FW]` The parsed 64-bit value is
 written straight into the module's time global. The module has no RTC, so *your
 client is its time source* — which is where account `expires` values and the
@@ -192,6 +200,12 @@ them wrong.
 The module is single-threaded about connections and says so: the firmware
 contains `429 Too Many Requests`, `Connection rate exceeded`,
 `device lock timeout: %d` and `send_message_unlock_semaphore_timer`. `[FW]`
+
+The HTTP server has a fixed number of connection slots (eight) and answers
+`429` only when all of them are busy. It runs one server thread, and the TLS
+handshake blocks that thread: a client that connects and sends nothing stalls
+every other request for about 18 s until keepalive gives up. `[FW]` (029 image)
+Close connections promptly and do not probe the port with bare TCP connects.
 
 **Practical rule, confirmed in the field:** one connection at a time, at least
 **1 second** between requests, per device. `[HW]` Violating it produces dropouts
@@ -386,7 +400,7 @@ Since the MHI frame is `SB0 SB1 SB2 DB0 DB1 …`, that gives:
 | `2` | `DB0` | power / mode / up-down swing | `[HW]` |
 | `3` | `DB1` | fan speed / vane position | `[HW]` |
 | `4` | `DB2` | setpoint | `[HW]` |
-| `5` | `DB3` | room temperature in use, `(raw−61)/4` °C | `[EXT]` `[HW]` |
+| `5` | `DB3` | room temperature in use; decode with the thermistor table, ≈ `(raw−59)/4` °C over the living range (§4.5) | `[APP]` `[HW]` |
 | `6` | `DB4` | error code | `[HW]` |
 | `7` | `DB5` | bit `0x10` echoes `command[8]` from the last command frame — not a device state (§5.3) | `[HW]` |
 | `8` | `DB6` | operation-data type/echo; bit `0x08` = "cool/hot judge" off | `[HW]` |
@@ -469,6 +483,38 @@ Bit 7 selects the family, and the bit-7 test must come **before** the
 zero test. `[APP]` Getting this wrong is a well-worn bug: a naive
 implementation makes the `E` branch dead code.
 
+### 4.5 Temperatures — one byte, one table
+
+`state[5]` is `DB3`, the *room temperature the controller is currently working
+with*. It is the **same raw byte** the pushed indoor-temperature segment (§5.2)
+carries — verified on two units over nine consecutive frames, `state[5]` equal to
+the segment's data byte every time `[HW]` — and it decodes through the same
+256-entry thermistor table (`indoorTempList`, 0.1 °C steps, −30…52 °C) `[APP]`.
+Over the living range (16…31 °C) that table is linear at `T = (raw − 59) / 4`
+within 0.05 K, i.e. 0.25 °C steps; outside it, it bends like the thermistor curve
+it is, so copy the table rather than fit a line.
+
+The SPI-bus projects decode this byte as `T = (raw − 61) / 4` `[EXT]`. Against the
+manufacturer's own table that reads half a kelvin low across the whole living
+range. It is very likely the "< 0.5 °C" discrepancy between room and return-air
+temperature that MHI-AC-Trace notes without explanation, and it was the constant
+this project encoded with until September 2026 — which is where the apparent
+0.5 K "echo" on injected values came from (§5.6).
+
+**The `0xFF` convention runs the other way.** `0xFF` means "no external value" in
+the *write* direction (`command[5]`, §5.6); in the read direction the AC reports
+the temperature it is actually using.
+
+Which is literal: with an external room temperature injected, `state[5]` carries
+back exactly the value that was written, and so does the pushed indoor-temperature
+segment below — neither is a reading of the room any more. See §5.6. `[HW]`
+
+The **pushed variable segments** (§5.2) remain the place to read temperatures
+from: the indoor one carries this same byte, the outdoor one has a table of its
+own (−50…43 °C), and both arrive unsolicited. The tables are non-linear and are
+not derivable from a formula — copy them (the ones in this project live in
+[`pywfrac`'s `utils.py`](https://github.com/blues-sechseck/pywfrac/blob/main/src/pywfrac/utils.py)). `[APP]`
+
 ### 4.6 `state[9] & 0x02` — compressor demand
 
 Not documented anywhere else. It carries the distinction between *powered on*
@@ -504,38 +550,6 @@ not, and the bit is the one that answers "is this room being served".
 
 `state[7] & 0x10` stayed set in every sample, at 0 Hz and at full load alike,
 so whatever it means, it is not compressor state.
-
-### 4.5 Temperatures — one byte, one table
-
-`state[5]` is `DB3`, the *room temperature the controller is currently working
-with*. It is the **same raw byte** the pushed indoor-temperature segment (§5.2)
-carries — verified on two units over nine consecutive frames, `state[5]` equal to
-the segment's data byte every time `[HW]` — and it decodes through the same
-256-entry thermistor table (`indoorTempList`, 0.1 °C steps, −30…52 °C) `[APP]`.
-Over the living range (16…31 °C) that table is linear at `T = (raw − 59) / 4`
-within 0.05 K, i.e. 0.25 °C steps; outside it, it bends like the thermistor curve
-it is, so copy the table rather than fit a line.
-
-The SPI-bus projects decode this byte as `T = (raw − 61) / 4` `[EXT]`. Against the
-manufacturer's own table that reads half a kelvin low across the whole living
-range. It is very likely the "< 0.5 °C" discrepancy between room and return-air
-temperature that MHI-AC-Trace notes without explanation, and it was the constant
-this project encoded with until September 2026 — which is where the apparent
-0.5 K "echo" on injected values came from (§5.6).
-
-**The `0xFF` convention runs the other way.** `0xFF` means "no external value" in
-the *write* direction (`command[5]`, §5.6); in the read direction the AC reports
-the temperature it is actually using.
-
-Which is literal: with an external room temperature injected, `state[5]` carries
-back exactly the value that was written, and so does the pushed indoor-temperature
-segment below — neither is a reading of the room any more. See §5.6. `[HW]`
-
-The **pushed variable segments** (§5.2) remain the place to read temperatures
-from: the indoor one carries this same byte, the outdoor one has a table of its
-own (−50…43 °C), and both arrive unsolicited. The tables are non-linear and are
-not derivable from a formula — copy them (the ones in this project live in
-[`pywfrac`'s `utils.py`](https://github.com/blues-sechseck/pywfrac/blob/main/src/pywfrac/utils.py)). `[APP]`
 
 ---
 
@@ -801,14 +815,14 @@ This table is the decoded subset. The whole code space has since been swept and
 | `0xB1` | TDSH [°C] | `OP2 / 2` | `00` in both — never moved |
 | `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32`, **only for `OP2 >= 0x12`** | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
 | `0x13` | Outdoor EEV [pulses] | `OP3 << 8 \| OP2` (`OP3 = ff` ⇒ no value, `OP2` alone); full stroke assumed 500 pulses, not confirmed per model | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
-| `0x05` | Internal setpoint [°C] | `OP2 / 2`, `sel` = `0x13` | `2e` ⇒ **23.0 °C** while 22.5 °C was the value sent |
+| `0x05` | Internal setpoint [°C] | `OP2 / 2`, `sel` = `0x13` | `2e` ⇒ **23.0 °C** while 22.5 °C was the value sent; in heating 21.0 or 20.5 sent ⇒ `2e` as well (+2 K, see below) |
 | `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
 | `0x81` | THI-R1 [°C] | thermistor curve, see §5.4 | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
 | `0x87` | THI-R3 [°C], gas header | thermistor curve, see §5.4 | `10 5a ff` ⇒ raw 90 |
 | `0x1E` | Total run hours [h] | `OP2 × 100` | `ff ff ff` ⇒ **no value** |
 | `0x1F` | Indoor fan speed | `OP1 & 0x0f`, **not `OP2`** `[EXT]` | `ff ff ff` ⇒ **no value** |
-| `0x0D` | *unknown* | — | `00 ff ff`, `sel` = `0x00` |
-| `0x21` | silent operation — the write code (see below); read, the state is likely `OP1 & 0x0f` `[INF]` | — | `10 ff ff` ⇒ 0 |
+| `0x0D` | Hot start | `OP1`: `02` while the indoor unit holds its fan back after a heating start (also after switching cool → heat without turning off) until the indoor coil is warm, ≈ 29 °C on an SRK20ZS-WF; otherwise `00`. Lasts minutes `[HW]` | `00 ff ff`, `sel` = `0x00` |
+| `0x21` | silent operation — the write code (see below); read, the state is `OP1 & 0x0f`: others see `11` (on) and `10` (off) on the SPI bus ([mhi-ac-ctrl-esp32#46](https://github.com/hberntsen/mhi-ac-ctrl-esp32/issues/46)) `[EXT]`; not yet read with it on over this interface `[INF]` | — | `10 ff ff` ⇒ 0 |
 | `0x32` | *unknown* | — | `2e 04 ff`, unusual `sel` |
 | `0x34` | *unknown* | — | `11 01 04`, **uses `OP3`** — multi-byte value |
 | `0x35` | *unknown* | — | `10 00 ff` |
@@ -819,7 +833,8 @@ Notes on the shape of the answers `[HW]`:
 
 - The second byte is a **selector**, not a fixed status marker. `0x10` and
   `0x20` follow the same indoor/outdoor convention as air temperature; `0x0D`
-  and `0x32` answer with values outside that pattern and are not understood.
+  and `0x32` answer with values outside that pattern. `0x0D` is understood (hot
+  start, table above); `0x32` is not.
 - **`0x05` is absent from the bridge's own code list and answers anyway**, over
   the channel in §5.3, with the setpoint the unit is *using internally*. It is
   not always the value that was sent: 22.5 °C came back as 23.0, 22.0 °C as
@@ -828,6 +843,15 @@ Notes on the shape of the answers `[HW]`:
   degree away or nowhere — which is what `ENHANCED_RESOLUTION` in MHI-AC-Ctrl
   works around. `[HW]` A correction finer than a degree has to travel in the
   injected room temperature instead (§5.6); that field has a 0.25 K grid.
+- **In heating, `0x05` sits 2 K above the value sent**: 21.0 and 20.5 sent both
+  came back as 23.0 (three measurements each, SRK20ZS-WF). `[HW]` That is the
+  manufacturer's "setting temperature + 2 °C during heating" compensation. It can
+  be switched at the indoor unit (hold ON/OFF for 30 s or more; two beeps on,
+  three off) on the series whose service manuals describe it; the ZTL and ZR-WF
+  service manuals do not list it. So while heating, `0x05` minus `state[4]` shows
+  whether it is on. With it off the offset disappears, as others report
+  ([MHI-AC-Ctrl#101](https://github.com/absalom-muc/MHI-AC-Ctrl/issues/101#issuecomment-1292016712)) —
+  not measured here. `[UR]`
 - `0x1E` and `0x1F` answer with all-`0xFF`, and that is as far as this interface
   goes. Both exist on both units, and every implementation that reads them does
   so with `DB6 = 0xc0` for the indoor variant `[EXT]` - the one byte the bridge
@@ -844,8 +868,8 @@ Notes on the shape of the answers `[HW]`:
   three-entry ROM table and never sees a code you asked for. `[FW]` Either way,
   reading indoor fan speed or run hours needs a device on the indoor unit's own
   connector; it is not available over this interface.
-- `0x34` is the only code that used `OP3`, so at least one value here is wider
-  than one byte.
+- `0x13` (EEV, high byte), `0x34` and `0x94` (§5.2) use `OP3`, so those values
+  are wider than one byte.
 - On a multi-split installation, `0x11`/`0x90`/`0x85` (compressor frequency,
   current, discharge temperature) read identically from every indoor unit
   sharing the outdoor unit — they are outdoor-unit-level values, not
@@ -854,14 +878,14 @@ Notes on the shape of the answers `[HW]`:
   identical frequency/current/temperature on both, EEV 57 vs. 0. `[HW]` So
   `0x11` does **not** tell you whether *this* indoor unit is calling for
   cooling on a multi-split — `state[9] & 0x02` (§4.6) does, and costs nothing.
-- `0x13`'s full-open pulse count is unknown. MHI-AC-Ctrl reads the same
-  quantity as 16 bits (`DB12<<8 | DB11`, its `OU-EEV1`), while this bridge's
-  `OP2` is a single byte — likely a narrowed/derived value, not a raw pass
-  of the same counter. No reference project (MHI-AC-Ctrl or its ESPHome
-  port) converts it to a percentage either; both publish raw pulses. `[EXT]`
-  Mapping the byte linearly onto 0–100 % is fine as a *relative* reading —
-  idle against load, or one indoor unit against another — but do not present
-  it as a calibrated valve opening.
+- `0x13` is a 16-bit pulse count. `OP3` is the high byte, so it is the same
+  quantity MHI-AC-Ctrl reads as `DB12<<8 | DB11` (`OU-EEV1`) `[EXT]`; raw values
+  above 255 occur, with `OP3` = `01`
+  ([#446](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/446)).
+  `[HW]` Neither reference project converts it to a percentage; both publish raw
+  pulses. `[EXT]` A percentage (full stroke assumed 500 pulses, unconfirmed) is
+  only a *relative* reading — idle against load, or one indoor unit against
+  another — not a calibrated valve opening.
 - `0x13` on an indoor unit without demand depends on the system's direction.
   While another indoor unit cools, it reads 0 and only the working unit's
   valve is open. `[HW]` While another one heats, it stays at roughly 16–24 % of
@@ -1008,17 +1032,16 @@ rest:
 
 Read this as a map of where something exists, not as a set of new sensors. A
 value of `0` from a unit that is standing still carries no information, and 17
-of the 30 are in exactly that state — they have to be read again under load
-before any of them means anything. The three that do carry a value at rest are
-the ones worth chasing first, and one of them has a visible lead:
+of the 30 are in exactly that state. One further sweep with the compressor
+running (cooling, SRK20ZS-WF) returned the same zeros `[HW]`, so the zero is not
+an idle artefact; it is a single run, and heating was not swept. Four codes carry
+a value at rest: two are decoded (`0xAD`, `0xDD`), one is a duplicate (`0xAE`),
+and `0xD2` is still open:
 
-- **`0xAE` tracks the indoor air temperature.** It moved with `0x80`/`sel 0x20`
-  (the return-air sensor, §5.2) across the sweep and the confirmation passes,
-  on the same scale, never more than one 0.25 K step apart, and the two agreed
-  exactly on the second pass. An unfiltered or differently-rounded read of the
-  same sensor is the obvious reading, but it has only been seen on a still
-  room — confirm it on a room whose temperature is actually moving before
-  relying on it.
+- **`0xAE` duplicates the return-air sensor.** With a room temperature that was
+  actually moving (about 1 K) it followed `0x80`/`sel 0x20` (§5.2) step for step
+  and sat on the same raw value in two runs; the one-step offset seen at
+  standstill was sampling skew. There is nothing to gain from it. `[HW]`
 - **`0xAD` is the relative humidity** in percent (`OP2`), read at the indoor
   unit's return-air sensor. Whether a unit has the sensor depends on the
   series: MHI's service manuals show it only on the SRK35 and SRK50 in the
@@ -1131,7 +1154,20 @@ The value has no set-bit of its own (§4.3), so it is written by whichever frame
 goes out next and reverted by any frame that leaves the byte at `0xFF` — there is
 no way to write it once and leave it. A periodic request frame is the cheapest
 carrier for it; note that this makes such a frame a write, and that a running
-self-clean cycle does not survive one `[HW]`.
+self-clean cycle does not survive one `[HW]`. On units that switch off when a
+block without set-bits arrives, a periodic carrier frame is a full command — see
+the `WCBN4612L` box in §5.3.
+
+**Not every unit regulates on the injected value.** A ZT indoor unit behind a
+`WCBN4612L` 029 module reflects `command[5]` in the echo but keeps regulating on
+its own return-air sensor: its power draw followed the unit's own reading while
+the room stayed several kelvin away. `[UR]`
+([#424](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/discussions/424);
+[#427](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/427)
+and [#431](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/431)
+show the same module and unit class with the same reduced status block.) In heating,
+a unit that does follow the value regulates to the setpoint + 2 K unless the
+compensation is switched off (the `0x05` note in §5.4). `[HW]`
 
 ### 5.7 Compressor overload protection (speed-limit clamps)
 
@@ -1246,6 +1282,23 @@ constant exists in the application area. `[FW]` So the periodic reset seen in
 the field is commanded from below, not by the Wi-Fi stack. Blocking the module's
 WAN access does not stop it. `[HW]`
 
+What a client has to expect:
+
+- **Each reset is a full restart** (`sys_reset`: all tasks and sockets are gone)
+  `[FW]` (029 image). The module is offline for about 7 s; a request in flight
+  ends in a reset connection. `[HW]`
+- **Each module has its own fixed minute** within the hour (`:04` and `:32` on
+  two modules of one multi-split), so resets of several modules do not coincide.
+  The phase drifts by a few seconds per hour. `[HW]`
+- **The HTTPS listener on 51443 is created once per boot**, with no retry and no
+  restart of the server `[FW]` (029 image). If that start fails, the port refuses
+  connections until the next hourly reset while ping and mDNS keep working;
+  outages of about an hour that begin and end at a reset are reported on
+  `WF-RAC-HTTPS` modules
+  ([#406](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/406)).
+  `[UR]` The 025 image could not be read, so for that branch the mechanism is an
+  inference from the symptom. `[INF]`
+
 ### 6.7 Left/right vanes and 3D-auto, on units with the legacy bus signature
 
 The bridge MCU implements **two** CNS protocols and picks one from the first
@@ -1327,7 +1380,7 @@ Registering your `operatorId` via `updateAccountInfo` is a prerequisite (§2.5).
    -> Hz = (OP1 - 0x10) * 25.6 + 0.1 * OP2
 ```
 
-Untested `[INF]`. If it works, the same shape works for every code in §5.4.
+Verified on hardware `[HW]`; the same shape works for every code in §5.4.
 
 ---
 
@@ -1344,7 +1397,7 @@ people up constantly when comparing notes across units.
 | `WCBN4612L` | 029 | 999 |
 
 Both numbers are reported by `getDeviceInfo` as `wireless`/`mcu`, alongside
-`firmType`. Quote all three when reporting a problem — the pair alone is
+`firmType` (one `WCBN4612L` unit omitted the `mcu` key `[UR]`). Quote all three when reporting a problem — the pair alone is
 ambiguous.
 
 Updating is the app's job and is deliberately **not** documented here. Two
@@ -1365,7 +1418,7 @@ things are worth knowing before anyone goes looking:
 | Can I run an ESP32 on CNS *and* keep the WF-RAC module? | No. Two active slaves on the bus conflict. A purely passive sniffer that never drives MISO is fine. `[EXT]` |
 | Is there a local MQTT broker? | No. MQTT is cloud-only, endpoint fetched from `iot.smartmair.com`, mutual TLS with a device certificate in flash. `[FW]` |
 | Can I get compressor/current/hours without opening the unit? | Yes, via §5.3 — verified end to end, all fifteen codes in §5.4 answer. Watch the firmware caveat there. |
-| Can I feed an external room temperature without opening the unit? | Yes, via §5.6, verified on hardware. It also replaces the room temperature the unit reports back. |
+| Can I feed an external room temperature without opening the unit? | Yes on ZS-WF units, via §5.6, verified on hardware. It also replaces the room temperature the unit reports back. ZT units behind a `WCBN4612L` module echo the value but regulate on their own sensor (§5.6). |
 | Does the module do anything smart with the state bytes? | No. It is a base64 pipe. All semantics live in the RL78 and the AC. `[FW]` |
 | Why does the energy counter keep dropping to zero? | It is a per-run counter, not a lifetime one (§5.2). Nothing is broken. |
 | Why is my accumulated energy total lower than my electricity meter? | The counter reports whole 0.25 kWh steps only, and each power-on discards the unreported remainder — about 0.125 kWh per run (§5.2). |
