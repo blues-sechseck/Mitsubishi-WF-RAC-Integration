@@ -44,6 +44,7 @@ from pywfrac import (
 
 from custom_components.mitsubishi_wf_rac import (
     coordinator as coordinator_module,
+    firmware_check as firmware_check_module,
     service_data as service_data_module,
 )
 from custom_components.mitsubishi_wf_rac.const import (
@@ -1403,7 +1404,7 @@ async def test_update_does_not_check_firmware_when_disabled_by_default(
     # firmware_update_check option (see const.py's CONF_FIRMWARE_UPDATE_CHECK).
     assert device.firmware_update_check_enabled is False
     fetch = AsyncMock(return_value={"wireless": "026", "mcu": "200"})
-    monkeypatch.setattr(coordinator_module, "fetch_latest_firmware", fetch)
+    monkeypatch.setattr(firmware_check_module, "fetch_latest_firmware", fetch)
     device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
         ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
     )
@@ -1417,9 +1418,9 @@ async def test_update_does_not_check_firmware_when_disabled_by_default(
 
 
 async def test_update_detects_available_firmware_update(device, monkeypatch):
-    device._firmware_update_check_enabled = True
+    device.firmware_check.enabled = True
     fetch = AsyncMock(return_value={"wireless": "026", "mcu": "200"})
-    monkeypatch.setattr(coordinator_module, "fetch_latest_firmware", fetch)
+    monkeypatch.setattr(firmware_check_module, "fetch_latest_firmware", fetch)
     device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
         ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
     )
@@ -1439,9 +1440,9 @@ async def test_update_does_not_flag_downgrade_or_equal_version_as_update(
     # Strictly-greater-than only: the module silently no-ops a requested
     # version <= its current one, so neither "equal" nor "older" may be
     # reported as an available update.
-    device._firmware_update_check_enabled = True
+    device.firmware_check.enabled = True
     fetch = AsyncMock(return_value={"wireless": "025", "mcu": "200"})
-    monkeypatch.setattr(coordinator_module, "fetch_latest_firmware", fetch)
+    monkeypatch.setattr(firmware_check_module, "fetch_latest_firmware", fetch)
     device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
         ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
     )
@@ -1453,9 +1454,9 @@ async def test_update_does_not_flag_downgrade_or_equal_version_as_update(
 
 
 async def test_update_firmware_check_is_rate_limited(device, monkeypatch):
-    device._firmware_update_check_enabled = True
+    device.firmware_check.enabled = True
     fetch = AsyncMock(return_value={"wireless": "026", "mcu": "200"})
-    monkeypatch.setattr(coordinator_module, "fetch_latest_firmware", fetch)
+    monkeypatch.setattr(firmware_check_module, "fetch_latest_firmware", fetch)
     device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
         ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
     )
@@ -1469,9 +1470,9 @@ async def test_update_firmware_check_is_rate_limited(device, monkeypatch):
 
 
 async def test_update_firmware_check_failure_leaves_state_unknown(device, monkeypatch):
-    device._firmware_update_check_enabled = True
+    device.firmware_check.enabled = True
     fetch = AsyncMock(return_value=None)
-    monkeypatch.setattr(coordinator_module, "fetch_latest_firmware", fetch)
+    monkeypatch.setattr(firmware_check_module, "fetch_latest_firmware", fetch)
     device._api.get_aircon_stats.return_value = _stats_response_with_firmware(
         ON_COOL_PAYLOAD, "WF-RAC-HTTPS", "025"
     )
@@ -2217,7 +2218,7 @@ async def test_add_account_does_not_report_an_issue_on_ordinary_success(device):
 
 
 async def test_a_failed_poll_neither_raises_nor_clears_the_repair_issue(device):
-    device._report_registration_full()
+    device.account_slots.report_registration_full()
     device._api.get_aircon_stats.side_effect = WfRacError("boom")
 
     await device.update()
@@ -2232,7 +2233,7 @@ async def test_a_failed_poll_neither_raises_nor_clears_the_repair_issue(device):
 async def test_an_accepted_write_clears_the_repair_issue(device):
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
-    device._report_registration_full()
+    device.account_slots.report_registration_full()
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
 
     await device.set_airco({AirconCommands.Operation: True})

@@ -55,9 +55,9 @@ async def test_diagnostics_redacts_sensitive_data_and_is_json_serializable(hass)
     device._account_expires = 1_725_000_000  # pylint: disable=protected-access
     device._led_status = 1  # pylint: disable=protected-access
     device._auto_heating = 0  # pylint: disable=protected-access
-    device._wireless_firmware_ver = "105"  # pylint: disable=protected-access
-    device._latest_wireless_firmware_ver = "106"  # pylint: disable=protected-access
-    device._firmware_update_available = True  # pylint: disable=protected-access
+    device.firmware_check.wireless_version = "105"  # pylint: disable=protected-access
+    device.firmware_check.latest_wireless_version = "106"  # pylint: disable=protected-access
+    device.firmware_check.update_available = True  # pylint: disable=protected-access
     device._airco = Aircon(  # pylint: disable=protected-access
         ModelNrRaw=3,
         HomeLeaveModeForCooling=HomeLeaveModeSetting(18.0, 20.0, 2),

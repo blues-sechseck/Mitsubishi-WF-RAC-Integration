@@ -21,6 +21,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.typing import ConfigType
 
+from .account_slots import registration_full_issue_id
 from .const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_CHECK,
@@ -41,11 +42,7 @@ from .const import (
     STATUS_REQUEST_STOPPED_LEGACY,
     STATUS_REQUEST_STRICT,
 )
-from .coordinator import (
-    AVAILABILITY_FAILURE_LIMIT_MIN,
-    Device,
-    registration_full_issue_id,
-)
+from .coordinator import AVAILABILITY_FAILURE_LIMIT_MIN, Device
 from .defrost_trace import async_remove_stored_trace
 from .foreign_writers import (
     report_status_request_unsupported,

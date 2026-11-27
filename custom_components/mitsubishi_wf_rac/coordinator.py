@@ -32,7 +32,6 @@ from pywfrac import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import (
     CONNECTION_NETWORK_MAC,
@@ -42,6 +41,10 @@ from homeassistant.helpers.device_registry import (
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from .account_slots import (
+    AccountSlots,
+    registration_full_issue_id,  # noqa: F401  (re-export for existing importers)
+)
 from .const import (
     AC_CERT_FILENAME,
     CONF_STATUS_REQUEST_MODE,
@@ -55,7 +58,7 @@ from .const import (
 )
 from .defrost_trace import DefrostTrace, create_store
 from .external_temperature import ExternalTemperatureFeed
-from .firmware_check import fetch_latest_firmware
+from .firmware_check import FirmwareUpdateCheck
 from .foreign_writers import ForeignWriterWatch
 from .service_data import (
     RESEARCH_CONTEXT,
@@ -91,12 +94,6 @@ SILENT_OPERATION_READBACK_ATTEMPTS: Final = 3
 # instead of merging (e.g. a fan-speed change followed shortly by a
 # temperature change loses the fan change).
 UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
-
-# The manufacturer's getFirmware endpoint is unauthenticated and cheap, but
-# there's no reason to call it on every MIN_TIME_BETWEEN_UPDATES (60s) poll -
-# firmware doesn't change that often. Rate-limit background checks to this
-# interval instead.
-FIRMWARE_CHECK_INTERVAL = timedelta(hours=24)
 
 
 # How far into the past the operation-data request is stamped, and so how much
@@ -167,15 +164,6 @@ POLL_TIMEOUT = 2 * REQUEST_TIMEOUT + MIN_TIME_BETWEEN_REQUESTS + timedelta(secon
 AVAILABILITY_FAILURE_LIMIT_MIN = 3
 
 
-def registration_full_issue_id(entry_id: str) -> str:
-    """Repair-issue id for a full account table on this entry's airco.
-
-    Shared with async_remove_entry, which clears it when the entry is deleted.
-    An unload leaves it standing: the condition outlives a reload.
-    """
-    return f"too_many_devices_{entry_id}"
-
-
 def _revision(value: Any) -> str:
     """One firmware string of a status answer, or "unknown" where none came."""
     return str(value) if value else "unknown"
@@ -186,20 +174,6 @@ def _firmware_version(section: Any) -> str:
     if not isinstance(section, dict):
         return "unknown"
     return _revision(section.get("firmVer"))
-
-
-def result_code(answer: Any) -> int | None:
-    """The result code of a module answer, or None if it carries none.
-
-    The parsed body arrives as it came, so neither its shape nor the field's
-    type is guaranteed.
-    """
-    if not isinstance(answer, dict):
-        return None
-    try:
-        return int(answer["result"])
-    except (KeyError, TypeError, ValueError):
-        return None
 
 
 class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instance-attributes
@@ -262,12 +236,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._account_expires: int | None = None
         self._led_status: int | None = None
         self._auto_heating: int | None = None
-        self._firm_type: str | None = None
-        self._wireless_firmware_ver: str | None = None
-        self._latest_wireless_firmware_ver: str | None = None
-        self._firmware_update_available: bool | None = None
-        self._last_firmware_check: datetime | None = None
-        self._firmware_update_check_enabled = firmware_update_check_enabled
+        self.firmware_check = FirmwareUpdateCheck(self, firmware_update_check_enabled)
+        self.account_slots = AccountSlots(self)
         # When we last sent a real (set-bit) command, so an operation-data
         # request within one lock's span of it stamps honestly instead of
         # trimming that command's lease - see _service_data_stamp_backdate().
@@ -601,69 +571,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             _LOGGER.debug("[%s] reports firmware %s", self.device_name, firmware)
         self._firmware = firmware
 
-        self._firm_type = response.get("firmType")
-        self._wireless_firmware_ver = (response.get("wireless") or {}).get("firmVer")
-        self._maybe_check_firmware_update()
+        self.firmware_check.record_local(
+            response.get("firmType"), (response.get("wireless") or {}).get("firmVer")
+        )
+        self.firmware_check.maybe_check()
         self.maybe_request_service_data()
         return True
-
-    def _maybe_check_firmware_update(self) -> None:
-        """Kick off a background cloud firmware check if one is due.
-
-        Due is FIRMWARE_CHECK_INTERVAL. Fire-and-forget: the result lands
-        whenever the request completes and reaches entities via
-        async_set_updated_data() in _async_check_firmware_update() below,
-        independent of the regular 60s poll cycle that triggered this check.
-        """
-        # Hard opt-in gate, checked first and unconditionally: this is the
-        # only outbound internet call anywhere in this integration (every
-        # other request stays on the local network) - users who leave the
-        # option off must get zero cloud traffic, not just a less frequent one.
-        if not self._firmware_update_check_enabled:
-            return
-        if not self._firm_type or not self._wireless_firmware_ver:
-            return
-        now = dt_util.utcnow()
-        if (
-            self._last_firmware_check is not None
-            and now - self._last_firmware_check < FIRMWARE_CHECK_INTERVAL
-        ):
-            return
-        self._last_firmware_check = now
-        self.hass.async_create_task(
-            self._async_check_firmware_update(
-                self._firm_type, self._wireless_firmware_ver
-            )
-        )
-
-    async def _async_check_firmware_update(
-        self, firm_type: str, wireless_firmware_ver: str
-    ) -> None:
-        """Compare the locally-reported wireless firmware version.
-
-        Compared against the manufacturer's latest for this firmType.
-        """
-        latest = await fetch_latest_firmware(self.hass, firm_type)
-        if latest is None or latest.get("wireless") is None:
-            return
-
-        try:
-            # Strictly-greater-than only: the module treats a requested
-            # firmVer <= its current one as "nothing to do" and returns 200 OK
-            # without flashing - a `!=` check would misreport that harmless
-            # case as an available downgrade.
-            update_available = int(latest["wireless"]) > int(wireless_firmware_ver)
-        except (TypeError, ValueError):
-            _LOGGER.debug(
-                "Could not compare firmware versions: local=%r latest=%r",
-                wireless_firmware_ver,
-                latest["wireless"],
-            )
-            return
-
-        self._latest_wireless_firmware_ver = latest["wireless"]
-        self._firmware_update_available = update_available
-        self.async_set_updated_data(self._airco)
 
     async def _async_write_lock_delay(self) -> float:
         """Seconds to wait before retrying a write the unit just refused.
@@ -1075,41 +988,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             )
 
     async def delete_account(self) -> dict[str, Any] | None:
-        """Delete account (operator id) from the airco.
-
-        None means the slot was not released - the request failed, or the
-        answer did not confirm it. Nothing but a result code of 0 does: the
-        refusal, the rate limit and the module's internal error all leave the
-        slot where it was.
-        """
-        try:
-            result = await self._api.del_account_info(self._airco_id)
-        except (WfRacError, KeyError, TypeError):
-            _LOGGER.warning("Could not delete account from airco %s", self._airco_id)
-            return None
-        if result_code(result) != 0:
-            return None
-        return result
+        """Delete account (operator id) from the airco."""
+        return await self.account_slots.delete()
 
     async def add_account(self) -> dict[str, Any] | None:
         """Add account (operator id) from the airco."""
-        try:
-            result = await self._api.update_account_info(
-                self._airco_id, self.hass.config.time_zone
-            )
-        except (WfRacError, KeyError, TypeError):
-            _LOGGER.debug("Could not add account from airco %s", self._airco_id)
-            return None
-
-        # Here result:2 means the account table is full, and nothing frees a
-        # slot but the official app - a standing condition for Repairs, ended
-        # by a registration that went through and by nothing else.
-        code = result_code(result)
-        if code == 2:
-            self._report_registration_full()
-        elif code == 0:
-            self._clear_registration_full_issue()
-        return result
+        return await self.account_slots.add()
 
     def adopt_status_request_mode(self, mode: str) -> None:
         """Switch the shape of the status request and write the choice down.
@@ -1129,22 +1013,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         entry = self.config_entry
         self.hass.config_entries.async_update_entry(
             entry, data={**entry.data, CONF_STATUS_REQUEST_MODE: mode}
-        )
-
-    def _report_registration_full(self) -> None:
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            registration_full_issue_id(self.entry_id),
-            is_fixable=False,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key="too_many_devices",
-            translation_placeholders={"device_name": self.device_name},
-        )
-
-    def _clear_registration_full_issue(self) -> None:
-        ir.async_delete_issue(
-            self.hass, DOMAIN, registration_full_issue_id(self.entry_id)
         )
 
     def _build_command(self, params: dict[AirconCommands, Any]) -> AirconStat:
@@ -1310,7 +1178,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
                 self._airco = new_airco
                 # An accepted write proves the account is registered.
-                self._clear_registration_full_issue()
+                self.account_slots.clear_registration_full_issue()
                 # Our own write is not a foreign one: move the expectation to
                 # what the unit reports back, or the next poll would read this
                 # command as somebody else's (see _note_unexpected_settings).
@@ -1603,6 +1471,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return info
 
     @property
+    def api(self) -> Repository:
+        """Return the client for the module's local API."""
+        return self._api
+
+    @property
     def operator_id(self) -> str:
         """Return Airco Operator ID."""
         return self._operator_id
@@ -1635,7 +1508,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     @property
     def wireless_firmware_version(self) -> str | None:
         """Return the locally-reported wireless-module firmware version."""
-        return self._wireless_firmware_ver
+        return self.firmware_check.wireless_version
 
     @property
     def latest_wireless_firmware_version(self) -> str | None:
@@ -1643,7 +1516,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
         None if not yet checked or unknown.
         """
-        return self._latest_wireless_firmware_ver
+        return self.firmware_check.latest_wireless_version
 
     @property
     def firmware_update_available(self) -> bool | None:
@@ -1651,12 +1524,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
         None if that hasn't been determined yet.
         """
-        return self._firmware_update_available
+        return self.firmware_check.update_available
 
     @property
     def firmware_update_check_enabled(self) -> bool:
         """Return whether the (online, cloud) firmware update check is enabled."""
-        return self._firmware_update_check_enabled
+        return self.firmware_check.enabled
 
     @property
     def device_id(self) -> str:

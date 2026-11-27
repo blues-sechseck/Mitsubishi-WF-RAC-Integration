@@ -224,9 +224,9 @@ async def test_platform_option_and_capability_gates(hass, platform_device):
         for entity in switches
     ] == [(f"{DOMAIN}-airco-id-silent-operation", False)]
 
-    platform_device._firmware_update_check_enabled = False
+    platform_device.firmware_check.enabled = False
     assert await _entities(update.async_setup_entry, hass, entry) == []
-    platform_device._firmware_update_check_enabled = True
+    platform_device.firmware_check.enabled = True
     firmware_entities = await _entities(update.async_setup_entry, hass, entry)
     assert [entity.unique_id for entity in firmware_entities] == [
         f"{DOMAIN}-airco-id-firmware-update"
@@ -605,9 +605,9 @@ async def test_home_leave_controls_require_known_settings_and_preserve_other_sid
     ("available", "latest"), [(True, "2.0"), (False, "1.0"), (False, None)]
 )
 async def test_update_version_states(platform_device, available, latest):
-    platform_device._wireless_firmware_ver = "1.0"
-    platform_device._latest_wireless_firmware_ver = latest
-    platform_device._firmware_update_available = available
+    platform_device.firmware_check.wireless_version = "1.0"
+    platform_device.firmware_check.latest_wireless_version = latest
+    platform_device.firmware_check.update_available = available
     entity = update.FirmwareUpdateEntity(platform_device)
     assert entity.installed_version == "1.0"
     assert entity.latest_version == (latest if available else "1.0")
