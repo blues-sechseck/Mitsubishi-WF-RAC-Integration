@@ -7,9 +7,9 @@ worth showing, and whether this unit has the channel at all is a bundle of
 eight counters and timestamps that used to sit among the polling in the
 coordinator.
 
-The coordinator still sends the frame - that is wire work, and it needs the
-parser, the settings snapshot and the #329 detection next to it. What is here
-is everything around it that only concerns this one channel.
+The frame itself goes out through the coordinator's set_airco(), which holds
+the parser, the settings snapshot and the #329 detection; async_request() here
+drives it. Everything around that only concerns this one channel.
 """
 
 from __future__ import annotations
@@ -37,7 +37,11 @@ from pywfrac import (
     SERVICE_DATA_PROTECTION_RAW,
     SERVICE_DATA_SILENT_OPERATION,
     Aircon,
+    AirconCommands,
     ServiceDataRefusals,
+    WfRacCommandError,
+    WfRacError,
+    WfRacWriteRefusedError,
     hot_start_possible,
 )
 
@@ -50,6 +54,10 @@ if TYPE_CHECKING:
     from .coordinator import Device
 
 _LOGGER = logging.getLogger(__name__)
+
+# A refused request costs a full cycle of every operation-data sensor, and
+# these refusals are transient, so one retry is worth the extra request.
+SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
 
 # Operation data is requested for active operation-data entities and costs a
 # second request per poll. It stays on the local network, and on most modules
@@ -744,3 +752,132 @@ class ServiceDataChannel:
             self._device.device_name,
             limit.total_seconds(),
         )
+
+    async def async_request(
+        self,
+        service_data_codes: tuple[int, ...],
+        research_codes: tuple[int, ...] = (),
+    ) -> None:
+        """Ask the unit for operation-data segments.
+
+        Offset from the poll and retried once if the unit refuses it (see
+        SERVICE_DATA_REQUEST_OFFSET). Sends directly rather than through
+        async_queue_command() so the refusal is visible here: a queued command
+        is flushed by a detached task that deliberately swallows its errors.
+        """
+        await asyncio.sleep(self.offset.total_seconds())
+        # What the frame carries depends on the module: no set-bits at all
+        # without the #329 quirk, a full command with it (see
+        # RacParser.status_request_to_byte). Byte 5 goes out either way,
+        # having no set-bit to leave out, which is how an active external
+        # temperature override stays alive between commands - and what makes
+        # this request a write in the strict sense, for which the backdated
+        # timestamp below gives back part of the lock.
+        if (
+            self._device.status_request_carries_state
+            and not await self._device.async_read_before_echo()
+        ):
+            return
+        if not self._device.status_request_is_allowed():
+            # Re-checked after the sleep, not only when the request was
+            # scheduled: the offset is up to half a minute, and the unit going
+            # off inside it is exactly the window this protects.
+            _LOGGER.debug(
+                "Skipping the operation-data request for [%s]: it is either "
+                "not sent to this unit at all, or the unit is off and the "
+                "request would carry that state back to it",
+                self._device.device_name,
+            )
+            return
+        params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
+        timestamp_offset = -round(
+            self._device.service_data_stamp_backdate().total_seconds()
+        )
+        # _carry_forward_service_data() moves this whenever a segment arrives,
+        # so comparing it across the request says whether this one was answered
+        # - which the state itself cannot, the previous reading being carried
+        # forward into it.
+        answered_before = self.last_response
+        regular_codes = tuple(c for c in service_data_codes if c not in research_codes)
+        for attempt in (1, 2):
+            try:
+                await self._device.set_airco(
+                    params,
+                    log_failure=False,
+                    timestamp_offset=timestamp_offset,
+                    is_status_request=True,
+                    retry_when_locked=False,
+                )
+                if attempt > 1:
+                    _LOGGER.debug("Service data request succeeded on retry")
+                if regular_codes:
+                    self.note_whether_anything_answered(answered_before)
+                if research_codes and self._device.airco is not None:
+                    self._device.research_data.note_answer(self._device.airco)
+                self.note_offset_survived()
+                # Notify, but deliberately not through async_set_updated_data():
+                # that resets the refresh timer, and this runs half a cycle
+                # after the poll - every cycle - so it would push the next poll
+                # to 90s and keep doing so, silently turning the documented
+                # 60s cadence into something else. Listeners get the fresh
+                # state (set_airco() has already stored it) without the
+                # schedule moving.
+                self._device.async_update_listeners()
+                # Not an else block: the two handlers below are what decide
+                # whether the loop runs again, and splitting the success path
+                # away from them would put that decision in two places.
+                return  # noqa: TRY300
+            except WfRacWriteRefusedError as ex:  # noqa: PERF203
+                # The unit's answer to a code it does not know - or a foreign
+                # write lock, which the refusal limits allow for.
+                if research_codes:
+                    self._device.research_data.note_refused(research_codes)
+                self.note_refused(regular_codes)
+                # Someone else may hold the write lock. Unlike a user command
+                # this is not worth contesting: give the cycle up immediately
+                # rather than retrying into a lock we would only be renewing
+                # for ourselves if we won it. set_airco()'s own wait-and-retry
+                # is off for this call (retry_when_locked=False), or the
+                # refusal would arrive here already contested.
+                _LOGGER.debug(
+                    "Service data request declined for [%s], skipping this cycle: %s",
+                    self._device.device_name,
+                    ex,
+                )
+                return
+            except WfRacCommandError as ex:
+                if attempt == 1:
+                    # A refusal here is the module saying the request came too
+                    # close to something else, which is exactly what the offset
+                    # is for - so widen it, whether or not the retry gets
+                    # through.
+                    self.widen_offset()
+                    _LOGGER.debug("Service data request refused (%s); retrying", ex)
+                    await asyncio.sleep(SERVICE_DATA_RETRY_DELAY.total_seconds())
+                    continue
+                # Debug, not a warning: the module refuses these requests
+                # transiently and a single skipped cycle changes nothing the
+                # user can see - the values survive their expiry. The
+                # warning belongs where they actually expire, see
+                # _note_service_data_expired().
+                _LOGGER.debug(
+                    "Service data request refused twice, skipping this cycle "
+                    "for [%s]: %s",
+                    self._device.device_name,
+                    ex,
+                )
+            except (WfRacError, KeyError, TypeError, ValueError) as ex:
+                # Unreachable or unparseable: the poll itself reports that, and
+                # this request is an optional extra on top of it. Still logged:
+                # with an external temperature source this request is what
+                # carries the override, and a lost one shows up only as the
+                # unit falling back to its own sensor.
+                _LOGGER.debug(
+                    "Service data request failed for [%s], skipping this cycle: %s: %s",
+                    self._device.device_name,
+                    type(ex.__cause__ or ex).__name__,
+                    ex,
+                )
+                return
+        # Entities keep their previous operation-data values on a skipped cycle
+        # (see _carry_forward_service_data), so there is nothing to push here.

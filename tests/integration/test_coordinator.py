@@ -163,7 +163,7 @@ def _shorten_service_data_timing(monkeypatch, offset_ms: int = 5) -> None:
         command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     monkeypatch.setattr(
-        coordinator_module, "SERVICE_DATA_RETRY_DELAY", timedelta(milliseconds=5)
+        service_data_module, "SERVICE_DATA_RETRY_DELAY", timedelta(milliseconds=5)
     )
     # The ceiling doubles as the starting value, so shrinking it is what makes
     # the request fire inside a test.
@@ -1796,18 +1796,18 @@ async def test_service_data_stamps_honestly_right_after_our_own_command(device):
     (offset 0) instead; before and after, it backdates."""
     device._last_command_at = None
     assert (
-        device._service_data_stamp_backdate()
+        device.service_data_stamp_backdate()
         == coordinator_module.SERVICE_DATA_STAMP_BACKDATE
     )
 
     device._last_command_at = dt_util.utcnow()
-    assert device._service_data_stamp_backdate() == timedelta(0)
+    assert device.service_data_stamp_backdate() == timedelta(0)
 
     device._last_command_at = (
         dt_util.utcnow() - 2 * coordinator_module.MIN_TIME_BETWEEN_UPDATES
     )
     assert (
-        device._service_data_stamp_backdate()
+        device.service_data_stamp_backdate()
         == coordinator_module.SERVICE_DATA_STAMP_BACKDATE
     )
 

@@ -21,7 +21,6 @@ from pywfrac import (
     HomeLeaveModeSetting,
     RacParser,
     Repository,
-    WfRacCommandError,
     WfRacConnectionError,
     WfRacError,
     WfRacRegistrationError,
@@ -97,7 +96,7 @@ SILENT_OPERATION_READBACK_ATTEMPTS: Final = 3
 # seconds and the deadline is compared as timestamp >= expires, so a little
 # margin keeps the request holding a lock it can call its own rather than one
 # that has already lapsed as it arrives. NOT applied right after one of our own
-# real commands - see _async_request_service_data, where backdating would cut
+# real commands - see ServiceDataChannel.async_request, where backdating would cut
 # that command's own protection window instead of someone else's lock (same
 # deviceId bypasses the lock check, so the request overwrites our own lease).
 # That guard matters more at this setting than it did at 30s: a request that
@@ -110,10 +109,6 @@ SERVICE_DATA_STAMP_BACKDATE = timedelta(seconds=55)
 # override rides on - so this is the one that answers under every condition:
 # it is per indoor unit and reads a temperature whatever the system is doing,
 # which is why it is also the sensor the README recommends enabling first.
-
-# A refused request costs a full cycle of every operation-data sensor, and
-# these refusals are transient, so one retry is worth the extra request.
-SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
 
 # One retry for a user command refused because someone else holds the lock,
 # timed to land just after the lock lapses (see _async_write_lock_delay). Used
@@ -231,7 +226,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self.account_slots = AccountSlots(self)
         # When we last sent a real (set-bit) command, so an operation-data
         # request within one lock's span of it stamps honestly instead of
-        # trimming that command's lease - see _service_data_stamp_backdate().
+        # trimming that command's lease - see service_data_stamp_backdate().
         self._last_command_at: datetime | None = None
         self.foreign_writers = ForeignWriterWatch(self)
         self.service_data = ServiceDataChannel(self)
@@ -379,7 +374,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             feed.set_override(None)
         try:
             if (
-                self._status_request_is_allowed()
+                self.status_request_is_allowed()
                 and not self._parser.status_request_carries_state
             ):
                 await self.set_airco(
@@ -390,7 +385,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     },
                     log_failure=False,
                     timestamp_offset=-round(
-                        self._service_data_stamp_backdate().total_seconds()
+                        self.service_data_stamp_backdate().total_seconds()
                     ),
                     is_status_request=True,
                     retry_when_locked=False,
@@ -635,7 +630,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """Whether this unit answers operation-data requests at all."""
         return self.service_data.supported
 
-    def _status_request_is_allowed(self) -> bool:
+    def status_request_is_allowed(self) -> bool:
         """Whether an operation-data request may go out right now.
 
         False on a unit we have given up asking (#329), and false on one that
@@ -671,7 +666,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # temperature override or a release still owed, which ride on it
             # without needing an answer.
             return
-        if not self._status_request_is_allowed():
+        if not self.status_request_is_allowed():
             return
         if self.foreign_activity:
             # Skipped entirely rather than deferred: this request would take
@@ -707,12 +702,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # instead of waiting for them.
         self.service_data.adopt_task(
             self.hass.async_create_background_task(
-                self._async_request_service_data(service_data_codes, research_codes),
+                self.service_data.async_request(service_data_codes, research_codes),
                 name=f"{DOMAIN} service data request {self._airco_id}",
             )
         )
 
-    def _service_data_stamp_backdate(self) -> timedelta:
+    def service_data_stamp_backdate(self) -> timedelta:
         """How far to backdate the next operation-data request's timestamp.
 
         Normally SERVICE_DATA_STAMP_BACKDATE, so the request's write lock runs
@@ -760,133 +755,6 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         self._airco = new_airco
         return True
 
-    async def _async_request_service_data(
-        self,
-        service_data_codes: tuple[int, ...],
-        research_codes: tuple[int, ...] = (),
-    ) -> None:
-        """Ask the unit for operation-data segments.
-
-        Offset from the poll and retried once if the unit refuses it (see
-        SERVICE_DATA_REQUEST_OFFSET). Sends directly rather than through
-        async_queue_command() so the refusal is visible here: a queued command
-        is flushed by a detached task that deliberately swallows its errors.
-        """
-        await asyncio.sleep(self.service_data.offset.total_seconds())
-        # What the frame carries depends on the module: no set-bits at all
-        # without the #329 quirk, a full command with it (see
-        # RacParser.status_request_to_byte). Byte 5 goes out either way,
-        # having no set-bit to leave out, which is how an active external
-        # temperature override stays alive between commands - and what makes
-        # this request a write in the strict sense, for which the backdated
-        # timestamp below gives back part of the lock.
-        if (
-            self._parser.status_request_carries_state
-            and not await self.async_read_before_echo()
-        ):
-            return
-        if not self._status_request_is_allowed():
-            # Re-checked after the sleep, not only when the request was
-            # scheduled: the offset is up to half a minute, and the unit going
-            # off inside it is exactly the window this protects.
-            _LOGGER.debug(
-                "Skipping the operation-data request for [%s]: it is either "
-                "not sent to this unit at all, or the unit is off and the "
-                "request would carry that state back to it",
-                self.device_name,
-            )
-            return
-        params = {AirconCommands.ServiceDataStatusRequest: service_data_codes}
-        timestamp_offset = -round(self._service_data_stamp_backdate().total_seconds())
-        # _carry_forward_service_data() moves this whenever a segment arrives,
-        # so comparing it across the request says whether this one was answered
-        # - which the state itself cannot, the previous reading being carried
-        # forward into it.
-        answered_before = self.service_data.last_response
-        regular_codes = tuple(c for c in service_data_codes if c not in research_codes)
-        for attempt in (1, 2):
-            try:
-                await self.set_airco(
-                    params,
-                    log_failure=False,
-                    timestamp_offset=timestamp_offset,
-                    is_status_request=True,
-                    retry_when_locked=False,
-                )
-                if attempt > 1:
-                    _LOGGER.debug("Service data request succeeded on retry")
-                if regular_codes:
-                    self.service_data.note_whether_anything_answered(answered_before)
-                if research_codes and self._airco is not None:
-                    self.research_data.note_answer(self._airco)
-                self.service_data.note_offset_survived()
-                # Notify, but deliberately not through async_set_updated_data():
-                # that resets the refresh timer, and this runs half a cycle
-                # after the poll - every cycle - so it would push the next poll
-                # to 90s and keep doing so, silently turning the documented
-                # 60s cadence into something else. Listeners get the fresh
-                # state (set_airco() has already stored it) without the
-                # schedule moving.
-                self.async_update_listeners()
-                # Not an else block: the two handlers below are what decide
-                # whether the loop runs again, and splitting the success path
-                # away from them would put that decision in two places.
-                return  # noqa: TRY300
-            except WfRacWriteRefusedError as ex:  # noqa: PERF203
-                # The unit's answer to a code it does not know - or a foreign
-                # write lock, which the refusal limits allow for.
-                if research_codes:
-                    self.research_data.note_refused(research_codes)
-                self.service_data.note_refused(regular_codes)
-                # Someone else may hold the write lock. Unlike a user command
-                # this is not worth contesting: give the cycle up immediately
-                # rather than retrying into a lock we would only be renewing
-                # for ourselves if we won it. set_airco()'s own wait-and-retry
-                # is off for this call (retry_when_locked=False), or the
-                # refusal would arrive here already contested.
-                _LOGGER.debug(
-                    "Service data request declined for [%s], skipping this cycle: %s",
-                    self.device_name,
-                    ex,
-                )
-                return
-            except WfRacCommandError as ex:
-                if attempt == 1:
-                    # A refusal here is the module saying the request came too
-                    # close to something else, which is exactly what the offset
-                    # is for - so widen it, whether or not the retry gets
-                    # through.
-                    self.service_data.widen_offset()
-                    _LOGGER.debug("Service data request refused (%s); retrying", ex)
-                    await asyncio.sleep(SERVICE_DATA_RETRY_DELAY.total_seconds())
-                    continue
-                # Debug, not a warning: the module refuses these requests
-                # transiently and a single skipped cycle changes nothing the
-                # user can see - the values survive their expiry. The
-                # warning belongs where they actually expire, see
-                # _note_service_data_expired().
-                _LOGGER.debug(
-                    "Service data request refused twice, skipping this cycle "
-                    "for [%s]: %s",
-                    self.device_name,
-                    ex,
-                )
-            except (WfRacError, KeyError, TypeError, ValueError) as ex:
-                # Unreachable or unparseable: the poll itself reports that, and
-                # this request is an optional extra on top of it. Still logged:
-                # with an external temperature source this request is what
-                # carries the override, and a lost one shows up only as the
-                # unit falling back to its own sensor.
-                _LOGGER.debug(
-                    "Service data request failed for [%s], skipping this cycle: %s: %s",
-                    self.device_name,
-                    type(ex.__cause__ or ex).__name__,
-                    ex,
-                )
-                return
-        # Entities keep their previous operation-data values on a skipped cycle
-        # (see _carry_forward_service_data), so there is nothing to push here.
-
     def reduced_status_error(self) -> HomeAssistantError:
         """The refusal for an operation-data request on a reduced unit."""
         return HomeAssistantError(
@@ -916,7 +784,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     translation_key="status_request_not_sent",
                     translation_placeholders={"device": self.device_name},
                 )
-            if not self._status_request_is_allowed():
+            if not self.status_request_is_allowed():
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="silent_operation_unit_off",

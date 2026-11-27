@@ -94,7 +94,7 @@ class CommandQueue:
         self._consolidation_task = None
         # A real, set-bit command: mark it so the next operation-data request
         # stamps honestly and renews this command's lock rather than trimming
-        # it (see _service_data_stamp_backdate).
+        # it (see service_data_stamp_backdate).
         self._device.mark_command_sent()
         try:
             await self._device.set_airco(params)
