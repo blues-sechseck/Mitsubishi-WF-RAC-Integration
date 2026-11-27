@@ -188,7 +188,7 @@ Any one of them switches the request on, so pick one that always has something t
 
 | Entity | Values | Description |
 |---|---|---|
-| Silent operation *(disabled by default)* | on/off | The unit's own silent operation: it limits the outdoor unit's compressor and fan to make it quieter, at the cost of maximum capacity. The state is what the unit reports, read on every operation-data request, so the switch stays unavailable on a unit that never answers. A change is only accepted once the unit confirms it. The IR remote can switch it as well, and a state set there may only clear with the remote. Mitsubishi's documentation is not consistent on multi-split systems, and on mine I could not measure a difference while heating; please report what you see on yours. |
+| Silent operation *(disabled by default)* | on/off | The unit's own silent operation: it limits the outdoor unit's compressor and fan to make it quieter, at the cost of maximum capacity. The state is what the unit reports, read on every operation-data request, so the switch stays unavailable on a unit that never answers. A change is only accepted once the unit confirms it. The IR remote can switch it as well, and a state set there may only clear with the remote. Mitsubishi documents the compressor limit for cooling only. In heating, some outdoor units hold the compressor near its minimum while Silent is on, which can leave rooms short of heat in cold weather. If rooms stay cold, switch Silent off. |
 
 ## Home Leave Mode
 
