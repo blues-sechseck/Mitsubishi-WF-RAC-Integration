@@ -9,7 +9,8 @@
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/blues-sechseck)
 
 This is a Home Assistant integration for **Mitsubishi Heavy Industries** air conditioners that use
-the WF-RAC WiFi module and the **"Smart M-Air"** app.
+the WF-RAC WiFi module and the **"Smart M-Air"** app. It is an independent community project and is
+not affiliated with or endorsed by Mitsubishi Heavy Industries.
 
 > **Not compatible with Mitsubishi Electric systems** (e.g. those using a MAC-577IF2-E interface) or
 > the MELCloud platform — those are a different manufacturer with a different app and protocol. If
