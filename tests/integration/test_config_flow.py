@@ -20,6 +20,8 @@ from custom_components.mitsubishi_wf_rac.config_flow import (
 from custom_components.mitsubishi_wf_rac.const import (
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_FIRMWARE_UPDATE_CHECK,
     CONF_INDOOR_OFFSET,
@@ -613,6 +615,8 @@ async def test_zeroconf_discovery_confirm_port_can_be_overridden(hass: HomeAssis
 
 _OPTION_SECTIONS = {
     CONF_EXTERNAL_TEMPERATURE_SOURCE: SECTION_INDOOR_TEMPERATURE_SOURCE,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE: SECTION_INDOOR_TEMPERATURE_SOURCE,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET: SECTION_INDOOR_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_COOL: SECTION_INDOOR_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_DRY: SECTION_INDOOR_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_HEAT: SECTION_INDOOR_TEMPERATURE_SOURCE,
@@ -687,6 +691,69 @@ async def test_options_flow_saves_submitted_values(hass: HomeAssistant):
     # The host is connection data now, so it is not in the options at all and
     # an options save cannot touch it.
     assert "host" not in result["data"]
+
+
+async def test_options_flow_saves_and_clears_the_fallback_source(hass: HomeAssistant):
+    entry = MockConfigEntry(domain=DOMAIN, data={"name": "Living Room AC"}, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _form_input(
+            {
+                CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature",
+                CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE: "sensor.den_temperature",
+                CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET: -1.5,
+            }
+        ),
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert (
+        result["data"][CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE]
+        == "sensor.den_temperature"
+    )
+    assert result["data"][CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET] == -1.5
+
+
+async def test_options_flow_clears_the_fallback_source_when_left_empty(
+    hass: HomeAssistant,
+):
+    # Leaving the picker empty removes the fallback rather than carrying the
+    # stored one over.
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"name": "Living Room AC"},
+        options={
+            CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature",
+            CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE: "sensor.den_temperature",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        _form_input({CONF_EXTERNAL_TEMPERATURE_SOURCE: "sensor.hallway_temperature"}),
+    )
+
+    assert CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE not in result["data"]
+
+
+async def test_options_flow_rejects_a_fallback_offset_out_of_range(
+    hass: HomeAssistant,
+):
+    import voluptuous as vol
+
+    entry = MockConfigEntry(domain=DOMAIN, data={"name": "Living Room AC"}, options={})
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with pytest.raises((vol.Invalid, InvalidData)):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            _form_input({CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET: 11.0}),
+        )
 
 
 async def test_options_flow_refuses_its_own_entity_as_source(hass: HomeAssistant):
@@ -938,7 +1005,9 @@ async def test_options_flow_only_offers_the_overshoots_with_a_source(
         if str(key.schema) == SECTION_INDOOR_TEMPERATURE_SOURCE
     )
     assert {str(key.schema) for key in source_section.schema.schema} == {
-        CONF_EXTERNAL_TEMPERATURE_SOURCE
+        CONF_EXTERNAL_TEMPERATURE_SOURCE,
+        CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
+        CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
     }
 
     hass.config_entries.async_update_entry(
@@ -956,6 +1025,8 @@ async def test_options_flow_only_offers_the_overshoots_with_a_source(
     )
     assert {str(key.schema) for key in source_section.schema.schema} == {
         CONF_EXTERNAL_TEMPERATURE_SOURCE,
+        CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
+        CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
         CONF_OVERSHOOT_COOL,
         CONF_OVERSHOOT_DRY,
         CONF_OVERSHOOT_HEAT,

@@ -163,6 +163,10 @@ class ExternalTemperatureActiveBinarySensor(WfRacEntity, BinarySensorEntity):
 
     def _update_state(self) -> None:
         self._attr_is_on = self.coordinator.external_temperature_applied
+        # Which source the armed value comes from: main, fallback or none.
+        self._attr_extra_state_attributes = {
+            "source": self.coordinator.external_temperature_active_source
+        }
 
 
 class OccupancyBinarySensor(WfRacEntity, BinarySensorEntity):

@@ -153,12 +153,16 @@
             "description": "Kondicionieriui perduodama kambario temperatūra, išmatuota ten, kur jums svarbu, o ne prie jo paties oro įsiurbimo grotelių.",
             "data": {
               "external_temperature_source": "Jutiklis",
+              "external_temperature_fallback_source": "Atsarginis jutiklis",
+              "external_temperature_fallback_offset": "Atsarginio jutiklio poslinkis",
               "overshoot_cool": "Perviršis vėsinant",
               "overshoot_dry": "Perviršis džiovinant",
               "overshoot_heat": "Perviršis šildant"
             },
             "data_description": {
               "external_temperature_source": "Kondicionierius reguliuoja pagal šį jutiklį. Palikite tuščią, kad grįžtų prie savojo; esant „unavailable“ ar „unknown“ tas pat įvyks su kitu kadru. Šildant dauguma įrenginių patys prideda 2 °C prie nustatymo — kambaryje pastatytas jutiklis tai parodo; kaip tai išjungti pačiame įrenginyje, aprašyta README.",
+              "external_temperature_fallback_source": "Naudojamas, kol pagrindinis jutiklis „unavailable“ arba „unknown“. Be jo kondicionierius tada grįžta prie savojo jutiklio. Veikia tik nustačius pagrindinį jutiklį.",
+              "external_temperature_fallback_offset": "Pridedamas prie atsarginio jutiklio rodmens, kol jis pasiekia įrenginį, jutikliui, kuris rodo daugiau ar mažiau nei pagrindinis. Be atsarginio jutiklio nieko nekeičia.",
               "overshoot_cool": "Kiek kambarys peršoka jūsų nustatymą, kol kondicionierius sustoja. Nustatyta 22 °C, kambarys nusistovi ties 21,5 °C: įrašykite 0,5. Pradinė reikšmė 0,5, nes tiek reikia iki šiol išmatuotiems įrenginiams — pasižiūrėkite, kur nusistovi jūsų kambarys, ir pakoreguokite. Jei, priešingai, taip ir neatvėsta, įrašykite neigiamą skaičių. Galioja tik vėsinimo režimu — džiovinimas turi atskirą laukelį, o automatiniu režimu įrenginys gauna jūsų rodmenį nepakeistą.",
               "overshoot_dry": "Tas pat džiovinant — jis irgi vėsina, todėl ženklas toks pat. Pradinė reikšmė 0: vienintelis iki šiol išmatuotas įrenginys šiuo režimu nusistovėjo ties nustatymu, tik platesniu ruožu nei vėsinant. Jei jūsiškis peršoka, nustatykite tikslą, leiskite kambariui nusistovėti ir įrašykite, kiek jis peršoko.",
               "overshoot_heat": "Tas pat šildant: teigiamas, jei kambarys lieka virš jūsų nustatymo, neigiamas — jei žemiau."

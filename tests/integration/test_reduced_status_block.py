@@ -28,6 +28,8 @@ from custom_components.mitsubishi_wf_rac import (
     switch,
 )
 from custom_components.mitsubishi_wf_rac.const import (
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_OVERSHOOT_COOL,
     CONF_STATUS_REQUEST_MODE,
@@ -583,7 +585,9 @@ async def test_the_options_form_of_a_normal_unit_is_unchanged(hass: HomeAssistan
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert _form_sections(result)["indoor_temperature_source"] == {
-        CONF_EXTERNAL_TEMPERATURE_SOURCE
+        CONF_EXTERNAL_TEMPERATURE_SOURCE,
+        CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
+        CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
     }
 
 

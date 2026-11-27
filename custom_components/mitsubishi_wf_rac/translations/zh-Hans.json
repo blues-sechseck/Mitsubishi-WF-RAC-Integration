@@ -153,12 +153,16 @@
             "description": "把你真正在意的位置测得的室温交给空调，取代它自己回风口处的读数。",
             "data": {
               "external_temperature_source": "传感器",
+              "external_temperature_fallback_source": "备用传感器",
+              "external_temperature_fallback_offset": "备用传感器偏移",
               "overshoot_cool": "制冷过冲",
               "overshoot_dry": "除湿过冲",
               "overshoot_heat": "制热过冲"
             },
             "data_description": {
               "external_temperature_source": "空调按这个传感器的读数调节。留空即可让它回到自己的传感器；读数为 unavailable 或 unknown 时，也会在下一帧回退。制热时大多数机器会自行在设定值上加 2 °C，房间里的传感器会让这一点显现出来；如何在机器上关闭它，见 README。",
+              "external_temperature_fallback_source": "主传感器为 unavailable 或 unknown 时改用它。未设置时，空调在那段时间回到自己的传感器。仅在已设置主传感器时生效。",
+              "external_temperature_fallback_offset": "在把读数交给空调之前加到备用传感器的读数上，适用于读数比主传感器偏高或偏低的传感器。没有备用传感器时不起作用。",
               "overshoot_cool": "空调停机前房间越过设定值的幅度。设为 22 °C，房间稳定在 21.5 °C：填 0.5。默认从 0.5 开始，因为目前测过的机器都需要这个值——看看你自己的房间稳定在哪里再调整。若反而停得太早、始终不够凉，请填负数。仅在制冷模式生效——除湿有自己的字段，自动模式下机器直接使用你的读数。",
               "overshoot_dry": "除湿同理：它同样制冷，符号也相同。初始值为 0：目前唯一测过的机器在这个模式下正好停在设定值上，只是调节范围比制冷更宽。如果你的房间越过了设定值，设定一个目标温度，等房间稳定下来，再填入超出的度数。",
               "overshoot_heat": "制热同理：房间高于设定值填正数，低于设定值填负数。"

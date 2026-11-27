@@ -100,12 +100,16 @@
             "description": "Transmet à l'appareil une température mesurée dans la pièce, au lieu de celle qu'il lit à sa propre grille de reprise d'air.",
             "data": {
               "external_temperature_source": "Capteur",
+              "external_temperature_fallback_source": "Capteur de secours",
+              "external_temperature_fallback_offset": "Décalage du capteur de secours",
               "overshoot_cool": "Dépassement en refroidissement",
               "overshoot_dry": "Dépassement en déshumidification",
               "overshoot_heat": "Dépassement en chauffage"
             },
             "data_description": {
               "external_temperature_source": "L'appareil se régule sur ce capteur. Laissez vide pour le remettre sur son propre capteur. Un état indisponible ou inconnu produit le même effet à la trame suivante. En mode chauffage, la plupart des appareils ajoutent d'eux-mêmes 2 °C à la consigne, ce qu'un capteur placé dans la pièce rend visible ; le README explique comment le désactiver sur l'appareil.",
+              "external_temperature_fallback_source": "Utilisé tant que le capteur principal est indisponible ou inconnu. Sans lui, l'appareil revient alors à son propre capteur. N'agit qu'avec un capteur principal défini.",
+              "external_temperature_fallback_offset": "Ajouté à la mesure du capteur de secours avant qu'elle n'arrive à l'appareil, pour un capteur qui mesure plus haut ou plus bas que le principal. Sans effet sans capteur de secours.",
               "overshoot_cool": "De combien la température de la pièce dépasse votre consigne avant que l'appareil s'arrête. Avec une consigne de 22 °C, si la pièce se stabilise à 21,5 °C, saisissez 0,5. La valeur initiale est 0,5 car c'est ce dont les appareils mesurés jusqu'ici ont besoin ; vérifiez où se stabilise votre pièce et ajustez. Si l'appareil s'arrête trop tôt et que la pièce n'est jamais assez fraîche, saisissez un nombre négatif. Le quart de degré est le pas le plus fin que l'appareil accepte. S'applique uniquement en mode refroidissement : la déshumidification a son propre champ, et en mode auto l'appareil reçoit votre mesure sans correction.",
               "overshoot_dry": "La même chose pour la déshumidification, qui refroidit aussi et suit le même signe. Démarre à 0 : le seul appareil mesuré dans ce mode s'est stabilisé sur sa consigne, avec une plage plus large qu'en refroidissement. Si le vôtre la dépasse, définissez une consigne, laissez la pièce se stabiliser et saisissez de combien elle l'a dépassée.",
               "overshoot_heat": "La même chose pour le chauffage, uniquement en mode chauffage : positif si la pièce finit au-dessus de votre consigne, négatif si elle s'arrête en dessous."

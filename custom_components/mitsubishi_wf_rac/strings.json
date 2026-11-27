@@ -100,12 +100,16 @@
             "description": "Hand the unit a room temperature measured out in the room, instead of the one it reads at its own return air grille.",
             "data": {
               "external_temperature_source": "Sensor",
+              "external_temperature_fallback_source": "Fallback source",
+              "external_temperature_fallback_offset": "Fallback source offset",
               "overshoot_cool": "Cooling overshoot",
               "overshoot_dry": "Dry overshoot",
               "overshoot_heat": "Heating overshoot"
             },
             "data_description": {
               "external_temperature_source": "The unit regulates on this sensor. Leave it empty to put the unit back on its own sensor. Unavailable or unknown states do the same on the next frame. In heat mode most units add 2 °C to the setting on their own, which a sensor out in the room makes visible - the README says how to switch that off at the unit.",
+              "external_temperature_fallback_source": "Used while the main sensor is unavailable or unknown. Without it the unit goes back to its own sensor then. Only takes effect with a main sensor set.",
+              "external_temperature_fallback_offset": "Added to the fallback reading before the unit gets it, for a sensor that reads higher or lower than the main one. Has no effect without a fallback source.",
               "overshoot_cool": "How far the room goes past your setting before the unit stops. Set 22 °C and the room settles at 21.5 °C: enter 0.5. Starts at 0.5 because that is what the units measured so far need - check where your own room settles and adjust. If it stops short instead and never gets cold enough, enter a negative number. Quarter degrees are the finest step that reaches the unit. Applies in cool mode only - dry has a field of its own, and in auto the unit is handed your reading uncorrected.",
               "overshoot_dry": "The same for dry, which cools as well and takes the same sign. Opens on 0: the one unit measured in this mode landed on its setting, with a wider band than in cooling. If yours goes past it, set a target, let the room settle, and enter how far past it the room went.",
               "overshoot_heat": "The same for heating, and in heat mode only: positive if the room ends up above your setting, negative if it stops short of it."

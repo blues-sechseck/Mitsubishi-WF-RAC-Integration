@@ -153,12 +153,16 @@
             "description": "Gibt dem Gerät eine Raumtemperatur, die dort gemessen wird, wo es darauf ankommt, statt der am eigenen Ansauggitter.",
             "data": {
               "external_temperature_source": "Sensor",
+              "external_temperature_fallback_source": "Ersatzquelle",
+              "external_temperature_fallback_offset": "Versatz der Ersatzquelle",
               "overshoot_cool": "Überschwingen Kühlen",
               "overshoot_dry": "Überschwingen Trocknen",
               "overshoot_heat": "Überschwingen Heizen"
             },
             "data_description": {
               "external_temperature_source": "Das Gerät regelt auf diesen Sensor. Leer lassen, damit es wieder seinen eigenen benutzt; bei „unavailable“ oder „unknown“ geschieht dasselbe mit dem nächsten Frame. Beim Heizen legen die meisten Geräte von sich aus 2 °C auf die Einstellung — ein Sensor im Raum macht das sichtbar; wie sich das am Gerät abschalten lässt, steht im README.",
+              "external_temperature_fallback_source": "Wird benutzt, solange der Hauptsensor „unavailable“ oder „unknown“ meldet. Ohne sie geht das Gerät dann auf seinen eigenen Sensor zurück. Wirkt nur, wenn ein Hauptsensor gesetzt ist.",
+              "external_temperature_fallback_offset": "Wird zum Messwert der Ersatzquelle addiert, bevor das Gerät ihn bekommt — für einen Sensor, der höher oder niedriger misst als der Hauptsensor. Ohne Ersatzquelle ohne Wirkung.",
               "overshoot_cool": "Wie weit der Raum über Ihre Einstellung hinausschießt, bevor das Gerät abschaltet. 22 °C eingestellt, Raum pendelt sich bei 21,5 °C ein: 0,5 eintragen. Startet bei 0,5, weil die bisher gemessenen Geräte das brauchen — prüfen Sie, wo Ihr Raum landet, und passen Sie an. Bleibt er stattdessen darüber und wird nie kalt genug, tragen Sie eine negative Zahl ein. Viertelgrad ist der feinste Schritt, der beim Gerät ankommt. Gilt nur im Modus Kühlen — Trocknen hat ein eigenes Feld, im Automatikbetrieb bekommt das Gerät Ihren Messwert unverändert.",
               "overshoot_dry": "Dasselbe fürs Trocknen, das ebenfalls kühlt und dasselbe Vorzeichen hat. Startet bei 0: das bisher einzige gemessene Gerät landete in diesem Modus auf seiner Einstellung, mit breiterem Band als beim Kühlen. Schießt Ihres darüber hinaus, Ziel einstellen, den Raum einpendeln lassen und eintragen, wie weit er darüber hinausging.",
               "overshoot_heat": "Dasselbe fürs Heizen, und nur im Modus Heizen: positiv, wenn der Raum über Ihrer Einstellung landet, negativ, wenn er darunter bleibt."

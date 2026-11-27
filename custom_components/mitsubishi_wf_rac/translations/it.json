@@ -100,12 +100,16 @@
             "description": "Passa all'unità una temperatura misurata nella stanza, al posto di quella che legge alla propria griglia di ripresa dell'aria.",
             "data": {
               "external_temperature_source": "Sensore",
+              "external_temperature_fallback_source": "Sensore di riserva",
+              "external_temperature_fallback_offset": "Scostamento sensore di riserva",
               "overshoot_cool": "Superamento in raffrescamento",
               "overshoot_dry": "Superamento in deumidificazione",
               "overshoot_heat": "Superamento in riscaldamento"
             },
             "data_description": {
               "external_temperature_source": "L'unità regola in base a questo sensore. Lascialo vuoto per rimettere l'unità sul proprio sensore. Gli stati non disponibile o sconosciuto hanno lo stesso effetto al frame successivo. In modalità riscaldamento la maggior parte delle unità aggiunge da sola 2 °C all'impostazione, cosa che un sensore posto nella stanza rende visibile: il README spiega come disattivarlo sull'unità.",
+              "external_temperature_fallback_source": "Usato finché il sensore principale non è disponibile o è sconosciuto. Senza di esso l'unità torna al proprio sensore. Ha effetto solo con un sensore principale impostato.",
+              "external_temperature_fallback_offset": "Sommato alla lettura del sensore di riserva prima che l'unità la riceva, per un sensore che legge più alto o più basso del principale. Nessun effetto senza sensore di riserva.",
               "overshoot_cool": "Di quanto la stanza supera la tua impostazione prima che l'unità si fermi. Se imposti 22 °C e la stanza si assesta a 21,5 °C, inserisci 0,5. Parte da 0,5 perché è ciò che serve alle unità misurate finora: controlla dove si assesta la tua stanza e regola. Se invece si ferma troppo presto e la stanza non diventa mai abbastanza fredda, inserisci un numero negativo. Il quarto di grado è il passo più fine che l'unità riceve. Vale solo in modalità raffrescamento: la deumidificazione ha un campo proprio e in automatico all'unità viene passata la tua lettura senza correzione.",
               "overshoot_dry": "Lo stesso per la deumidificazione, che raffredda anch'essa e usa lo stesso segno. Parte da 0: l'unica unità misurata in questa modalità si è assestata sull'impostazione, con una banda più ampia rispetto al raffrescamento. Se la tua la supera, imposta un valore, lascia assestare la stanza e inserisci di quanto è andata oltre.",
               "overshoot_heat": "Lo stesso per il riscaldamento, e solo in modalità riscaldamento: positivo se la stanza finisce sopra la tua impostazione, negativo se si ferma sotto."

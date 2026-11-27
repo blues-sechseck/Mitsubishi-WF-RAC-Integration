@@ -324,6 +324,18 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """Return the integration-side external temperature override, if any."""
         return self.external_temperature.override
 
+    @property
+    def external_temperature_active_source(self) -> str:
+        """Which source the armed override comes from: main, fallback or none."""
+        return self.external_temperature.active_source
+
+    def set_external_temperature_active_source(self, source: str) -> None:
+        """Record which configured source the armed override comes from."""
+        if source != self.external_temperature.active_source:
+            self.external_temperature.set_active_source(source)
+            # Entities showing it do not wait for the next poll.
+            self.async_update_listeners()
+
     def set_external_temperature_override(self, value: float | None) -> None:
         """Set the integration-side override state.
 

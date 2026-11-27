@@ -114,6 +114,12 @@ SERVICE_DATA_SENSOR_TYPES = (
 # New offset constants
 CONF_INDOOR_OFFSET = "indoor_offset"
 CONF_EXTERNAL_TEMPERATURE_SOURCE = "external_temperature_source"
+CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE = "external_temperature_fallback_source"
+CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET = "external_temperature_fallback_offset"
+# Which of the two configured sources the injected value currently comes from.
+EXTERNAL_TEMPERATURE_SOURCE_MAIN = "main"
+EXTERNAL_TEMPERATURE_SOURCE_FALLBACK = "fallback"
+EXTERNAL_TEMPERATURE_SOURCE_NONE = "none"
 CONF_OUTDOOR_OFFSET = "outdoor_offset"
 CONF_TARGET_OFFSET = "target_offset"
 CONF_TARGET_OFFSET_COOL = "target_offset_cool"

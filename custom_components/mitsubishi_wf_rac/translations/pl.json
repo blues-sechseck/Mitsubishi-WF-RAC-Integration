@@ -100,12 +100,16 @@
             "description": "Przekazuje urządzeniu temperaturę zmierzoną w pomieszczeniu zamiast tej, którą odczytuje przy własnej kratce powrotnej.",
             "data": {
               "external_temperature_source": "Czujnik",
+              "external_temperature_fallback_source": "Czujnik zapasowy",
+              "external_temperature_fallback_offset": "Korekta czujnika zapasowego",
               "overshoot_cool": "Przeregulowanie chłodzenia",
               "overshoot_dry": "Przeregulowanie osuszania",
               "overshoot_heat": "Przeregulowanie grzania"
             },
             "data_description": {
               "external_temperature_source": "Urządzenie reguluje według tego czujnika. Pozostaw puste, aby urządzenie wróciło do własnego czujnika. Stany niedostępny lub nieznany robią to samo w następnej ramce. W trybie grzania większość urządzeń sama dodaje 2 °C do nastawy, co czujnik w pomieszczeniu uwidacznia - jak to wyłączyć w urządzeniu, opisuje README.",
+              "external_temperature_fallback_source": "Używany, dopóki główny czujnik jest niedostępny lub nieznany. Bez niego urządzenie wraca wtedy do własnego czujnika. Działa tylko przy ustawionym czujniku głównym.",
+              "external_temperature_fallback_offset": "Dodawana do odczytu czujnika zapasowego, zanim trafi do urządzenia - dla czujnika, który wskazuje więcej lub mniej niż główny. Bez czujnika zapasowego nie ma efektu.",
               "overshoot_cool": "O ile pomieszczenie przekracza Twoją nastawę, zanim urządzenie się zatrzyma. Przy nastawie 22 °C i temperaturze ustalającej się na 21,5 °C wpisz 0,5. Wartość początkowa to 0,5, bo tego potrzebują dotychczas zmierzone urządzenia - sprawdź, gdzie ustala się Twoje pomieszczenie, i dostosuj. Jeśli zamiast tego urządzenie zatrzymuje się za wcześnie i nigdy nie schładza wystarczająco, wpisz liczbę ujemną. Ćwierć stopnia to najmniejszy krok, który dociera do urządzenia. Dotyczy tylko trybu chłodzenia - osuszanie ma własne pole, a w trybie auto urządzenie dostaje Twój odczyt bez korekty.",
               "overshoot_dry": "To samo dla osuszania, które również chłodzi i ma ten sam znak. Zaczyna od 0: jedyne zmierzone w tym trybie urządzenie ustaliło się na nastawie, z szerszym pasmem niż przy chłodzeniu. Jeśli Twoje ją przekracza, ustaw wartość docelową, poczekaj, aż pomieszczenie się ustabilizuje, i wpisz, o ile ją przekroczyło.",
               "overshoot_heat": "To samo dla grzania i tylko w trybie grzania: dodatnie, jeśli pomieszczenie kończy powyżej Twojej nastawy, ujemne, jeśli zatrzymuje się poniżej niej."

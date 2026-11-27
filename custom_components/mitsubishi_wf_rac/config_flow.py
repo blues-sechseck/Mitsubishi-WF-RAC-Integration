@@ -36,6 +36,8 @@ from .const import (
     AC_CERT_FILENAME,
     CONF_AIRCO_ID,
     CONF_AVAILABILITY_RETRY_LIMIT,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_FIRMWARE_UPDATE_CHECK,
     CONF_INDOOR_OFFSET,
@@ -647,6 +649,8 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
             CONF_AVAILABILITY_RETRY_LIMIT,
             CONF_FIRMWARE_UPDATE_CHECK,
             CONF_EXTERNAL_TEMPERATURE_SOURCE,
+            CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
+            CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
             CONF_TARGET_OFFSET,
             CONF_TARGET_OFFSET_COOL,
             CONF_TARGET_OFFSET_HEAT,
@@ -659,6 +663,8 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
             # user to a place where it cannot be removed.
             keys -= {
                 CONF_EXTERNAL_TEMPERATURE_SOURCE,
+                CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
+                CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
                 CONF_OVERSHOOT_COOL,
                 CONF_OVERSHOOT_DRY,
                 CONF_OVERSHOOT_HEAT,
@@ -734,16 +740,9 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         # for some.
         overshoot_validator = degrees(OVERSHOOT_MAX, 0.25)
 
-        source_fields: dict[Any, Any] = {
-            # Keep this optional without a default: an omitted source must
-            # stay omitted, rather than becoming a falsey value that
-            # unnecessarily changes the saved options shape.
-            vol.Optional(
-                CONF_EXTERNAL_TEMPERATURE_SOURCE,
-                description={
-                    "suggested_value": options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
-                },
-            ): selector.EntitySelector(
+        def temperature_sensor() -> selector.EntitySelector:
+            """The picker both sources share."""
+            return selector.EntitySelector(
                 selector.EntitySelectorConfig(
                     domain="sensor",
                     device_class="temperature",
@@ -757,8 +756,42 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                     # only a convenience.
                     exclude_entities=self._own_entity_ids(),
                 )
-            ),
+            )
+
+        source_fields: dict[Any, Any] = {
+            # Keep this optional without a default: an omitted source must
+            # stay omitted, rather than becoming a falsey value that
+            # unnecessarily changes the saved options shape.
+            vol.Optional(
+                CONF_EXTERNAL_TEMPERATURE_SOURCE,
+                description={
+                    "suggested_value": options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
+                },
+            ): temperature_sensor(),
         }
+        if not self._reduced_status_block:
+            source_fields.update(
+                {
+                    # Takes over while the main source is unavailable or unusable. Same
+                    # omitted-means-unset rule as the main source.
+                    vol.Optional(
+                        CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
+                        description={
+                            "suggested_value": options.get(
+                                CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE
+                            )
+                        },
+                    ): temperature_sensor(),
+                    # For a fallback that measures somewhere else than the main source
+                    # (another room, a different height); only used with a fallback.
+                    vol.Optional(
+                        CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
+                        default=options.get(
+                            CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET, 0.0
+                        ),
+                    ): degrees(10.0, 0.1),
+                }
+            )
         # Tied to the source picker on purpose, and not because the correction
         # needs one: ExternalTemperatureFeed.corrected() bends whatever value is
         # armed, including one set from the action. A source entity is what

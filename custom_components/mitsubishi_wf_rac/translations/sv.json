@@ -100,12 +100,16 @@
             "description": "Ge enheten en rumstemperatur uppmätt ute i rummet, i stället för den som den läser av vid sitt eget returluftsgaller.",
             "data": {
               "external_temperature_source": "Sensor",
+              "external_temperature_fallback_source": "Reservsensor",
+              "external_temperature_fallback_offset": "Justering av reservsensor",
               "overshoot_cool": "Översläpp vid kyla",
               "overshoot_dry": "Översläpp vid avfuktning",
               "overshoot_heat": "Översläpp vid värme"
             },
             "data_description": {
               "external_temperature_source": "Enheten reglerar efter den här sensorn. Lämna tomt för att låta enheten gå tillbaka till sin egen sensor. Otillgängliga eller okända tillstånd gör detsamma i nästa ram. I värmeläge lägger de flesta enheter själva till 2 °C på inställningen, vilket syns när en sensor sitter ute i rummet – README förklarar hur du stänger av det på enheten.",
+              "external_temperature_fallback_source": "Används så länge huvudsensorn är otillgänglig eller okänd. Utan den går enheten då tillbaka till sin egen sensor. Gäller bara när en huvudsensor är angiven.",
+              "external_temperature_fallback_offset": "Läggs till reservsensorns avläsning innan enheten får den, för en sensor som visar högre eller lägre än huvudsensorn. Utan reservsensor har den ingen effekt.",
               "overshoot_cool": "Hur långt rummet går förbi din inställning innan enheten stannar. Ställ in 22 °C och rummet landar på 21,5 °C: ange 0,5. Börjar på 0,5 eftersom det är vad de hittills uppmätta enheterna behöver – kontrollera var ditt eget rum landar och justera. Om det i stället stannar för tidigt och aldrig blir tillräckligt kallt, ange ett negativt tal. Kvarts grader är det finaste steg som når enheten. Gäller bara i kylläge – avfuktning har ett eget fält, och i auto får enheten din avläsning okorrigerad.",
               "overshoot_dry": "Detsamma för avfuktning, som också kyler och har samma tecken. Börjar på 0: den enda enhet som mättes i det här läget landade på sin inställning, med ett bredare band än vid kyla. Om din går förbi den, ställ in ett mål, låt rummet stabiliseras och ange hur långt förbi rummet gick.",
               "overshoot_heat": "Detsamma för värme, och bara i värmeläge: positivt om rummet hamnar över din inställning, negativt om det stannar under den."

@@ -100,12 +100,16 @@
             "description": "Entrega a la unidad una temperatura ambiente medida en la propia estancia, en lugar de la que lee en su rejilla de retorno de aire.",
             "data": {
               "external_temperature_source": "Sensor",
+              "external_temperature_fallback_source": "Sensor de respaldo",
+              "external_temperature_fallback_offset": "Compensación del sensor de respaldo",
               "overshoot_cool": "Sobrepaso en refrigeración",
               "overshoot_dry": "Sobrepaso en deshumidificación",
               "overshoot_heat": "Sobrepaso en calefacción"
             },
             "data_description": {
               "external_temperature_source": "La unidad regula según este sensor. Déjalo vacío para que la unidad vuelva a usar el suyo. Un estado no disponible o desconocido tiene el mismo efecto en el siguiente mensaje. En modo calefacción, la mayoría de las unidades suman 2 °C a la consigna por su cuenta, algo que se hace visible con un sensor colocado en la estancia; el README explica cómo desactivarlo en la unidad.",
+              "external_temperature_fallback_source": "Se usa mientras el sensor principal no está disponible o es desconocido. Sin él, la unidad vuelve a su propio sensor. Solo actúa si hay un sensor principal.",
+              "external_temperature_fallback_offset": "Se suma a la lectura del sensor de respaldo antes de pasársela a la unidad, para un sensor que marca más o menos que el principal. No tiene efecto sin sensor de respaldo.",
               "overshoot_cool": "Cuánto se pasa la estancia de tu consigna antes de que la unidad se detenga. Si fijas 22 °C y la estancia se estabiliza en 21,5 °C, introduce 0,5. Empieza en 0,5 porque es lo que han necesitado las unidades medidas hasta ahora: comprueba en qué valor se estabiliza tu estancia y ajústalo. Si, por el contrario, se queda corta y nunca llega a enfriar lo suficiente, introduce un número negativo. Los cuartos de grado son el paso más fino que llega a la unidad. Se aplica solo en modo refrigeración: la deshumidificación tiene su propio campo y en automático se entrega a la unidad tu lectura sin corregir.",
               "overshoot_dry": "Lo mismo para la deshumidificación, que también enfría y usa el mismo signo. Empieza en 0: la única unidad medida en este modo se estabilizó en su consigna, con una banda más amplia que en refrigeración. Si la tuya se pasa, fija un objetivo, deja que la estancia se estabilice e introduce cuánto se ha pasado.",
               "overshoot_heat": "Lo mismo para la calefacción, y solo en modo calefacción: positivo si la estancia acaba por encima de tu consigna, negativo si se queda por debajo."

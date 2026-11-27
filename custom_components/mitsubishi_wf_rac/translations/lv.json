@@ -100,12 +100,16 @@
             "description": "Nodot ierīcei telpā izmērītu telpas temperatūru, nevis to, ko tā nolasa pie sava atgaisa režģa.",
             "data": {
               "external_temperature_source": "Sensors",
+              "external_temperature_fallback_source": "Rezerves sensors",
+              "external_temperature_fallback_offset": "Rezerves sensora nobīde",
               "overshoot_cool": "Pārsniegums dzesēšanā",
               "overshoot_dry": "Pārsniegums sausināšanā",
               "overshoot_heat": "Pārsniegums apsildē"
             },
             "data_description": {
               "external_temperature_source": "Ierīce regulē pēc šī sensora. Atstājiet tukšu, lai ierīci atgrieztu pie sava sensora. Nepieejami vai nezināmi stāvokļi dara to pašu nākamajā kadrā. Apsildes režīmā lielākā daļa ierīču pašas pieskaita iestatījumam 2 °C, kas kļūst redzams, ja sensors atrodas telpā — README paskaidro, kā to izslēgt ierīcē.",
+              "external_temperature_fallback_source": "Tiek izmantots, kamēr galvenais sensors ir nepieejams vai nezināms. Bez tā ierīce tad atgriežas pie sava sensora. Darbojas tikai tad, ja ir iestatīts galvenais sensors.",
+              "external_temperature_fallback_offset": "Tiek pieskaitīta rezerves sensora rādījumam, pirms tas nonāk pie ierīces, sensoram, kas rāda augstāk vai zemāk par galveno. Bez rezerves sensora nav nekādas ietekmes.",
               "overshoot_cool": "Cik tālu telpa aiziet pāri jūsu iestatījumam, pirms ierīce apstājas. Iestatiet 22 °C, un telpa nostabilizējas pie 21,5 °C: ievadiet 0,5. Sākuma vērtība ir 0,5, jo tas ir nepieciešams līdz šim izmērītajām ierīcēm — pārbaudiet, kur nostabilizējas jūsu telpa, un pielāgojiet. Ja tā tā vietā apstājas par agru un nekad nekļūst pietiekami auksta, ievadiet negatīvu skaitli. Ceturtdaļgrādi ir smalkākais solis, kas sasniedz ierīci. Attiecas tikai uz dzesēšanas režīmu — sausināšanai ir savs lauks, un režīmā auto ierīcei tiek nodots jūsu rādījums bez korekcijas.",
               "overshoot_dry": "Tas pats sausināšanai, kas arī dzesē un ņem to pašu zīmi. Sākas ar 0: vienīgā šajā režīmā izmērītā ierīce nonāca pie sava iestatījuma, ar platāku joslu nekā dzesēšanā. Ja jūsējā iet tam pāri, iestatiet mērķi, ļaujiet telpai nostabilizēties un ievadiet, cik tālu telpa pārsniedza.",
               "overshoot_heat": "Tas pats apsildei, un tikai apsildes režīmā: pozitīvs, ja telpa nonāk virs jūsu iestatījuma, negatīvs, ja apstājas zem tā."

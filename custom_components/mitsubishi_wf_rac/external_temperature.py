@@ -29,6 +29,7 @@ from .const import (
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
+    EXTERNAL_TEMPERATURE_SOURCE_NONE,
     OPERATION_MODE_COOL,
     OPERATION_MODE_DRY,
     OPERATION_MODE_HEAT,
@@ -65,6 +66,19 @@ class ExternalTemperatureFeed:
         # sentinel instead, so clearing on our side is only half of letting
         # go. Cleared again by the frame that does it - see note_frame().
         self._release_pending = False
+        # Which configured source the armed value came from. Kept apart from
+        # the value so a switch between sources that lands on the same
+        # protocol value is visible without being a change to send.
+        self._active_source = EXTERNAL_TEMPERATURE_SOURCE_NONE
+
+    @property
+    def active_source(self) -> str:
+        """Which source the armed value comes from: main, fallback or none."""
+        return self._active_source
+
+    def set_active_source(self, source: str) -> None:
+        """Record where the armed value came from; sends nothing."""
+        self._active_source = source
 
     @property
     def override(self) -> float | None:

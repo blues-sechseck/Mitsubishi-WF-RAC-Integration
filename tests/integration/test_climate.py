@@ -24,6 +24,8 @@ from custom_components.mitsubishi_wf_rac import climate as climate_module
 from custom_components.mitsubishi_wf_rac.climate import AircoClimate
 from custom_components.mitsubishi_wf_rac.const import (
     ATTR_TARGET_TEMPERATURE,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_INDOOR_OFFSET,
     CONF_OVERSHOOT_COOL,
@@ -611,6 +613,127 @@ async def test_external_temperature_source_clears_on_an_unusable_value(
 
     assert entity._external_temperature_override is None
     assert device.external_temperature_override is None
+    entity._call_on_remove_callbacks()
+
+
+def _with_fallback(device: Device, offset: float | None = None) -> tuple[str, str]:
+    main = "sensor.living_room_temperature"
+    fallback = "sensor.hallway_temperature"
+    options: dict = {
+        CONF_EXTERNAL_TEMPERATURE_SOURCE: main,
+        CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE: fallback,
+    }
+    if offset is not None:
+        options[CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET] = offset
+    _set_options(device, options)
+    return main, fallback
+
+
+async def test_fallback_source_takes_over_and_hands_back(device):
+    main, fallback = _with_fallback(device, offset=-1.0)
+    states = device.hass.states
+    states.async_set(main, "21", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    states.async_set(fallback, "23", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+    assert entity._external_temperature_override == 21.0
+    assert device.external_temperature_active_source == "main"
+
+    # Main gone: the fallback reading plus its offset is what gets armed.
+    states.async_set(main, STATE_UNAVAILABLE)
+    await device.hass.async_block_till_done()
+    assert entity._external_temperature_override == 22.0
+    assert device.external_temperature_override == 22.0
+    assert device.external_temperature_active_source == "fallback"
+
+    # The fallback follows its own changes while it is in use.
+    states.async_set(fallback, "23.5", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    await device.hass.async_block_till_done()
+    assert entity._external_temperature_override == 22.5
+
+    # Main back: it wins again.
+    states.async_set(main, "20", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    await device.hass.async_block_till_done()
+    assert entity._external_temperature_override == 20.0
+    assert device.external_temperature_active_source == "main"
+    entity._call_on_remove_callbacks()
+
+
+async def test_both_sources_unusable_releases_the_unit(device):
+    main, fallback = _with_fallback(device)
+    states = device.hass.states
+    states.async_set(main, STATE_UNKNOWN)
+    states.async_set(fallback, "22", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+    assert entity._external_temperature_override == 22.0
+    assert device.external_temperature_active_source == "fallback"
+
+    states.async_set(fallback, STATE_UNAVAILABLE)
+    await device.hass.async_block_till_done()
+
+    assert entity._external_temperature_override is None
+    assert device.external_temperature_override is None
+    assert device.external_temperature_active_source == "none"
+    entity._call_on_remove_callbacks()
+
+
+async def test_unusable_main_value_falls_back_too(device):
+    main, fallback = _with_fallback(device)
+    states = device.hass.states
+    states.async_set(main, "120", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    states.async_set(fallback, "22", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+
+    assert entity._external_temperature_override == 22.0
+    entity._call_on_remove_callbacks()
+
+
+async def test_fallback_offset_pushing_out_of_range_releases(device):
+    main, fallback = _with_fallback(device, offset=10.0)
+    states = device.hass.states
+    states.async_set(main, STATE_UNAVAILABLE)
+    states.async_set(fallback, "45", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+
+    assert entity._external_temperature_override is None
+    assert device.external_temperature_active_source == "none"
+    entity._call_on_remove_callbacks()
+
+
+async def test_switching_source_with_the_same_value_sends_nothing_new(device):
+    main, fallback = _with_fallback(device)
+    states = device.hass.states
+    states.async_set(main, "21", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    states.async_set(fallback, "21", {ATTR_UNIT_OF_MEASUREMENT: "°C"})
+    entity = _service_entity(device)
+    set_override = MagicMock(wraps=device.set_external_temperature_override)
+    device.set_external_temperature_override = set_override
+    await entity.async_added_to_hass()
+    set_override.reset_mock()
+
+    states.async_set(main, STATE_UNAVAILABLE)
+    await device.hass.async_block_till_done()
+
+    set_override.assert_not_called()
+    assert device.external_temperature_active_source == "fallback"
+    entity._call_on_remove_callbacks()
+
+
+async def test_fallback_is_ignored_without_a_main_source(device):
+    _set_options(
+        device,
+        {CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE: "sensor.hallway_temperature"},
+    )
+    device.hass.states.async_set(
+        "sensor.hallway_temperature", "22", {ATTR_UNIT_OF_MEASUREMENT: "°C"}
+    )
+    entity = _service_entity(device)
+    await entity.async_added_to_hass()
+
+    assert entity._external_temperature_override is None
     entity._call_on_remove_callbacks()
 
 

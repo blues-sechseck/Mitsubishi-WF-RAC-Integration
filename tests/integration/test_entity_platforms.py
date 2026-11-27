@@ -308,6 +308,21 @@ async def test_external_temperature_active_sensor_shows_when_it_took_effect(
     assert entity.is_on is False
 
 
+async def test_external_temperature_active_sensor_names_the_source_in_use(
+    platform_device,
+):
+    entity = binary_sensor.ExternalTemperatureActiveBinarySensor(platform_device)
+    assert entity.extra_state_attributes == {"source": "none"}
+
+    platform_device.set_external_temperature_active_source("fallback")
+    entity._update_state()
+    assert entity.extra_state_attributes == {"source": "fallback"}
+
+    platform_device.set_external_temperature_active_source("main")
+    entity._update_state()
+    assert entity.extra_state_attributes == {"source": "main"}
+
+
 @pytest.mark.parametrize(
     ("capture", "mode", "action"),
     [

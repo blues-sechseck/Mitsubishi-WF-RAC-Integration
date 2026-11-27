@@ -50,9 +50,14 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import MitsubishiWfRacConfigEntry
 from .const import (
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
+    CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
     CONF_EXTERNAL_TEMPERATURE_SOURCE,
     CONF_INDOOR_OFFSET,
     DOMAIN,
+    EXTERNAL_TEMPERATURE_SOURCE_FALLBACK,
+    EXTERNAL_TEMPERATURE_SOURCE_MAIN,
+    EXTERNAL_TEMPERATURE_SOURCE_NONE,
     FAN_MODE_TRANSLATION,
     HOME_LEAVE_SETPOINT_CEILING,
     HOME_LEAVE_TEMP_COOL,
@@ -223,9 +228,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         else:
             # A source's current state is more authoritative than restore data:
             # the latter can be stale precisely when the source stopped reporting.
-            self._set_external_temperature_from_source_state(
-                self.hass.states.get(source)
-            )
+            self._set_external_temperature_from_sources()
             if (
                 self._external_temperature_override is None
                 and _stored_external_temperature_is_set(stored)
@@ -236,9 +239,13 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
                 # cannot know the unit is still holding that value - only this
                 # entity's restored state says so.
                 self.coordinator.request_external_temperature_release()
+            watched = [source]
+            fallback = self._external_temperature_fallback_source
+            if fallback is not None:
+                watched.append(fallback)
             self.async_on_remove(
                 async_track_state_change_event(
-                    self.hass, source, self._handle_external_temperature_source_change
+                    self.hass, watched, self._handle_external_temperature_source_change
                 )
             )
         # No async_write_ha_state() here: the platform writes the state itself
@@ -251,10 +258,22 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         source = self.coordinator.options.get(CONF_EXTERNAL_TEMPERATURE_SOURCE)
         return source if isinstance(source, str) and source else None
 
+    @property
+    def _external_temperature_fallback_source(self) -> str | None:
+        """Return the fallback source, which only counts next to a main source."""
+        if self._external_temperature_source is None:
+            return None
+        source = self.coordinator.options.get(CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE)
+        return source if isinstance(source, str) and source else None
+
     def _external_temperature_from_source_state(
-        self, state: State | None
+        self, state: State | None, offset: float = 0.0
     ) -> float | None:
-        """Convert a usable source state to the quarter-degree protocol grid."""
+        """Convert a usable source state to the quarter-degree protocol grid.
+
+        The offset is added before snapping, so what is compared and sent is
+        the corrected value.
+        """
         if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             return None
         try:
@@ -277,7 +296,7 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
 
         # Compare protocol values, not raw sensor precision: otherwise tiny
         # changes which encode identically would keep waking the write carrier.
-        value = round(value * 4) / 4
+        value = round((value + offset) * 4) / 4
         if not EXTERNAL_TEMPERATURE_MIN <= value <= EXTERNAL_TEMPERATURE_MAX:
             _LOGGER.warning(
                 "Clearing the external temperature override: source value %s °C is "
@@ -299,19 +318,48 @@ class AircoClimate(WfRacEntity, ClimateEntity, RestoreEntity):
         self._apply_state()
         self.async_write_ha_state()
 
-    def _set_external_temperature_from_source_state(self, state: State | None) -> None:
-        """Apply a source state only when its encoded value changes."""
-        temperature = self._external_temperature_from_source_state(state)
-        if temperature == self._external_temperature_override:
+    def _set_external_temperature_from_sources(self) -> None:
+        """Arm the main source's value, else the fallback's, else release.
+
+        Both are read from the state machine rather than from the event that
+        woke us: either one changing can change which of them is in use. Only
+        a changed protocol value is armed, so a switch between sources that
+        lands on the same value costs no frame.
+        """
+        main = self._external_temperature_source
+        if main is None:
             return
-        self._set_external_temperature_override(temperature, from_source=True)
+        temperature = self._external_temperature_from_source_state(
+            self.hass.states.get(main)
+        )
+        active = EXTERNAL_TEMPERATURE_SOURCE_MAIN
+        fallback = self._external_temperature_fallback_source
+        if temperature is None and fallback is not None:
+            offset = self.coordinator.options.get(
+                CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET, 0.0
+            )
+            temperature = self._external_temperature_from_source_state(
+                self.hass.states.get(fallback),
+                float(offset) if isinstance(offset, (int, float)) else 0.0,
+            )
+            active = EXTERNAL_TEMPERATURE_SOURCE_FALLBACK
+        if temperature is None:
+            active = EXTERNAL_TEMPERATURE_SOURCE_NONE
+        source_changed = active != self.coordinator.external_temperature_active_source
+        if source_changed:
+            self.coordinator.set_external_temperature_active_source(active)
+        if temperature != self._external_temperature_override:
+            self._set_external_temperature_override(temperature, from_source=True)
+        elif source_changed:
+            self._apply_state()
+            self.async_write_ha_state()
 
     @callback
     def _handle_external_temperature_source_change(
         self, event: Event[EventStateChangedData]
     ) -> None:
-        """Keep the override tied to the source's availability and value."""
-        self._set_external_temperature_from_source_state(event.data["new_state"])
+        """Keep the override tied to the sources' availability and values."""
+        self._set_external_temperature_from_sources()
 
     def _restore_external_temperature_override(
         self, stored: ExtraStoredData | None

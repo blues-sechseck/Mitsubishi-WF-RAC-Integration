@@ -100,12 +100,16 @@
             "description": "Cihaza, kendi dönüş havası ızgarasında okuduğu sıcaklık yerine odada ölçülen bir oda sıcaklığı verir.",
             "data": {
               "external_temperature_source": "Sensör",
+              "external_temperature_fallback_source": "Yedek sensör",
+              "external_temperature_fallback_offset": "Yedek sensör sapması",
               "overshoot_cool": "Soğutma aşımı",
               "overshoot_dry": "Nem alma aşımı",
               "overshoot_heat": "Isıtma aşımı"
             },
             "data_description": {
               "external_temperature_source": "Cihaz bu sensöre göre düzenleme yapar. Cihazı kendi sensörüne geri vermek için boş bırakın. Kullanılamıyor veya bilinmiyor durumları bir sonraki çerçevede aynı etkiyi yapar. Isıtma modunda çoğu cihaz ayara kendiliğinden 2 °C ekler; odadaki bir sensör bunu görünür kılar - bunun cihazda nasıl kapatılacağı README dosyasında anlatılıyor.",
+              "external_temperature_fallback_source": "Ana sensör kullanılamıyor veya bilinmiyor durumundayken kullanılır. Ayarlanmazsa cihaz o sırada kendi sensörüne döner. Yalnızca bir ana sensör ayarlıysa etkilidir.",
+              "external_temperature_fallback_offset": "Cihaza verilmeden önce yedek sensörün okumasına eklenir; ana sensörden yüksek veya düşük ölçen bir sensör için. Yedek sensör yoksa etkisi yoktur.",
               "overshoot_cool": "Cihaz durmadan önce odanın ayarınızı ne kadar aştığı. 22 °C ayarlarsanız ve oda 21,5 °C'de dengeleniyorsa 0,5 girin. 0,5 ile başlar, çünkü şimdiye kadar ölçülen cihazların ihtiyacı budur - kendi odanızın nerede dengelendiğine bakın ve ayarlayın. Bunun yerine oda yetersiz kalıyor ve yeterince soğumuyorsa negatif bir sayı girin. Çeyrek derece, cihaza ulaşan en küçük adımdır. Yalnızca soğutma modunda geçerlidir - nem almanın kendi alanı var ve otomatikte cihaza değeriniz düzeltilmeden verilir.",
               "overshoot_dry": "Nem alma için aynısı; o da soğutur ve aynı işareti taşır. 0 ile açılır: bu modda ölçülen tek cihaz ayarına oturdu, soğutmadakinden daha geniş bir bantla. Sizinki aşıyorsa bir hedef ayarlayın, odanın dengelenmesini bekleyin ve odanın hedefi ne kadar aştığını girin.",
               "overshoot_heat": "Isıtma için aynısı ve yalnızca ısıtma modunda: oda ayarınızın üzerinde sonlanıyorsa pozitif, altında kalıyorsa negatif."
