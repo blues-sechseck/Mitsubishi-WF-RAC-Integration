@@ -404,6 +404,9 @@
       "indoor_coil_outlet_raw": {
         "name": "室內熱交換器出口溫度（原始）"
       },
+      "outdoor_coil_temp": {
+        "name": "室外熱交換器溫度"
+      },
       "outdoor_coil_raw": {
         "name": "室外熱交換器溫度（原始）"
       },

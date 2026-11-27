@@ -404,6 +404,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Vidaus šilumokaičio išėjimo temperatūra (neapdorota)"
       },
+      "outdoor_coil_temp": {
+        "name": "Lauko šilumokaičio temperatūra"
+      },
       "outdoor_coil_raw": {
         "name": "Lauko šilumokaičio temperatūra (neapdorota)"
       },

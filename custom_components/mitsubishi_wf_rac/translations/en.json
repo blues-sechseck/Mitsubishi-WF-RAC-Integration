@@ -287,6 +287,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Indoor coil outlet temperature (raw)"
       },
+      "outdoor_coil_temp": {
+        "name": "Outdoor coil temperature"
+      },
       "outdoor_coil_raw": {
         "name": "Outdoor coil temperature (raw)"
       },

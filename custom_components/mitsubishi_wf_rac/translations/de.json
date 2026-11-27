@@ -404,6 +404,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Innen-Wärmetauscher Austritt Temperatur (Rohwert)"
       },
+      "outdoor_coil_temp": {
+        "name": "Außen-Wärmetauscher Temperatur"
+      },
       "outdoor_coil_raw": {
         "name": "Außen-Wärmetauscher Temperatur (Rohwert)"
       },

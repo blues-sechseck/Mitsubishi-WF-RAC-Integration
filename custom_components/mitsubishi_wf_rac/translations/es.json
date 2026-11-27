@@ -287,6 +287,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Temperatura de salida de la batería interior (sin procesar)"
       },
+      "outdoor_coil_temp": {
+        "name": "Temperatura de la batería exterior"
+      },
       "outdoor_coil_raw": {
         "name": "Temperatura de la batería exterior (sin procesar)"
       },

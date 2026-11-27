@@ -287,6 +287,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Temperatura wylotu wymiennika wewnętrznego (surowa)"
       },
+      "outdoor_coil_temp": {
+        "name": "Temperatura wymiennika zewnętrznego"
+      },
       "outdoor_coil_raw": {
         "name": "Temperatura wymiennika zewnętrznego (surowa)"
       },

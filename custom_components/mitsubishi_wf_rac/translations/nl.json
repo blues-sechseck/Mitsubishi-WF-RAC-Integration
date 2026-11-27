@@ -404,6 +404,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Binnenunit warmtewisselaar uitlaattemperatuur (onbewerkt)"
       },
+      "outdoor_coil_temp": {
+        "name": "Buitenunit warmtewisselaar temperatuur"
+      },
       "outdoor_coil_raw": {
         "name": "Buitenunit warmtewisselaar temperatuur (onbewerkt)"
       },

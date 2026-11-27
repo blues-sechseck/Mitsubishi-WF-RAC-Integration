@@ -287,6 +287,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Iekštelpu siltummaiņa izejas temperatūra (neapstrādāta)"
       },
+      "outdoor_coil_temp": {
+        "name": "Ārējā siltummaiņa temperatūra"
+      },
       "outdoor_coil_raw": {
         "name": "Ārējā siltummaiņa temperatūra (neapstrādāta)"
       },

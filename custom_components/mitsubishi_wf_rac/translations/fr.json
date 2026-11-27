@@ -287,6 +287,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Température de sortie de l'échangeur intérieur (brute)"
       },
+      "outdoor_coil_temp": {
+        "name": "Température de l'échangeur extérieur"
+      },
       "outdoor_coil_raw": {
         "name": "Température de l'échangeur extérieur (brute)"
       },

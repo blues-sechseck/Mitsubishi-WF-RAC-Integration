@@ -59,6 +59,7 @@ from .const import (
     ATTR_OPERATING_CURRENT,
     ATTR_OPERATING_CURRENT_RAW,
     ATTR_OUTDOOR_COIL_RAW,
+    ATTR_OUTDOOR_COIL_TEMP,
     ATTR_OUTSIDE_TEMPERATURE,
     ATTR_PROTECTION_RAW,
     ATTR_TARGET_TEMPERATURE,
@@ -141,6 +142,7 @@ async def async_setup_entry(
             ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_TEMP),
             ServiceDataSensor(device, ATTR_INDOOR_COIL_RAW),
             ServiceDataSensor(device, ATTR_INDOOR_COIL_OUTLET_RAW),
+            ServiceDataSensor(device, ATTR_OUTDOOR_COIL_TEMP),
             ServiceDataSensor(device, ATTR_OUTDOOR_COIL_RAW),
             ServiceDataSensor(device, ATTR_DISCHARGE_SUPERHEAT_RAW),
             ServiceDataSensor(device, ATTR_PROTECTION_RAW),
@@ -497,6 +499,7 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
         ATTR_INDOOR_COIL_OUTLET_TEMP: "IndoorCoilOutletTemp",
         ATTR_INDOOR_COIL_RAW: "IndoorCoilRaw",
         ATTR_INDOOR_COIL_OUTLET_RAW: "IndoorCoilOutletRaw",
+        ATTR_OUTDOOR_COIL_TEMP: "OutdoorCoilTemp",
         ATTR_OUTDOOR_COIL_RAW: "OutdoorCoilRaw",
         ATTR_DISCHARGE_SUPERHEAT_RAW: "DischargeSuperheatRaw",
         ATTR_PROTECTION_RAW: "ProtectionRaw",
@@ -526,7 +529,11 @@ class ServiceDataSensor(WfRacEntity, SensorEntity):
             self._attr_native_unit_of_measurement = "pulses"
         elif custom_type == ATTR_EEV_POSITION:
             self._attr_native_unit_of_measurement = PERCENTAGE
-        elif custom_type in (ATTR_INDOOR_COIL_TEMP, ATTR_INDOOR_COIL_OUTLET_TEMP):
+        elif custom_type in (
+            ATTR_INDOOR_COIL_TEMP,
+            ATTR_INDOOR_COIL_OUTLET_TEMP,
+            ATTR_OUTDOOR_COIL_TEMP,
+        ):
             self._attr_device_class = SensorDeviceClass.TEMPERATURE
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         elif custom_type == ATTR_INDOOR_HUMIDITY:

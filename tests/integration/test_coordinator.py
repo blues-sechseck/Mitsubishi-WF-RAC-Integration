@@ -2628,6 +2628,19 @@ async def test_unconvertible_coil_reading_is_not_carried_forward(device):
     assert new_airco.IndoorCoilTemp is None
 
 
+async def test_unconvertible_outdoor_coil_reading_is_not_carried_forward(device):
+    device._airco.OutdoorCoilTemp = 4.0
+    device._airco.OutdoorCoilRaw = 30
+    device.service_data._last_response = dt_util.utcnow()
+    new_airco = Aircon()
+    new_airco.OutdoorCoilRaw = 0  # arrived, but carries no temperature
+
+    device.service_data.carry_forward(new_airco)
+
+    assert new_airco.OutdoorCoilRaw == 0
+    assert new_airco.OutdoorCoilTemp is None
+
+
 async def test_hot_gas_below_its_range_is_not_carried_forward(device):
     """Below 0x12 the byte only says "30 °C or colder", so a unit standing
     still must not keep showing the discharge temperature of its last run.

@@ -141,9 +141,10 @@ SERVICE_DATA_INTERVALS: Final[dict[int, timedelta]] = {
     SERVICE_DATA_INDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_INDOOR_COIL_OUTLET_RAW: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_HOT_GAS_TEMP: SERVICE_DATA_INTERVAL_FAST,
-    SERVICE_DATA_OUTDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_MEDIUM,
+    # A defrost lasts only a few minutes, so the outdoor coil is read every poll.
+    SERVICE_DATA_OUTDOOR_COIL_RAW: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_HUMIDITY: SERVICE_DATA_INTERVAL_MEDIUM,
-    # A hot start lasts one to four minutes, so anything slower can miss it.
+    # A hot start lasts about two to six minutes, so anything slower can miss it.
     SERVICE_DATA_HOT_START: SERVICE_DATA_INTERVAL_FAST,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW: SERVICE_DATA_INTERVAL_SLOW,
     SERVICE_DATA_PROTECTION_RAW: SERVICE_DATA_INTERVAL_SLOW,
@@ -207,6 +208,7 @@ SERVICE_DATA_FIELDS = (
     "IndoorCoilOutletTemp",
     "IndoorCoilRaw",
     "IndoorCoilOutletRaw",
+    "OutdoorCoilTemp",
     "OutdoorCoilRaw",
     "DischargeSuperheatRaw",
     "ProtectionRaw",
@@ -242,12 +244,13 @@ RESEARCH_SERVICE_DATA_CODES: Final = (
     0xB0,
     0xD2,
     0xD5,
+    0x05,  # the setpoint the unit works with internally
 )
 RESEARCH_CONTEXT: Final = "research_data"
 
 # Research codes asked in every request once they answer, instead of waiting
-# for their turn in the rotation: 0x0D shows a state for about ten minutes
-# after some heating starts, shorter than one trip through the rotation.
+# for their turn in the rotation: 0x0D shows a state for about two to six
+# minutes after some heating starts, shorter than one trip through the rotation.
 RESEARCH_PINNED_CODES: Final = (0x0D,)
 
 
@@ -356,6 +359,7 @@ SERVICE_DATA_DERIVED_FROM = {
     "IndoorHumidity": "IndoorHumidityRaw",
     "IndoorCoilTemp": "IndoorCoilRaw",
     "IndoorCoilOutletTemp": "IndoorCoilOutletRaw",
+    "OutdoorCoilTemp": "OutdoorCoilRaw",
     "HotGasTemp": "HotGasTempRaw",
 }
 

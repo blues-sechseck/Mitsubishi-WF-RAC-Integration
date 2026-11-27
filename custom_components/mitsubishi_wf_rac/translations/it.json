@@ -287,6 +287,9 @@
       "indoor_coil_outlet_raw": {
         "name": "Temperatura di uscita della batteria interna (grezza)"
       },
+      "outdoor_coil_temp": {
+        "name": "Temperatura della batteria esterna"
+      },
       "outdoor_coil_raw": {
         "name": "Temperatura della batteria esterna (grezza)"
       },

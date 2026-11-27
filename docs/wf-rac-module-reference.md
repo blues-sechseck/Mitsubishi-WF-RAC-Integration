@@ -816,12 +816,12 @@ This table is the decoded subset. The whole code space has since been swept and
 | `0x85` | Discharge pipe TD [°C] | `OP2 / 2 + 32`, **only for `OP2 >= 0x12`** | idle `14` ⇒ 42 °C · load `17` ⇒ **43.5 °C** |
 | `0x13` | Outdoor EEV [pulses] | `OP3 << 8 \| OP2` (`OP3 = ff` ⇒ no value, `OP2` alone); full stroke assumed 500 pulses, not confirmed per model | idle `c8` ⇒ 200 · load `5f`/`66` ⇒ **95 / 102** (valve closes under load) |
 | `0x05` | Internal setpoint [°C] | `OP2 / 2`, `sel` = `0x13` | `2e` ⇒ **23.0 °C** while 22.5 °C was the value sent; in heating 21.0 or 20.5 sent ⇒ `2e` as well (+2 K, see below) |
-| `0x82` | THO-R1 | outdoor heat exchanger, **no known conversion** | idle `3f` ⇒ 63 · load `49` ⇒ 73; tracks the outdoor unit, but not on the coil scale below |
+| `0x82` | THO-R1 [°C], outdoor heat exchanger | same thermistor curve as `0x81`/`0x87` with `Rs = 1230 Ω`, see §5.4 `[HW]` | idle `3f` ⇒ raw 63 (≈ 21 °C) · load `49` ⇒ 73; defrost plateau raw 24–25 ⇒ 0 °C |
 | `0x81` | THI-R1 [°C] | thermistor curve, see §5.4 | `20 5a ff` ⇒ raw 90, **`sel` = `0x20`** |
 | `0x87` | THI-R3 [°C], gas header | thermistor curve, see §5.4 | `10 5a ff` ⇒ raw 90 |
 | `0x1E` | Total run hours [h] | `OP2 × 100` | `ff ff ff` ⇒ **no value** |
 | `0x1F` | Indoor fan speed | `OP1 & 0x0f`, **not `OP2`** `[EXT]` | `ff ff ff` ⇒ **no value** |
-| `0x0D` | Hot start | `OP1`: `02` while the indoor unit holds its fan back after a heating start (also after switching cool → heat without turning off) until the indoor coil is warm, ≈ 29 °C on an SRK20ZS-WF; otherwise `00`. Lasts minutes `[HW]` | `00 ff ff`, `sel` = `0x00` |
+| `0x0D` | Hot start | `OP1`: `02` while the indoor unit holds its fan back after a heating start (also after switching cool → heat without turning off) until the indoor coil is warm, ≈ 28–30 °C on SRK20/25/35ZS-WF; otherwise `00`. Starts with the heat command and can precede the compressor request; lasts about two to six minutes `[HW]` | `00 ff ff`, `sel` = `0x00` |
 | `0x21` | silent operation — the write code (see below); read, the state is `OP1 & 0x0f`: others see `11` (on) and `10` (off) on the SPI bus ([mhi-ac-ctrl-esp32#46](https://github.com/hberntsen/mhi-ac-ctrl-esp32/issues/46)) `[EXT]`; not yet read with it on over this interface `[INF]` | — | `10 ff ff` ⇒ 0 |
 | `0x32` | *unknown* | — | `2e 04 ff`, unusual `sel` |
 | `0x34` | *unknown* | — | `11 01 04`, **uses `OP3`** — multi-byte value |
@@ -943,17 +943,20 @@ Notes on the shape of the answers `[HW]`:
   so a direct reading at byte 75 (16.8 °C measured, 17.0 °C from the curve) was
   taken as the better evidence. `[HW]` `[INF]`
 - **`0x82` is the same sensor behind a different resistor.** MHI's diagram
-  covers the outdoor coil too, and a five-hour standstill puts it on
-  `Rs ≈ 1230 Ω` against a reference thermometer — the same channel type as the
-  indoor coil (both far below the air channels' 4.0/5.6 kΩ, as a sensor that
-  has to span frost to condensing temperature needs), but not the same value:
-  at byte 80 the two curves are 4.5 K apart. `[HW]` `[INF]` Readings taken in
-  afternoon sun run high on a west-facing unit, and no calibrated point exists
-  yet, so it stays a raw byte. A defrost cycle would anchor it exactly: the
-  outdoor coil sits at 0 °C while ice melts off it.
-- `0x82` is *not* on that scale — a resting outdoor coil reads far lower than a
-  resting indoor coil at the same temperature. MHI-AC-Ctrl documents no formula
-  for THO-R1 either. `[EXT]` Treat it as a raw byte.
+  covers the outdoor coil too, and a five-hour compressor standstill (coil at
+  outdoor air temperature) against a weather station puts it on
+  `Rs ≈ 1230 Ω` — the same channel type as the indoor coil (both far below the
+  air channels' 4.0/5.6 kΩ, as a sensor that has to span frost to condensing
+  temperature needs), but not the same value: at byte 80 the two curves are
+  4.5 K apart. `[HW]` `[INF]` Two independent checks agree at the cold end: a
+  defrost plateau at raw 24–25, which is 0 °C while ice melts off the coil
+  (22 cycles), and a second, separately fitted sensor that matches to ±0.1 K
+  over about 3200 points down to −8 °C. `[HW]` Sample values: raw 15 → −9.5 °C,
+  19 → −5.0, 25 → +0.4, 38 → +9.5, 60 → +20.7. Above about raw 65 (≈ 22 °C)
+  the curve is extrapolation. Readings taken in afternoon sun run high on a
+  west-facing unit.
+- The indoor coil's `Rs` does not fit `0x82`; the resistor is the whole
+  difference. MHI-AC-Ctrl documents no formula for THO-R1. `[EXT]`
 - **Not every firmware branch answers usefully.** On `mcu131`/`wireless010`,
   `0x11` and `0x90` (compressor frequency, operating current) have been
   reported to return a constant 0 even with the compressor confirmed running,

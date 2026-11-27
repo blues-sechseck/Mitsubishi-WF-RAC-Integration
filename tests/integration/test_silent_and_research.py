@@ -313,7 +313,7 @@ def test_batches_rotate_through_the_answering_codes():
         research.states[code] = "ok"
 
     seen: set[int] = set()
-    for _ in range(3):
+    for _ in range(4):
         seen.update(research.request_codes())
 
     assert seen == set(RESEARCH_SERVICE_DATA_CODES)
@@ -436,3 +436,29 @@ async def test_humidity_sensor_reports_the_parsed_value(platform_device, raw, ex
     entity._update_state()
 
     assert entity.native_value == expected
+
+
+# --- outdoor coil temperature sensor ---------------------------------------------
+
+
+async def test_outdoor_coil_temp_sensor_is_a_diagnostic_temperature(platform_device):
+    entity = sensor.ServiceDataSensor(platform_device, sensor.ATTR_OUTDOOR_COIL_TEMP)
+
+    assert entity.unique_id == f"{DOMAIN}-airco-id-outdoor_coil_temp-sensor"
+    assert entity.translation_key == "outdoor_coil_temp"
+    assert entity.device_class is sensor.SensorDeviceClass.TEMPERATURE
+    assert entity.native_unit_of_measurement == "°C"
+    assert entity.entity_category is sensor.EntityCategory.DIAGNOSTIC
+    assert entity.entity_registry_enabled_default is False
+
+
+@pytest.mark.parametrize("value", [-5.0, None])
+async def test_outdoor_coil_temp_sensor_reports_the_parsed_value(
+    platform_device, value
+):
+    platform_device._airco.OutdoorCoilTemp = value
+    entity = sensor.ServiceDataSensor(platform_device, sensor.ATTR_OUTDOOR_COIL_TEMP)
+
+    entity._update_state()
+
+    assert entity.native_value == value

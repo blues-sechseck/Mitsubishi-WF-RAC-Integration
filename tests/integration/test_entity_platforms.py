@@ -147,7 +147,7 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device):
         for entity in entities
         if isinstance(entity, sensor.ServiceDataSensor) and entity is not humidity
     ]
-    assert len(operation_data_sensors) == 15
+    assert len(operation_data_sensors) == 16
     assert all(
         entity.entity_registry_enabled_default is False
         for entity in operation_data_sensors

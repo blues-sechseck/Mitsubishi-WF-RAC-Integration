@@ -17,10 +17,10 @@ from pywfrac import (
     SERVICE_DATA_COMPRESSOR_FREQ,
     SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW,
     SERVICE_DATA_EEV_PULSES,
+    SERVICE_DATA_HOT_GAS_TEMP,
     SERVICE_DATA_HOT_START,
     SERVICE_DATA_HUMIDITY,
     SERVICE_DATA_INDOOR_COIL_RAW,
-    SERVICE_DATA_OUTDOOR_COIL_RAW,
     SERVICE_DATA_REFUSALS_TO_SUSPEND,
     SERVICE_DATA_SILENT_OPERATION,
     Aircon,
@@ -41,7 +41,7 @@ from custom_components.mitsubishi_wf_rac.service_data import (
 from homeassistant.util import dt as dt_util
 
 FAST = SERVICE_DATA_COMPRESSOR_FREQ  # 60 s
-MEDIUM = SERVICE_DATA_OUTDOOR_COIL_RAW  # 120 s
+MEDIUM = SERVICE_DATA_HUMIDITY  # 120 s
 SLOW = SERVICE_DATA_DISCHARGE_SUPERHEAT_RAW  # 300 s
 
 
@@ -83,14 +83,14 @@ def test_most_overdue_ratio_goes_first_and_never_read_codes_lead(
     _read_before_send(channel, FAST, 200)  # ratio 3.3
     _read_before_send(channel, MEDIUM, 300)  # ratio 2.5
     _read_before_send(channel, SLOW, 400)  # ratio 1.3
-    _prove(channel, FAST, MEDIUM, SLOW, SERVICE_DATA_HUMIDITY)
+    _prove(channel, FAST, MEDIUM, SLOW, SERVICE_DATA_HOT_GAS_TEMP)
     codes = [FAST, MEDIUM, SLOW]
 
     assert channel.select(codes, None) == (FAST, MEDIUM)
     # A code never read is maximally overdue and beats them all.
-    assert channel.select([*codes, SERVICE_DATA_HUMIDITY], None) == (
+    assert channel.select([*codes, SERVICE_DATA_HOT_GAS_TEMP], None) == (
         FAST,
-        SERVICE_DATA_HUMIDITY,
+        SERVICE_DATA_HOT_GAS_TEMP,
     )
 
 
@@ -420,7 +420,7 @@ def test_a_code_refused_alone_twice_is_no_longer_selected(platform_device, caplo
 
     assert channel.select([FAST, MEDIUM], None) == (FAST,)
     assert not [r for r in caplog.records if r.levelno >= logging.INFO]
-    assert any("0x82" in r.message for r in caplog.records)
+    assert any("0xad" in r.message.lower() for r in caplog.records)
 
 
 def test_an_answer_lifts_a_suspension(platform_device):
