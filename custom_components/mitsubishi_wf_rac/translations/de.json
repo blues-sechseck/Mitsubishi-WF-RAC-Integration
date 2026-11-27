@@ -425,6 +425,15 @@
       },
       "research_data": {
         "name": "Forschungsdaten"
+      },
+      "defrost_count": {
+        "name": "Abtauzyklen"
+      },
+      "last_defrost_duration": {
+        "name": "Letzte Abtaudauer"
+      },
+      "last_defrost": {
+        "name": "Letztes Abtauen"
       }
     },
     "binary_sensor": {

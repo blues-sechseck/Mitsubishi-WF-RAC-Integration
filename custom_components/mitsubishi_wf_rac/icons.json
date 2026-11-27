@@ -45,6 +45,9 @@
             "eev_pulses": {
                 "default": "mdi:pulse"
             },
+            "defrost_count": {
+                "default": "mdi:snowflake-melt"
+            },
             "eev_position": {
                 "default": "mdi:valve"
             }

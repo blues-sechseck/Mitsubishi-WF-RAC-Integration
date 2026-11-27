@@ -308,6 +308,15 @@
       },
       "research_data": {
         "name": "Pētījuma dati"
+      },
+      "defrost_count": {
+        "name": "Atsaldēšanas cikli"
+      },
+      "last_defrost_duration": {
+        "name": "Pēdējās atsaldēšanas ilgums"
+      },
+      "last_defrost": {
+        "name": "Pēdējā atsaldēšana"
       }
     },
     "update": {

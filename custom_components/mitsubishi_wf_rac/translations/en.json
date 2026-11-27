@@ -308,6 +308,15 @@
       },
       "research_data": {
         "name": "Research data"
+      },
+      "defrost_count": {
+        "name": "Defrost cycles"
+      },
+      "last_defrost_duration": {
+        "name": "Last defrost duration"
+      },
+      "last_defrost": {
+        "name": "Last defrost"
       }
     },
     "update": {

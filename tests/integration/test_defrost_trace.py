@@ -352,3 +352,150 @@ def test_constants_are_what_the_report_format_promises():
         5,
     )
     assert OPERATION_STATUS_DEFROST_BIT == 0x01
+
+
+# --- the defrost statistics ------------------------------------------------
+
+
+def _defrost(trace: DefrostTrace, freezer, minutes: int) -> None:
+    """One defrost of the given length, polled once a minute, then a frame without."""
+    trace.record(_airco(150, status=0x01), "on", "poll")
+    for _ in range(minutes):
+        freezer.tick(timedelta(minutes=1))
+        trace.record(_airco(150, status=0x01), "on", "poll")
+    freezer.tick(timedelta(minutes=1))
+    trace.record(_airco(150, status=0x02), "off", "poll")
+
+
+def test_statistics_start_empty_and_wait_for_the_first_completed_defrost(freezer):
+    trace = DefrostTrace()
+    trace.record(_airco(150, status=0x02), "idle", "poll")
+    assert trace.defrost_count == 0
+    assert trace.last_defrost_duration is None
+    assert trace.last_defrost_end is None
+
+    # Running is not completed.
+    trace.record(_airco(150, status=0x01), "on", "poll")
+    assert trace.defrost_count == 0
+    assert trace.last_defrost_end is None
+
+
+def test_a_completed_defrost_is_counted_with_duration_and_end(freezer):
+    freezer.move_to("2026-12-01 06:00:00+00:00")
+    trace = DefrostTrace()
+    _defrost(trace, freezer, minutes=6)
+
+    assert trace.defrost_count == 1
+    # Started 06:00, first frame without it 06:07.
+    assert trace.last_defrost_duration == 7.0
+    assert trace.last_defrost_end is not None
+    assert trace.last_defrost_end.isoformat() == "2026-12-01T06:07:00+00:00"
+
+
+def test_two_defrosts_count_twice_and_keep_the_last_one(freezer):
+    trace = DefrostTrace()
+    _defrost(trace, freezer, minutes=3)
+    first_end = trace.last_defrost_end
+    freezer.tick(timedelta(hours=1))
+    _defrost(trace, freezer, minutes=8)
+
+    assert trace.defrost_count == 2
+    assert trace.last_defrost_duration == 9.0
+    assert trace.last_defrost_end > first_end
+
+
+def test_frames_the_unit_could_not_judge_do_not_end_a_defrost(freezer):
+    trace = DefrostTrace()
+    trace.record(_airco(150, status=0x01), "on", "poll")
+    freezer.tick(timedelta(minutes=2))
+    trace.record(Aircon(Operation=False), "unknown", "poll")
+    assert trace.defrost_count == 0
+
+    freezer.tick(timedelta(minutes=2))
+    trace.record(_airco(150, status=0x02), "off", "poll")
+    assert trace.defrost_count == 1
+    assert trace.last_defrost_duration == 4.0
+
+
+async def test_statistics_survive_a_reload(hass: HomeAssistant, hass_storage, freezer):
+    trace = DefrostTrace(create_store(hass, "entry-5"))
+    _defrost(trace, freezer, minutes=4)
+    _defrost(trace, freezer, minutes=2)
+    await trace.async_flush()
+
+    restored = DefrostTrace(create_store(hass, "entry-5"))
+    await restored.async_load()
+
+    assert restored.defrost_count == 2
+    assert restored.last_defrost_duration == 3.0
+    assert restored.last_defrost_end == trace.last_defrost_end
+
+
+async def test_a_defrost_open_at_shutdown_is_not_counted_twice(
+    hass: HomeAssistant, hass_storage, freezer
+):
+    trace = DefrostTrace(create_store(hass, "entry-6"))
+    _defrost(trace, freezer, minutes=2)
+    trace.record(_airco(150, status=0x01), "on", "poll")
+    freezer.tick(timedelta(minutes=1))
+    trace.record(_airco(150, status=0x01), "on", "poll")
+    await trace.async_flush()
+
+    restored = DefrostTrace(create_store(hass, "entry-6"))
+    await restored.async_load()
+    # Not counted while it was running, and not remembered as running either.
+    assert restored.defrost_count == 1
+
+    # Still going after the restart: it starts afresh and counts once, at its end.
+    restored.record(_airco(150, status=0x01), "on", "poll")
+    freezer.tick(timedelta(minutes=1))
+    restored.record(_airco(150, status=0x01), "on", "poll")
+    assert restored.defrost_count == 1
+    freezer.tick(timedelta(minutes=1))
+    restored.record(_airco(150, status=0x02), "off", "poll")
+    assert restored.defrost_count == 2
+    assert restored.last_defrost_duration == 2.0
+
+
+async def test_a_store_from_before_the_statistics_restores_at_zero(
+    hass: HomeAssistant, hass_storage
+):
+    hass_storage["mitsubishi_wf_rac.defrost_trace.entry-7"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": "mitsubishi_wf_rac.defrost_trace.entry-7",
+        "data": {"episodes_detected": 4},
+    }
+    trace = DefrostTrace(create_store(hass, "entry-7"))
+
+    await trace.async_load()
+
+    assert trace.defrost_count == 0
+    assert trace.last_defrost_duration is None
+    assert trace.last_defrost_end is None
+
+
+@pytest.mark.parametrize(
+    "stats",
+    [
+        "x",
+        {"count": -1, "last_duration_minutes": "long", "last_end": "yesterday"},
+        {"count": True, "last_duration_minutes": -2, "last_end": "2026-12-01T06:00:00"},
+    ],
+)
+async def test_garbled_statistics_start_at_zero(
+    hass: HomeAssistant, hass_storage, stats
+):
+    hass_storage["mitsubishi_wf_rac.defrost_trace.entry-8"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": "mitsubishi_wf_rac.defrost_trace.entry-8",
+        "data": {"defrost_stats": stats},
+    }
+    trace = DefrostTrace(create_store(hass, "entry-8"))
+
+    await trace.async_load()
+
+    assert trace.defrost_count == 0
+    assert trace.last_defrost_duration is None
+    assert trace.last_defrost_end is None

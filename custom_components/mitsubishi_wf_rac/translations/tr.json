@@ -308,6 +308,15 @@
       },
       "research_data": {
         "name": "Araştırma verileri"
+      },
+      "defrost_count": {
+        "name": "Buz çözme döngüleri"
+      },
+      "last_defrost_duration": {
+        "name": "Son buz çözme süresi"
+      },
+      "last_defrost": {
+        "name": "Son buz çözme"
       }
     },
     "update": {

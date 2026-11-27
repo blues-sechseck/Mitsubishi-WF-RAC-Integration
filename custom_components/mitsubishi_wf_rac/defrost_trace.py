@@ -15,11 +15,17 @@ The closed episodes and the counters are stored, so they survive restarts and
 reloads (a defrost is an hours-apart event and the report is read afterwards).
 The pre-buffer is not stored; an episode still open when the entry stops is
 restored as closed.
+
+The defrost statistics (count, last duration, last end) are kept next to it. A
+defrost counts once it has ended, so one that is still running when the entry
+stops is not counted twice: it is not stored as open, and if it is still going
+after the restart, the first frame that shows it starts it afresh.
 """
 
 from __future__ import annotations
 
 from collections import Counter, deque
+from datetime import datetime
 from typing import Any, Final
 
 from pywfrac import (
@@ -89,6 +95,10 @@ class DefrostTrace:
         self._with_coil = 0
         self._without_coil = 0
         self._signals_while_heating: dict[str, int] = dict.fromkeys(SIGNAL_KEYS, 0)
+        self._defrost_started: datetime | None = None
+        self.defrost_count = 0
+        self.last_defrost_duration: float | None = None
+        self.last_defrost_end: datetime | None = None
 
     async def async_load(self) -> None:
         """Restore the stored trace; anything unreadable leaves it empty."""
@@ -124,6 +134,7 @@ class DefrostTrace:
             "defrost_from_indoor_coil": coil,
         }
         self._count(airco, bit, coil)
+        self._track_defrost(detected)
 
         if self._open is None:
             if detected is True:
@@ -146,6 +157,26 @@ class DefrostTrace:
         if self._post_left <= 0:
             self._closed.append(self._open)
             self._open = None
+
+    def _track_defrost(self, detected: bool | None) -> None:
+        """Count a defrost when the first frame without it arrives.
+
+        Frames the unit could not judge (None) neither start nor end one. The
+        end is the time of that first frame, which is when the defrost sensor
+        turns off, so the duration has the poll interval as its resolution.
+        """
+        now = dt_util.utcnow()
+        if detected is True:
+            if self._defrost_started is None:
+                self._defrost_started = now
+        elif detected is False and self._defrost_started is not None:
+            self.defrost_count += 1
+            self.last_defrost_duration = round(
+                (now - self._defrost_started).total_seconds() / 60, 1
+            )
+            self.last_defrost_end = now
+            self._defrost_started = None
+            self._schedule_save()
 
     def _count(self, airco: Aircon, bit: bool | None, coil: bool | None) -> None:
         if airco.IndoorCoilRaw is None:
@@ -181,6 +212,13 @@ class DefrostTrace:
             "signals_while_heating": dict(self._signals_while_heating),
             "episodes": self._episodes(),
             "open_episode": self._open is not None,
+            "defrost_stats": {
+                "count": self.defrost_count,
+                "last_duration_minutes": self.last_defrost_duration,
+                "last_end": (
+                    self.last_defrost_end.isoformat() if self.last_defrost_end else None
+                ),
+            },
         }
 
     def _to_store(self) -> dict[str, Any]:
@@ -192,6 +230,7 @@ class DefrostTrace:
         """Take over a stored trace, ignoring whatever does not look right."""
         if not isinstance(stored, dict):
             return
+        self._restore_defrost_stats(stored.get("defrost_stats"))
         episodes = stored.get("episodes")
         if isinstance(episodes, list):
             for episode in episodes[-KEPT_EPISODES:]:
@@ -207,6 +246,21 @@ class DefrostTrace:
         if isinstance(signals, dict):
             for key in SIGNAL_KEYS:
                 self._signals_while_heating[key] = _count_of(signals.get(key))
+
+    def _restore_defrost_stats(self, stats: Any) -> None:
+        """Take over the stored statistics; data from before them stays at zero."""
+        if not isinstance(stats, dict):
+            return
+        self.defrost_count = _count_of(stats.get("count"))
+        duration = stats.get("last_duration_minutes")
+        if isinstance(duration, (int, float)) and not isinstance(duration, bool):
+            if duration >= 0:
+                self.last_defrost_duration = float(duration)
+        end = stats.get("last_end")
+        if isinstance(end, str):
+            parsed = dt_util.parse_datetime(end)
+            if parsed is not None and parsed.tzinfo is not None:
+                self.last_defrost_end = parsed
 
 
 def _count_of(value: Any) -> int:

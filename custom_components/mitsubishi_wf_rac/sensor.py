@@ -4,11 +4,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 import logging
 from typing import Any, Self
 
-from pywfrac import SERVICE_DATA_CODE_BY_FIELD
+from pywfrac import SERVICE_DATA_CODE_BY_FIELD, SERVICE_DATA_INDOOR_COIL_RAW
 
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.components.sensor import (
@@ -26,6 +27,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfFrequency,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
@@ -130,6 +132,9 @@ async def async_setup_entry(
     # them on a unit with a reduced state block, which never answers (#431).
     if not device.reduced_status_block:
         entities += [
+            DefrostStatisticsSensor(device, DEFROST_COUNT),
+            DefrostStatisticsSensor(device, LAST_DEFROST_DURATION),
+            DefrostStatisticsSensor(device, LAST_DEFROST),
             ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY),
             ServiceDataSensor(device, ATTR_COMPRESSOR_FREQUENCY_RAW),
             ServiceDataSensor(device, ATTR_OPERATING_CURRENT),
@@ -273,6 +278,61 @@ class DiagnosticsSensor(WfRacEntity, SensorEntity):
                 self._attr_native_value = None
             else:
                 self._attr_native_value = "heating" if airco.CoolHotJudge else "cooling"
+
+
+DEFROST_COUNT = "defrost_count"
+LAST_DEFROST_DURATION = "last_defrost_duration"
+LAST_DEFROST = "last_defrost"
+
+
+class DefrostStatisticsSensor(WfRacEntity, SensorEntity):
+    """What the defrost sensor has seen: how many, how long, and when last.
+
+    Counted from the same episodes the defrost binary sensor shows (see
+    DefrostTrace), so the two cannot disagree. Frames are handled by the
+    coordinator whether or not an entity is enabled; the subscription here only
+    makes sure the coil reading is requested for a unit that has no status
+    byte to judge by.
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, device: Device, kind: str) -> None:
+        """Initialize the sensor."""
+        super().__init__(device, context=SERVICE_DATA_INDOOR_COIL_RAW)
+        self._kind = kind
+        self._attr_translation_key = kind
+        self._attr_unique_id = f"{DOMAIN}-{device.airco_id_lower}-{kind}-sensor"
+        if kind == DEFROST_COUNT:
+            self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        elif kind == LAST_DEFROST_DURATION:
+            self._attr_device_class = SensorDeviceClass.DURATION
+            self._attr_native_unit_of_measurement = UnitOfTime.MINUTES
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+            self._attr_suggested_display_precision = 1
+        else:
+            self._attr_device_class = SensorDeviceClass.TIMESTAMP
+        self._apply_state()
+
+    @property
+    def available(self) -> bool:
+        """Unavailable on a unit that does not answer operation data at all."""
+        return super().available and self.coordinator.service_data_supported
+
+    def _mark_state_unknown(self) -> None:
+        self._attr_native_value = None
+
+    def _update_state(self) -> None:
+        trace = self.coordinator.defrost_trace
+        value: int | float | datetime | None
+        if self._kind == DEFROST_COUNT:
+            value = trace.defrost_count
+        elif self._kind == LAST_DEFROST_DURATION:
+            value = trace.last_defrost_duration
+        else:
+            value = trace.last_defrost_end
+        self._attr_native_value = value
 
 
 class TemperatureSensor(WfRacEntity, SensorEntity):

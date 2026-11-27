@@ -308,6 +308,15 @@
       },
       "research_data": {
         "name": "Dati di ricerca"
+      },
+      "defrost_count": {
+        "name": "Cicli di sbrinamento"
+      },
+      "last_defrost_duration": {
+        "name": "Durata dell'ultimo sbrinamento"
+      },
+      "last_defrost": {
+        "name": "Ultimo sbrinamento"
       }
     },
     "update": {

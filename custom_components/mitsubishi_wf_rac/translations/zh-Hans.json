@@ -425,6 +425,15 @@
       },
       "research_data": {
         "name": "研究数据"
+      },
+      "defrost_count": {
+        "name": "除霜次数"
+      },
+      "last_defrost_duration": {
+        "name": "上次除霜时长"
+      },
+      "last_defrost": {
+        "name": "上次除霜"
       }
     },
     "binary_sensor": {

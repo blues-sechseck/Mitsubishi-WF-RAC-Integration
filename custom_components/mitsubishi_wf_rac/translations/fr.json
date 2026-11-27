@@ -308,6 +308,15 @@
       },
       "research_data": {
         "name": "Données de recherche"
+      },
+      "defrost_count": {
+        "name": "Cycles de dégivrage"
+      },
+      "last_defrost_duration": {
+        "name": "Durée du dernier dégivrage"
+      },
+      "last_defrost": {
+        "name": "Dernier dégivrage"
       }
     },
     "update": {

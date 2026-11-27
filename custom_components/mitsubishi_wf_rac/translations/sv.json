@@ -308,6 +308,15 @@
       },
       "research_data": {
         "name": "Forskningsdata"
+      },
+      "defrost_count": {
+        "name": "Avfrostningscykler"
+      },
+      "last_defrost_duration": {
+        "name": "Senaste avfrostningens längd"
+      },
+      "last_defrost": {
+        "name": "Senaste avfrostning"
       }
     },
     "update": {

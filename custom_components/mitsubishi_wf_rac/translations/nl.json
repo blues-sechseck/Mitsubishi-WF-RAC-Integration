@@ -425,6 +425,15 @@
       },
       "research_data": {
         "name": "Onderzoeksgegevens"
+      },
+      "defrost_count": {
+        "name": "Ontdooicycli"
+      },
+      "last_defrost_duration": {
+        "name": "Duur laatste ontdooiing"
+      },
+      "last_defrost": {
+        "name": "Laatste ontdooiing"
       }
     },
     "binary_sensor": {

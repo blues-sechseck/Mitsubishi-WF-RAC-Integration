@@ -425,6 +425,15 @@
       },
       "research_data": {
         "name": "調査データ"
+      },
+      "defrost_count": {
+        "name": "霜取り回数"
+      },
+      "last_defrost_duration": {
+        "name": "直近の霜取り時間"
+      },
+      "last_defrost": {
+        "name": "直近の霜取り"
       }
     },
     "binary_sensor": {

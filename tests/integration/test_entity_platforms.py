@@ -200,6 +200,67 @@ async def test_platform_entity_composition_and_metadata(hass, platform_device):
     assert details[f"{DOMAIN}-airco-id-target_temperature-sensor"] == (False, None)
 
 
+async def test_defrost_statistics_sensors_are_diagnostic_and_off_by_default(
+    hass, platform_device
+):
+    entry = _entry(platform_device)
+    entities = {
+        entity.translation_key: entity
+        for entity in await _entities(sensor.async_setup_entry, hass, entry)
+        if isinstance(entity, sensor.DefrostStatisticsSensor)
+    }
+
+    assert set(entities) == {"defrost_count", "last_defrost_duration", "last_defrost"}
+    for entity in entities.values():
+        assert entity.entity_registry_enabled_default is False
+        assert entity.entity_category is EntityCategory.DIAGNOSTIC
+    count = entities["defrost_count"]
+    assert count.unique_id == f"{DOMAIN}-airco-id-defrost_count-sensor"
+    assert count.state_class is SensorStateClass.TOTAL_INCREASING
+    assert count.native_unit_of_measurement is None
+    duration = entities["last_defrost_duration"]
+    assert duration.device_class is SensorDeviceClass.DURATION
+    assert duration.native_unit_of_measurement == "min"
+    assert duration.state_class is SensorStateClass.MEASUREMENT
+    assert duration.suggested_display_precision == 1
+    assert entities["last_defrost"].device_class is SensorDeviceClass.TIMESTAMP
+
+
+async def test_defrost_statistics_sensors_are_left_out_on_a_reduced_unit(
+    hass, platform_device
+):
+    platform_device._reduced_status_block = True
+    entry = _entry(platform_device)
+
+    entities = await _entities(sensor.async_setup_entry, hass, entry)
+
+    assert not [e for e in entities if isinstance(e, sensor.DefrostStatisticsSensor)]
+
+
+def test_defrost_statistics_sensors_report_the_trace(platform_device):
+    count = sensor.DefrostStatisticsSensor(platform_device, "defrost_count")
+    duration = sensor.DefrostStatisticsSensor(platform_device, "last_defrost_duration")
+    last = sensor.DefrostStatisticsSensor(platform_device, "last_defrost")
+    # Zero once the unit has been seen, the others unknown until a defrost ends.
+    assert (count.native_value, duration.native_value, last.native_value) == (
+        0,
+        None,
+        None,
+    )
+
+    ended = dt_util.utcnow()
+    trace = platform_device.defrost_trace
+    trace.defrost_count = 3
+    trace.last_defrost_duration = 6.5
+    trace.last_defrost_end = ended
+    for entity in (count, duration, last):
+        entity._update_state()
+
+    assert count.native_value == 3
+    assert duration.native_value == 6.5
+    assert last.native_value == ended
+
+
 async def test_platform_option_and_capability_gates(hass, platform_device):
     entry = _entry(platform_device)
     platform_device.airco.Electric = None

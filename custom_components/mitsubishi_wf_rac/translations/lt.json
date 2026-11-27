@@ -425,6 +425,15 @@
       },
       "research_data": {
         "name": "Tyrimo duomenys"
+      },
+      "defrost_count": {
+        "name": "Atitirpinimo ciklai"
+      },
+      "last_defrost_duration": {
+        "name": "Paskutinio atitirpinimo trukmė"
+      },
+      "last_defrost": {
+        "name": "Paskutinis atitirpinimas"
       }
     },
     "binary_sensor": {
