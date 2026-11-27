@@ -43,6 +43,7 @@ from pywfrac import (
 )
 
 from custom_components.mitsubishi_wf_rac import (
+    command_queue as command_queue_module,
     coordinator as coordinator_module,
     firmware_check as firmware_check_module,
     service_data as service_data_module,
@@ -159,7 +160,7 @@ def _shorten_service_data_timing(monkeypatch, offset_ms: int = 5) -> None:
     test can wait out.
     """
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     monkeypatch.setattr(
         coordinator_module, "SERVICE_DATA_RETRY_DELAY", timedelta(milliseconds=5)
@@ -969,7 +970,7 @@ async def test_async_queue_command_coalesces_into_one_send(device, monkeypatch):
     which is why the platforms run with PARALLEL_UPDATES = 0.
     """
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -992,7 +993,7 @@ async def test_async_queue_command_reports_a_refusal_to_its_caller(device, monke
     it, so a service call reported success for a command that never arrived.
     """
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1010,7 +1011,7 @@ async def test_a_state_that_cannot_be_encoded_fails_translated_and_sends_nothing
     device, monkeypatch
 ):
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1027,7 +1028,7 @@ async def test_a_state_that_cannot_be_encoded_fails_translated_and_sends_nothing
 async def test_another_encoding_failure_keeps_the_general_error(device, monkeypatch):
     """Only the unreadable fan step gets the advice to set the fan mode."""
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1049,7 +1050,7 @@ async def test_a_caller_giving_up_does_not_cancel_the_shared_command(
     other callers' command down with it.
     """
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=20)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=20)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1073,7 +1074,7 @@ async def test_a_caller_whose_flush_is_cancelled_at_shutdown_gets_a_translated_e
     device, monkeypatch
 ):
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(seconds=30)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(seconds=30)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1093,7 +1094,7 @@ async def test_a_caller_whose_flush_is_cancelled_at_shutdown_gets_a_translated_e
 
 async def test_a_cancelled_caller_is_cancelled_not_translated(device, monkeypatch):
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(seconds=30)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(seconds=30)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1113,7 +1114,7 @@ async def test_a_failure_nobody_awaits_any_more_is_not_reported_as_unretrieved(
     device, monkeypatch
 ):
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1125,7 +1126,7 @@ async def test_a_failure_nobody_awaits_any_more_is_not_reported_as_unretrieved(
         device.async_queue_command({AirconCommands.Operation: True})
     )
     await asyncio.sleep(0)
-    (flush,) = device._running_flushes
+    (flush,) = device.command_queue.running_flushes
     leaving.cancel()
     await asyncio.wait({flush})
 
@@ -1137,7 +1138,7 @@ async def test_a_failure_nobody_awaits_any_more_is_not_reported_as_unretrieved(
 
 async def test_async_queue_command_notifies_listeners(device, monkeypatch):
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1163,7 +1164,7 @@ async def test_async_queue_command_notifies_listeners_even_on_failure(
     device, monkeypatch
 ):
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1193,7 +1194,7 @@ async def test_home_leave_mode_status_request_does_not_swallow_a_queued_command(
     status request directly through set_airco() keeps it out of that merge.
     """
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     await device.update()
@@ -1488,7 +1489,7 @@ async def test_update_does_not_request_service_data_without_active_entities(
     device, monkeypatch
 ):
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(ON_COOL_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)
@@ -1817,7 +1818,7 @@ async def test_a_real_command_records_its_time_for_the_backdate_guard(
     """A flushed user command marks _last_command_at so the guard above can
     see it - a bare status request (no set-bits) must not."""
     monkeypatch.setattr(
-        coordinator_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
+        command_queue_module, "UPDATE_CONSOLIDATION_PERIOD", timedelta(milliseconds=5)
     )
     device._api.get_aircon_stats.return_value = _stats_response(OFF_PAYLOAD)
     device._api.send_airco_command = AsyncMock(side_effect=_echo_send_airco_command)

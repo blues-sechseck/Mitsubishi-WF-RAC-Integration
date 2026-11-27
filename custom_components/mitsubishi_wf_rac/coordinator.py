@@ -9,7 +9,6 @@ import re
 from typing import Any, Final
 
 from pywfrac import (
-    AIRFLOW_UNKNOWN,
     MIN_TIME_BETWEEN_REQUESTS,
     REQUEST_TIMEOUT,
     SERVICE_DATA_BUDGET,
@@ -45,12 +44,11 @@ from .account_slots import (
     AccountSlots,
     registration_full_issue_id,  # noqa: F401  (re-export for existing importers)
 )
+from .command_queue import CommandQueue
 from .const import (
     AC_CERT_FILENAME,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
-    HOME_LEAVE_SETPOINT_CEILING,
-    HOME_LEAVE_TEMP_HEAT,
     MIN_TIME_BETWEEN_UPDATES,
     STATUS_REQUEST_ECHO,
     STATUS_REQUEST_STOPPED,
@@ -60,6 +58,7 @@ from .defrost_trace import DefrostTrace, create_store
 from .external_temperature import ExternalTemperatureFeed
 from .firmware_check import FirmwareUpdateCheck
 from .foreign_writers import ForeignWriterWatch
+from .home_leave import HomeLeaveMode
 from .service_data import (
     RESEARCH_CONTEXT,
     SERVICE_DATA_DEPENDS_ON,
@@ -86,14 +85,6 @@ def poll_offset(airco_id: str) -> timedelta:
 # hardware the new state read back reliably three seconds later.
 SILENT_OPERATION_READBACK_DELAY: Final = 2.0
 SILENT_OPERATION_READBACK_ATTEMPTS: Final = 3
-
-# Commands issued within this window of each other (from any entity) are
-# coalesced into a single set_airco() call instead of being sent as separate
-# requests. The unit expects a full state block per request, so two
-# near-simultaneous separate commands can otherwise overwrite each other
-# instead of merging (e.g. a fan-speed change followed shortly by a
-# temperature change loses the fan change).
-UPDATE_CONSOLIDATION_PERIOD = timedelta(milliseconds=500)
 
 
 # How far into the past the operation-data request is stamped, and so how much
@@ -258,10 +249,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # snapshot that's stale because another set_airco() is still in
         # flight - see set_airco() below.
         self._send_lock = asyncio.Lock()
-        self._consolidated_params: dict[AirconCommands, Any] = {}
-        self._consolidation_task: asyncio.Task[None] | None = None
-        # _consolidation_task is only the one still taking parameters.
-        self._running_flushes: set[asyncio.Task[None]] = set()
+        self.command_queue = CommandQueue(self)
+        self.home_leave = HomeLeaveMode(self)
 
         super().__init__(
             hass,
@@ -407,7 +396,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     retry_when_locked=False,
                 )
             else:
-                if not await self._async_read_before_echo():
+                if not await self.async_read_before_echo():
                     return False
                 await self.set_airco({}, log_failure=False, retry_when_locked=False)
         except (WfRacError, KeyError, TypeError, ValueError) as ex:
@@ -454,12 +443,12 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             await self.defrost_trace.async_flush()
         except Exception:  # pylint: disable=broad-except
             _LOGGER.debug("Could not store the defrost trace", exc_info=True)
-        # A flush that has taken its parameters lets go of
-        # _consolidation_task, so that alone leaves nothing to cancel: the
-        # send finishes afterwards and publishes to entities that are gone,
-        # over the one connection the reload needs.
-        self._consolidation_task = None
-        for task in (*self._running_flushes, self.service_data.task):
+        # A flush that has taken its parameters lets go of its pending slot,
+        # so that alone leaves nothing to cancel: the send finishes afterwards
+        # and publishes to entities that are gone, over the one connection the
+        # reload needs.
+        self.command_queue.forget_pending()
+        for task in (*self.command_queue.running_flushes, self.service_data.task):
             if task is None:
                 continue
             task.cancel()
@@ -473,7 +462,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                     self.device_name,
                     exc_info=True,
                 )
-        self._consolidation_task = None
+        self.command_queue.forget_pending()
         self.service_data.forget_task()
         await super().async_shutdown()
 
@@ -535,7 +524,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # does not send it must not cost the poll that read the state block.
             self._connected_accounts = int(response.get("numOfAccount", -1))
             new_airco = self._parser.translate_bytes(response["airconStat"])
-            self._carry_forward_home_leave_mode(new_airco)
+            self.home_leave.carry_forward(new_airco)
             self.service_data.carry_forward(new_airco)
             self.research_data.note_answer(new_airco)
             self.defrost_trace.record(new_airco, response["airconStat"], "poll")
@@ -599,7 +588,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # fresh block has no HomeLeaveMode and no service data in it, and
             # dropping those here would blank the diagnostic sensors for a
             # cycle exactly as an unprompted poll once did.
-            self._carry_forward_home_leave_mode(fresh)
+            self.home_leave.carry_forward(fresh)
             self.service_data.carry_forward(fresh)
             self.defrost_trace.record(fresh, response["airconStat"], "poll")
             self._airco = fresh
@@ -627,6 +616,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     def foreign_activity(self) -> bool:
         """Whether another client wrote recently enough that we stand down."""
         return self.foreign_writers.active
+
+    @property
+    def status_request_carries_state(self) -> bool:
+        """Return whether the status request is a full command on this module."""
+        return self._parser.status_request_carries_state
 
     @property
     def status_request_mode(self) -> str:
@@ -738,7 +732,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             return timedelta(0)
         return SERVICE_DATA_STAMP_BACKDATE
 
-    async def _async_read_before_echo(self) -> bool:
+    async def async_read_before_echo(self) -> bool:
         """Read the unit's state immediately before sending it back.
 
         A carrying request writes every field it contains, so anything changed
@@ -760,7 +754,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 ex,
             )
             return False
-        self._carry_forward_home_leave_mode(new_airco)
+        self.home_leave.carry_forward(new_airco)
         self.service_data.carry_forward(new_airco)
         self.defrost_trace.record(new_airco, raw_frame, "poll")
         self._airco = new_airco
@@ -788,7 +782,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # timestamp below gives back part of the lock.
         if (
             self._parser.status_request_carries_state
-            and not await self._async_read_before_echo()
+            and not await self.async_read_before_echo()
         ):
             return
         if not self._status_request_is_allowed():
@@ -893,7 +887,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         # Entities keep their previous operation-data values on a skipped cycle
         # (see _carry_forward_service_data), so there is nothing to push here.
 
-    def _reduced_status_error(self) -> HomeAssistantError:
+    def reduced_status_error(self) -> HomeAssistantError:
         """The refusal for an operation-data request on a reduced unit."""
         return HomeAssistantError(
             translation_domain=DOMAIN,
@@ -911,7 +905,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         unit over the bus after the module has already answered.
         """
         if self.reduced_status_block:
-            raise self._reduced_status_error()
+            raise self.reduced_status_error()
         async with self._silent_operation_lock:
             task = self.service_data.task
             if task is not None and not task.done():
@@ -930,7 +924,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
             if (
                 self._parser.status_request_carries_state
-                and not await self._async_read_before_echo()
+                and not await self.async_read_before_echo()
             ):
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
@@ -1169,7 +1163,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
                 )
                 confirmed = True
                 new_airco = self._parser.translate_bytes(response)
-                self._carry_forward_home_leave_mode(new_airco)
+                self.home_leave.carry_forward(new_airco)
                 self.service_data.carry_forward(new_airco)
                 self.defrost_trace.record(
                     new_airco,
@@ -1223,208 +1217,28 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
     async def async_queue_command(self, params: dict[AirconCommands, Any]) -> None:
         """Queue an airco command, coalescing calls made close together.
 
-        Calls within UPDATE_CONSOLIDATION_PERIOD become one set_airco(). Every
-        entity uses this rather than set_airco(), so a fan change and a
+        Every entity uses this rather than set_airco(), so a fan change and a
         setpoint change issued together share a request instead of racing.
         """
-        self._consolidated_params.update(params)
-        if (flush := self._consolidation_task) is None:
-            flush = self.hass.async_create_task(self._async_flush_queued_command())
-            self._consolidation_task = flush
-            self._running_flushes.add(flush)
-            flush.add_done_callback(self._flush_done)
-        # Every caller awaits the one flush its parameters ended up in, so a
-        # refusal by the unit reaches the action that caused it instead of
-        # being logged into the void. Not awaited directly because the task is
-        # shared: a caller giving up (a cancelled service call) must not take
-        # the other callers' command down with it.
-        try:
-            await asyncio.wait({flush})
-            flush.result()
-        except asyncio.CancelledError:
-            task = asyncio.current_task()
-            # Our own cancellation must propagate; only the flush being
-            # cancelled at shutdown is turned into an error.
-            if task is not None and task.cancelling():
-                raise
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="command_cancelled",
-                translation_placeholders={"device": self.device_name},
-            ) from None
+        await self.command_queue.queue(params)
 
-    def _flush_done(self, flush: asyncio.Task[None]) -> None:
-        self._running_flushes.discard(flush)
-        # With every caller gone nobody reads the error, which asyncio would
-        # then report as never retrieved.
-        if not flush.cancelled():
-            flush.exception()
-
-    def _carry_forward_home_leave_mode(self, new_airco: Aircon) -> None:
-        """Carry the last known HomeLeaveMode reading forward.
-
-        The unit reports the Tag-248 HomeLeaveMode extension segment exactly
-        once per HomeLeaveModeStatusRequest, then stops: the bridge MCU clears
-        its response cache after handing it to the WiFi side, so the segment is
-        present in a short window's worth of status blocks and absent from every
-        later poll. Observed effect: translate_bytes() builds a fresh Aircon()
-        with both fields back at their None default, which made the diagnostic
-        sensors flash the real value for one update cycle and then revert to
-        unknown. Carry the last known reading forward instead so it survives
-        until the next explicit request or a fresh None response (e.g.
-        reconnect).
-        """
-        if self._airco is None:
-            return
-        if new_airco.HomeLeaveModeForCooling is None:
-            new_airco.HomeLeaveModeForCooling = self._airco.HomeLeaveModeForCooling
-        if new_airco.HomeLeaveModeForHeating is None:
-            new_airco.HomeLeaveModeForHeating = self._airco.HomeLeaveModeForHeating
+    def mark_command_sent(self) -> None:
+        """Note that a real, set-bit command is going out now."""
+        self._last_command_at = dt_util.utcnow()
 
     async def async_request_home_leave_mode_status(self) -> None:
-        """Ask the unit to report its current HomeLeaveMode.
-
-        That is Tag 248, capability index 7: thresholds and airflow. Does not
-        change any AC setting by itself - but the unit only reports this
-        extension segment in response to this request, never on an unprompted
-        poll, and matches byte-for-byte against the official app's own display.
-
-        Timing, measured: the value shows up only on a later scheduled poll -
-        up to MIN_TIME_BETWEEN_UPDATES (60s) later - not in the response to
-        this call's own setAirconStat POST. A *single* extension request does
-        come back inside that same POST response (see the service-data
-        path), so the delay here is most likely because this request sends
-        six segments and the unit answers them one bus frame at a time.
-        Unconfirmed - if it matters, measure it rather than trusting this
-        paragraph.
-
-        _carry_forward_home_leave_mode() keeps the reading available on every
-        following poll instead of it reverting to unknown.
-
-        Sent directly through set_airco() rather than async_queue_command():
-        the latter coalesces this with any command queued in the same
-        window, and on a module whose status request holds no set-bits (see
-        RacParser.status_request_to_byte), a coalesced real command - e.g. a
-        setpoint change - would go out in that same block without its
-        set-bit and be silently ignored by the unit.
-
-        On a module that carries its state (#329) the block is a full command
-        instead, so the state it is built from is read fresh first, exactly as
-        the operation-data path does. Without that this action would write back
-        a setting up to a poll old and undo whatever was done at the unit since
-        - including switching a unit off that somebody just turned on.
-        """
-        if self.reduced_status_block:
-            raise self._reduced_status_error()
-        if self._status_request_mode == STATUS_REQUEST_STOPPED:
-            # This unit changes its settings whatever we put in the frame, so
-            # the frame is not sent at all any more (#329).
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="status_request_not_sent",
-                translation_placeholders={"device": self.device_name},
-            )
-        if (
-            self._parser.status_request_carries_state
-            and not await self._async_read_before_echo()
-        ):
-            # Sending the state we have would be a write on this module, and
-            # the caller asked for a reading.
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="status_request_read_failed",
-                translation_placeholders={"device": self.device_name},
-            )
-        await self.set_airco(
-            {AirconCommands.HomeLeaveModeStatusRequest: True},
-            is_status_request=True,
-        )
+        """Ask the unit to report its current HomeLeaveMode."""
+        await self.home_leave.request_status()
 
     async def async_read_home_leave_mode_once(self) -> None:
-        """Read Tag 248 once at setup, so away heating has its setting.
-
-        The reading lives in memory only, and without it away heats to
-        HOME_LEAVE_TEMP_HEAT rather than what the Smart M-Air app shows.
-        Skipped on a module whose status request carries state or is not sent
-        at all (#329): there the request is a write. Skipped as well on a unit
-        with a reduced state block, which never answers it. A failure is not worth
-        more than a debug line - away still works, on the fallback.
-        """
-        if (
-            self.reduced_status_block
-            or not self._airco.Capabilities.home_leave_mode
-            or self._status_request_mode == STATUS_REQUEST_STOPPED
-            or self._parser.status_request_carries_state
-        ):
-            return
-        try:
-            await self.async_request_home_leave_mode_status()
-        except (HomeAssistantError, WfRacError, KeyError, TypeError, ValueError) as ex:
-            # Same set the queued-command flush catches: set_airco() raises
-            # the encoder's errors as they come.
-            _LOGGER.debug(
-                "[%s] Home Leave mode not read at setup: %s", self.device_name, ex
-            )
+        """Read Tag 248 once at setup, so away heating has its setting."""
+        await self.home_leave.read_once()
 
     async def async_set_home_leave_mode(
         self, cooling: HomeLeaveModeSetting, heating: HomeLeaveModeSetting
     ) -> None:
-        """Write new HomeLeaveMode thresholds and airflow.
-
-        That is Tag 248, sub-codes 27-32. Written values round-trip exactly
-        through a subsequent read.
-        """
-        await self.async_queue_command(
-            {
-                AirconCommands.HomeLeaveModeForCooling: cooling,
-                AirconCommands.HomeLeaveModeForHeating: heating,
-            }
-        )
-
-    async def _async_flush_queued_command(self) -> None:
-        await asyncio.sleep(UPDATE_CONSOLIDATION_PERIOD.total_seconds())
-        params = self._consolidated_params.copy()
-        self._consolidated_params.clear()
-        self._consolidation_task = None
-        # A real, set-bit command: mark it so the next operation-data request
-        # stamps honestly and renews this command's lock rather than trimming
-        # it (see _service_data_stamp_backdate).
-        self._last_command_at = dt_util.utcnow()
-        try:
-            await self.set_airco(params)
-        except ValueError as ex:
-            if self._airco.AirFlow != AIRFLOW_UNKNOWN:
-                raise self._command_failed(ex) from ex
-            # The fan step the unit reported has no byte to send back; nothing
-            # went out.
-            self.async_update_listeners()
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="command_unencodable",
-                translation_placeholders={"device": self.device_name},
-            ) from ex
-        except (WfRacError, KeyError, TypeError) as ex:
-            # Already logged in set_airco(). A failed command says nothing
-            # about the poll before it, so the listeners hear the state without
-            # the coordinator being declared successful. Wrapped rather than
-            # re-raised - a library exception in a service call is a traceback,
-            # not something the user can read - and async_queue_command()
-            # awaits this task, so it lands on the action that issued it.
-            raise self._command_failed(ex) from ex
-        # The unit's answer reaches the entities now, not a poll later.
-        self.async_set_updated_data(self._airco)
-
-    def _command_failed(self, error: Exception) -> HomeAssistantError:
-        """Tell the listeners and build the error the action reports."""
-        self.async_update_listeners()
-        return HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="command_failed",
-            translation_placeholders={
-                "device": self.device_name,
-                "error": str(error),
-            },
-        )
+        """Write new HomeLeaveMode thresholds and airflow."""
+        await self.home_leave.write(cooling, heating)
 
     def _record_reachable(self) -> None:
         """Start the tolerance over, after the unit has answered."""
@@ -1570,22 +1384,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
 
     @property
     def home_leave_heat_setpoint(self) -> float:
-        """Return the setpoint the away preset heats to.
-
-        The unit's own Heating TempSetting once a Tag-248 reading is in, so
-        Home Assistant and the Smart M-Air app agree. A value outside
-        HOME_LEAVE_TEMP_HEAT..HOME_LEAVE_SETPOINT_CEILING would either not
-        register as Home Leave or is unconfirmed on hardware, and falls back.
-        """
-        heating = self._airco.HomeLeaveModeForHeating if self._airco else None
-        if (
-            heating is not None
-            and HOME_LEAVE_TEMP_HEAT
-            <= heating.TempSetting
-            < HOME_LEAVE_SETPOINT_CEILING
-        ):
-            return heating.TempSetting
-        return HOME_LEAVE_TEMP_HEAT
+        """Return the setpoint the away preset heats to."""
+        return self.home_leave.heat_setpoint
 
     @property
     def swing_selects_enabled_default(self) -> bool:

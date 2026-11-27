@@ -149,7 +149,7 @@ def aircon(aircon_stat: dict[str, Any], aircon_fields: dict[str, Any]) -> Aircon
 def no_consolidation_window() -> Generator[None]:
     """Send commands right away, since the frozen clock never ends the window."""
     with patch(
-        "custom_components.mitsubishi_wf_rac.coordinator.UPDATE_CONSOLIDATION_PERIOD",
+        "custom_components.mitsubishi_wf_rac.command_queue.UPDATE_CONSOLIDATION_PERIOD",
         timedelta(0),
     ):
         yield

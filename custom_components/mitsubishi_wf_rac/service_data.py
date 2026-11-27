@@ -634,7 +634,7 @@ class ServiceDataChannel:
     def carry_forward(self, new_airco: Aircon) -> None:
         """Carry the extension segments forward, as home/leave mode is.
 
-        Same rationale as Device._carry_forward_home_leave_mode(): the unit
+        Same rationale as HomeLeaveMode.carry_forward(): the unit
         reports these extension segments exactly once, so without this the
         sensors would flash the real value for one update cycle and then
         revert to unknown.
