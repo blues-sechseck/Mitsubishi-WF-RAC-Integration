@@ -7,10 +7,10 @@ body:
       value: |
         Thanks for taking the time to report this.
 
-        Only the first two fields are required - a report is welcome even if
-        that is all you can give me. Everything below them is optional, but
-        each one is a question I would otherwise have to come back and ask, so
-        whatever you can fill in gets you an answer faster.
+        The version, a description and the diagnostics file are required.
+        Everything else is optional, but each field is a question I would
+        otherwise have to come back and ask - a debug log in particular is
+        usually what makes a report solvable.
 
   - type: input
     id: version
@@ -65,6 +65,8 @@ body:
         address and its account and device ids are removed - and it carries the
         firmware version, your settings and the unit's own state, so it saves
         us a round of back and forth.
+    validations:
+      required: true
 
   - type: textarea
     id: logs

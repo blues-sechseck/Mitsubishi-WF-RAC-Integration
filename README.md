@@ -130,6 +130,8 @@ This integration creates one device per airco with the following entities.
 
 The diagnostic operation-data sensors below are disabled by default. Enabling a sensor makes the integration request its value; leaving all of them disabled makes no extra request at all - unless an external temperature override is armed, which asks for one segment on its own behalf (see [External temperature override](#indoor-temperature-override)).
 
+**Each enabled operation-data sensor occupies the module once a minute.** Every request holds the module's write lock for about a minute, so the Smart M-Air app can respond late while one of these sensors is enabled. If the unit refuses the requests, the integration pauses them for 5, 15 and then 60 minutes.
+
 Any one of them switches the request on, so pick one that always has something to show. **Indoor Coil Temperature** is the safest choice: it is per indoor unit and reads a temperature whatever the system is doing. **Compressor Frequency** is the more telling value where it works, but reads a constant 0 on older firmware ([#207](https://github.com/blues-sechseck/Mitsubishi-WF-RAC-Integration/issues/207)). **Hot Gas Temperature** is a poor first choice: it reads unknown whenever the outdoor unit is idle, which looks like a broken sensor rather than a resting one.
 
 | Entity | Values | Description |
@@ -533,6 +535,26 @@ problem: the module mishandles WiFi roaming and steering management frames. Reco
 - On UniFi, "Force WiFi 4 Mode" and "DTIM Interval Lock" under IoT Optimization are safe to enable.
 - Blocking the module's outbound internet access at the router removes these outages in some
   setups; this integration only needs LAN access. The hourly reassociation continues either way.
+
+## The app reacts late, or the unit stops taking commands
+
+Operation-data requests hold the module's write lock for about a minute each. With an operation-data
+sensor enabled or an indoor temperature source set, the official app can be locked out for a short
+while. If a unit keeps refusing these requests, the integration pauses them and offers to switch
+operation data off. A unit that stays locked for hours recovers after its power is switched off for a
+minute at the breaker.
+
+## Humidity shows unknown
+
+The humidity reading bottoms out at 30 %, and units without a humidity sensor report exactly that
+value, so 30 is shown as unknown. Which units have a sensor depends on the series: on ZS-WF only the
+3.5 and 5.0 kW sizes do, ZSX and ZT models have one in every size. In dry winter air a unit with a
+sensor can sit at that floor as well.
+
+## The indoor temperature source has no effect
+
+Units with a WCBN4612L module and ZT-series units keep regulating on their own sensor. The value
+arrives, but the unit ignores it, and nothing in the integration can change that.
 
 # Without Home Assistant
 

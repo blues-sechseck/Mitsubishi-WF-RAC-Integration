@@ -1,0 +1,28 @@
+name: Close unanswered issues
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          only-labels: "waiting for reporter"
+          days-before-issue-stale: 14
+          days-before-issue-close: 0
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          stale-issue-message: ""
+          remove-stale-when-updated: true
+          labels-to-remove-when-unstale: "waiting for reporter"
+          close-issue-message: >
+            Closing this as there has been no reply for two weeks. If it still
+            happens, reply here or reopen it with the requested details and I'll
+            pick it up again.
