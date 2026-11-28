@@ -82,7 +82,7 @@
         "step": {
           "confirm": {
             "title": "¿Desactivar los datos de funcionamiento de {device_name}?",
-            "description": "Esta unidad rechaza una y otra vez las solicitudes de datos de funcionamiento, y cada solicitud rechazada mantiene en marcha su bloqueo de escritura, así que volver a preguntar solo alarga el problema. Home Assistant ahora pregunta una sola vez por hora.\n\nPara dejar de preguntar del todo, envía esta reparación: la integración se recarga con los datos de funcionamiento desactivados para esta unidad. Lo que esto supone: los sensores de diagnóstico alimentados por esa solicitud (frecuencia del compresor, corriente de funcionamiento, temperatura del gas caliente, posición de la EEV y las temperaturas de las baterías) dejan de actualizarse, y una fuente de temperatura interior definida en las opciones de la integración ya no se pasa a la unidad, porque ambas cosas necesitan los datos de funcionamiento. Todo lo demás no se ve afectado.\n\nApagar y volver a encender la unidad —un minuto sin corriente— elimina el bloqueo, y Home Assistant retoma entonces los datos de funcionamiento por sí solo. Si no envías esta reparación, desaparecerá en cuanto la unidad vuelva a responder."
+            "description": "Esta unidad rechaza una y otra vez las solicitudes de datos de funcionamiento, y cada solicitud rechazada mantiene en marcha su bloqueo de escritura, así que volver a preguntar solo alarga el problema. Home Assistant ahora pregunta una sola vez por hora.\n\nPara dejar de preguntar del todo, envía esta reparación: la integración se recarga con los datos de funcionamiento desactivados para esta unidad. Lo que esto supone: los sensores de diagnóstico alimentados por esa solicitud (frecuencia del compresor, corriente de funcionamiento, temperatura del gas caliente, posición de la EEV y las temperaturas de las baterías) dejan de actualizarse, y una fuente de temperatura interior definida en las opciones de la integración ya no se pasa a la unidad, porque ambas cosas necesitan los datos de funcionamiento. Todo lo demás no se ve afectado. Puedes volver a activarlo con «Solicitar datos de funcionamiento» en las opciones de la integración.\n\nSi dejas esta reparación como está, apagar y volver a encender la unidad —un minuto sin corriente— elimina el bloqueo. Home Assistant retoma entonces los datos de funcionamiento por sí solo y la reparación desaparece."
           }
         }
       }
@@ -98,11 +98,13 @@
         "description": "A continuación están las opciones que puedes cambiar para este aire acondicionado.",
         "data": {
           "availability_retry_limit": "Límite de reintentos",
-          "firmware_update_check": "Buscar actualizaciones de firmware"
+          "firmware_update_check": "Buscar actualizaciones de firmware",
+          "service_data_requests": "Solicitar datos de funcionamiento"
         },
         "data_description": {
           "availability_retry_limit": "Consultas fallidas consecutivas antes de marcar el aire acondicionado como no disponible. El mínimo de tres equivale a unos tres minutos con el intervalo de consulta de 60 segundos, suficiente para superar la reasociación horaria del módulo a la WiFi. Auméntalo si la señal es débil.",
-          "firmware_update_check": "Añade una entidad de actualización de firmware que compara la versión del módulo con el servidor del fabricante. Es la única conexión saliente a internet que realiza la integración; déjalo desactivado para seguir funcionando totalmente en local."
+          "firmware_update_check": "Añade una entidad de actualización de firmware que compara la versión del módulo con el servidor del fabricante. Es la única conexión saliente a internet que realiza la integración; déjalo desactivado para seguir funcionando totalmente en local.",
+          "service_data_requests": "Desactivado: no se envía ninguna solicitud de datos de funcionamiento a esta unidad. Los sensores de diagnóstico y la fuente de temperatura interior los necesitan."
         },
         "title": "Opciones de WF-RAC",
         "sections": {

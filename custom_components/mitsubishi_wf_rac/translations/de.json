@@ -135,7 +135,7 @@
         "step": {
           "confirm": {
             "title": "Betriebsdaten für {device_name} abschalten?",
-            "description": "Dieses Gerät lehnt Anfragen nach Betriebsdaten immer wieder ab, und jede abgelehnte Anfrage hält seine Schreibsperre am Laufen — weiteres Fragen verlängert das Problem nur. Home Assistant fragt deshalb nur noch einmal pro Stunde.\n\nUm gar nicht mehr zu fragen, bestätigen Sie diese Reparatur: Die Integration lädt neu, und die Betriebsdaten sind für dieses Gerät abgeschaltet. Was das kostet: die daraus gespeisten Diagnosesensoren (Verdichterfrequenz, Betriebsstrom, Heißgastemperatur, EEV-Position und die Wärmetauscher-Temperaturen) werden nicht mehr aktualisiert, und eine in den Optionen der Integration eingestellte Raumtemperaturquelle wird dem Gerät nicht mehr übergeben, denn beides braucht Betriebsdaten. Alles andere bleibt unberührt.\n\nEin Aus- und Wiedereinschalten des Geräts — eine Minute stromlos — löst die Sperre, und Home Assistant nimmt die Betriebsdaten dann von selbst wieder auf. Bestätigen Sie die Reparatur nicht, verschwindet sie, sobald das Gerät wieder antwortet."
+            "description": "Dieses Gerät lehnt Anfragen nach Betriebsdaten immer wieder ab, und jede abgelehnte Anfrage hält seine Schreibsperre am Laufen — weiteres Fragen verlängert das Problem nur. Home Assistant fragt deshalb nur noch einmal pro Stunde.\n\nUm gar nicht mehr zu fragen, bestätigen Sie diese Reparatur: Die Integration lädt neu, und die Betriebsdaten sind für dieses Gerät abgeschaltet. Was das kostet: die daraus gespeisten Diagnosesensoren (Verdichterfrequenz, Betriebsstrom, Heißgastemperatur, EEV-Position und die Wärmetauscher-Temperaturen) werden nicht mehr aktualisiert, und eine in den Optionen der Integration eingestellte Raumtemperaturquelle wird dem Gerät nicht mehr übergeben, denn beides braucht Betriebsdaten. Alles andere bleibt unberührt. Unter „Betriebsdaten abfragen“ in den Optionen der Integration lässt es sich wieder einschalten.\n\nLassen Sie diese Reparatur unbeachtet, löst ein Aus- und Wiedereinschalten des Geräts — eine Minute stromlos — die Sperre. Home Assistant nimmt die Betriebsdaten dann von selbst wieder auf, und die Reparatur verschwindet."
           }
         }
       }
@@ -151,11 +151,13 @@
         "description": "Nachfolgend finden Sie die Optionen, die Sie für diese Klimaanlage ändern können.",
         "data": {
           "availability_retry_limit": "Max. Anzahl Wiederholungen",
-          "firmware_update_check": "Auf Firmware-Updates prüfen"
+          "firmware_update_check": "Auf Firmware-Updates prüfen",
+          "service_data_requests": "Betriebsdaten abfragen"
         },
         "data_description": {
           "availability_retry_limit": "Aufeinanderfolgende fehlgeschlagene Abfragen, bevor das Klimagerät als nicht verfügbar gilt. Das Minimum von drei entspricht bei 60 s Abfrageintervall etwa drei Minuten — genug, um die stündliche WLAN-Neuanmeldung des Moduls zu überbrücken. Bei schwacher Verbindung erhöhen.",
-          "firmware_update_check": "Legt eine Firmware-Update-Entität an, die die Version des Moduls mit dem Server des Herstellers vergleicht. Das ist die einzige ausgehende Internetverbindung der Integration — ausgeschaltet lassen, um vollständig lokal zu bleiben."
+          "firmware_update_check": "Legt eine Firmware-Update-Entität an, die die Version des Moduls mit dem Server des Herstellers vergleicht. Das ist die einzige ausgehende Internetverbindung der Integration — ausgeschaltet lassen, um vollständig lokal zu bleiben.",
+          "service_data_requests": "Aus: keine Betriebsdatenabfragen an dieses Gerät — die Diagnosesensoren und die eingespeiste Raumtemperatur brauchen sie."
         },
         "title": "WF-RAC Optionen",
         "sections": {

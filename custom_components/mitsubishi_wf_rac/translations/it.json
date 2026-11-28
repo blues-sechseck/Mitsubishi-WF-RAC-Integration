@@ -82,7 +82,7 @@
         "step": {
           "confirm": {
             "title": "Disattivare i dati di funzionamento di {device_name}?",
-            "description": "Questa unità rifiuta di continuo le richieste di dati di funzionamento, e ogni richiesta rifiutata tiene attivo il suo blocco di scrittura: chiedere ancora prolunga solo il problema. Home Assistant ora chiede una sola volta all'ora.\n\nPer smettere del tutto di chiedere, conferma questa riparazione: l'integrazione si ricarica con i dati di funzionamento disattivati per questa unità. Il prezzo da pagare: i sensori diagnostici alimentati da quella richiesta (frequenza del compressore, corrente di esercizio, temperatura del gas caldo, posizione della valvola EEV e temperature delle batterie) non si aggiornano più, e una sorgente di temperatura interna impostata nelle opzioni dell'integrazione non viene più passata all'unità, perché entrambe richiedono i dati di funzionamento. Tutto il resto non cambia.\n\nSpegnere e riaccendere l'unità — un minuto senza alimentazione — elimina il blocco, e Home Assistant riprende poi da solo i dati di funzionamento. Se non confermi questa riparazione, scompare non appena l'unità risponde di nuovo."
+            "description": "Questa unità rifiuta di continuo le richieste di dati di funzionamento, e ogni richiesta rifiutata tiene attivo il suo blocco di scrittura: chiedere ancora prolunga solo il problema. Home Assistant ora chiede una sola volta all'ora.\n\nPer smettere del tutto di chiedere, conferma questa riparazione: l'integrazione si ricarica con i dati di funzionamento disattivati per questa unità. Il prezzo da pagare: i sensori diagnostici alimentati da quella richiesta (frequenza del compressore, corrente di esercizio, temperatura del gas caldo, posizione della valvola EEV e temperature delle batterie) non si aggiornano più, e una sorgente di temperatura interna impostata nelle opzioni dell'integrazione non viene più passata all'unità, perché entrambe richiedono i dati di funzionamento. Tutto il resto non cambia. Puoi riattivarli con «Richiedi i dati di funzionamento» nelle opzioni dell'integrazione.\n\nSe lasci questa riparazione com'è, spegnere e riaccendere l'unità — un minuto senza alimentazione — elimina il blocco. Home Assistant riprende poi da solo i dati di funzionamento e la riparazione scompare."
           }
         }
       }
@@ -98,11 +98,13 @@
         "description": "Qui sotto trovi le opzioni che puoi modificare per questo climatizzatore.",
         "data": {
           "availability_retry_limit": "Limite di tentativi",
-          "firmware_update_check": "Verifica aggiornamenti del firmware"
+          "firmware_update_check": "Verifica aggiornamenti del firmware",
+          "service_data_requests": "Richiedi i dati di funzionamento"
         },
         "data_description": {
           "availability_retry_limit": "Numero di interrogazioni consecutive fallite prima che il climatizzatore venga segnato come non disponibile. Il minimo di tre corrisponde a circa tre minuti con un intervallo di interrogazione di 60 secondi, sufficiente per superare la riassociazione WiFi oraria del modulo. Aumentalo in caso di collegamento debole.",
-          "firmware_update_check": "Aggiunge un'entità di aggiornamento del firmware che confronta la versione del modulo con quella del server del produttore. È l'unica connessione a Internet in uscita che l'integrazione effettua: lasciala disattivata per restare completamente in locale."
+          "firmware_update_check": "Aggiunge un'entità di aggiornamento del firmware che confronta la versione del modulo con quella del server del produttore. È l'unica connessione a Internet in uscita che l'integrazione effettua: lasciala disattivata per restare completamente in locale.",
+          "service_data_requests": "Disattivato: nessuna richiesta di dati di funzionamento viene inviata a questa unità. I sensori diagnostici e la sorgente di temperatura interna ne hanno bisogno."
         },
         "title": "Opzioni WF-RAC",
         "sections": {

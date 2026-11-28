@@ -537,9 +537,10 @@ class ServiceDataChannel:
         False only after SERVICE_DATA_UNANSWERED_LIMIT requests it accepted and
         answered without a single segment. The sensors fed by that channel say
         unavailable rather than unknown then: unknown means "no reading right
-        now", and this is "there will not be one".
+        now", and this is "there will not be one". The same
+        goes for a unit the user switched operation data off for.
         """
-        return not self._unsupported
+        return not self._unsupported and self._device.service_data_enabled
 
     @property
     def last_response(self) -> datetime | None:

@@ -76,6 +76,7 @@ def test_sections_cover_every_field_the_options_form_shows():
     assert labelled == {
         config_flow.CONF_AVAILABILITY_RETRY_LIMIT,
         config_flow.CONF_FIRMWARE_UPDATE_CHECK,
+        config_flow.CONF_SERVICE_DATA_REQUESTS,
         config_flow.CONF_EXTERNAL_TEMPERATURE_SOURCE,
         config_flow.CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
         config_flow.CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,

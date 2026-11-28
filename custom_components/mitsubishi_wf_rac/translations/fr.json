@@ -82,7 +82,7 @@
         "step": {
           "confirm": {
             "title": "Désactiver les données de fonctionnement de {device_name} ?",
-            "description": "Cet appareil refuse sans cesse les requêtes de données de fonctionnement, et chaque requête refusée prolonge son verrou d'écriture : redemander ne fait qu'aggraver le problème. Home Assistant ne demande donc plus qu'une fois par heure.\n\nPour cesser complètement de demander, validez cette réparation : l'intégration se recharge avec les données de fonctionnement désactivées pour cet appareil. Conséquence : les capteurs de diagnostic alimentés par cette requête (fréquence du compresseur, courant de fonctionnement, température du gaz chaud, position du détendeur électronique et températures des échangeurs) ne sont plus mis à jour, et une source de température intérieure définie dans les options de l'intégration n'est plus transmise à l'appareil, car les deux nécessitent les données de fonctionnement. Tout le reste fonctionne normalement.\n\nCouper puis rétablir l'alimentation de l'appareil — une minute hors tension — lève le verrou, et Home Assistant reprend alors les données de fonctionnement de lui-même. Si vous ne validez pas cette réparation, elle disparaît dès que l'appareil répond de nouveau."
+            "description": "Cet appareil refuse sans cesse les requêtes de données de fonctionnement, et chaque requête refusée prolonge son verrou d'écriture : redemander ne fait qu'aggraver le problème. Home Assistant ne demande donc plus qu'une fois par heure.\n\nPour cesser complètement de demander, validez cette réparation : l'intégration se recharge avec les données de fonctionnement désactivées pour cet appareil. Conséquence : les capteurs de diagnostic alimentés par cette requête (fréquence du compresseur, courant de fonctionnement, température du gaz chaud, position du détendeur électronique et températures des échangeurs) ne sont plus mis à jour, et une source de température intérieure définie dans les options de l'intégration n'est plus transmise à l'appareil, car les deux nécessitent les données de fonctionnement. Tout le reste fonctionne normalement. Vous pouvez les réactiver avec « Demander les données de fonctionnement » dans les options de l'intégration.\n\nSi vous laissez cette réparation de côté, couper puis rétablir l'alimentation de l'appareil — une minute hors tension — lève le verrou. Home Assistant reprend alors les données de fonctionnement de lui-même et la réparation disparaît."
           }
         }
       }
@@ -98,11 +98,13 @@
         "description": "Voici les options que vous pouvez modifier pour ce climatiseur.",
         "data": {
           "availability_retry_limit": "Nombre maximal de tentatives",
-          "firmware_update_check": "Rechercher les mises à jour du firmware"
+          "firmware_update_check": "Rechercher les mises à jour du firmware",
+          "service_data_requests": "Demander les données de fonctionnement"
         },
         "data_description": {
           "availability_retry_limit": "Nombre d'interrogations consécutives échouées avant que le climatiseur soit marqué comme indisponible. Le minimum de trois correspond à environ trois minutes avec un intervalle d'interrogation de 60 secondes, ce qui suffit pour absorber la réassociation Wi-Fi horaire du module. Augmentez-le si la liaison est faible.",
-          "firmware_update_check": "Ajoute une entité de mise à jour du firmware qui compare la version du module à celle du serveur du fabricant. C'est la seule connexion Internet sortante de l'intégration ; laissez l'option désactivée pour rester entièrement en local."
+          "firmware_update_check": "Ajoute une entité de mise à jour du firmware qui compare la version du module à celle du serveur du fabricant. C'est la seule connexion Internet sortante de l'intégration ; laissez l'option désactivée pour rester entièrement en local.",
+          "service_data_requests": "Désactivé : aucune requête de données de fonctionnement n'est envoyée à cet appareil. Les capteurs de diagnostic et la source de température intérieure en ont besoin."
         },
         "title": "Options WF-RAC",
         "sections": {

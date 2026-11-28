@@ -32,7 +32,7 @@ from custom_components.mitsubishi_wf_rac import (
     coordinator as coordinator_module,
     service_data as service_data_module,
 )
-from custom_components.mitsubishi_wf_rac.const import DOMAIN
+from custom_components.mitsubishi_wf_rac.const import CONF_SERVICE_DATA_REQUESTS, DOMAIN
 from custom_components.mitsubishi_wf_rac.service_data import (
     RESEARCH_CONTEXT,
     RESEARCH_SERVICE_DATA_CODES,
@@ -680,3 +680,44 @@ async def test_the_repair_comes_at_the_third_pause_and_goes_on_an_answer(
     await requests(1)
 
     assert registry.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_the_option_off_stops_every_request_and_hands_the_unit_back(
+    armed, breaker, platform_device, requests
+):
+    assert await requests(1) == [(FAST, SERVICE_DATA_INDOOR_COIL_RAW)]
+    assert armed.wire_value == 22.0
+
+    platform_device.hass.config_entries.async_update_entry(
+        platform_device.config_entry, options={CONF_SERVICE_DATA_REQUESTS: False}
+    )
+
+    assert await requests(2) == [(), ()]
+    assert not platform_device.service_data_supported
+    assert armed.blocked
+    assert armed.wire_value is None
+    assert not armed.needs_frame
+
+
+async def test_the_option_back_on_resumes_requests(
+    breaker, platform_device, requests, clock
+):
+    """The reload that saving the options causes builds the channel afresh, so
+    the breaker starts at zero; what is checked here is that requests flow."""
+    entry = platform_device.config_entry
+    platform_device.hass.config_entries.async_update_entry(
+        entry, options={CONF_SERVICE_DATA_REQUESTS: False}
+    )
+    assert await requests(1) == [()]
+
+    platform_device.hass.config_entries.async_update_entry(
+        entry, options={CONF_SERVICE_DATA_REQUESTS: True}
+    )
+    fresh = service_data_module.ServiceDataChannel(platform_device)
+    platform_device.service_data = fresh
+    fresh._last_response = dt_util.utcnow()
+    _prove(fresh, FAST, SERVICE_DATA_INDOOR_COIL_RAW)
+
+    assert fresh.breaker_state()["consecutive_refusals"] == 0
+    assert platform_device.service_data_supported
+    assert len((await requests(1))[0]) > 0

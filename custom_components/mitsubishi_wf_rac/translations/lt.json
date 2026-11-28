@@ -135,7 +135,7 @@
         "step": {
           "confirm": {
             "title": "Išjungti {device_name} veikimo duomenis?",
-            "description": "Šis įrenginys vis atmeta veikimo duomenų užklausas, o kiekviena atmesta užklausa pratęsia jo rašymo užraktą, todėl klausinėti iš naujo tik prailgina problemą. Home Assistant dabar klausia tik kartą per valandą.\n\nNorėdami visai nebeklausti, patvirtinkite šį pataisymą: integracija persikraus, o šio įrenginio veikimo duomenys bus išjungti. Ko tai kainuoja: iš tos užklausos maitinami diagnostiniai jutikliai (kompresoriaus dažnis, darbinė srovė, karštų dujų temperatūra, EEV padėtis ir šilumokaičio temperatūros) nebeatsinaujina, o integracijos parinktyse nustatytas vidaus temperatūros šaltinis įrenginiui nebeperduodamas, nes abiem reikia veikimo duomenų. Visa kita nepaliesta.\n\nIšjungus įrenginį ir minutę palaukus, kol jis neturi maitinimo, užraktas nusiima, o Home Assistant veikimo duomenis vėl pradeda gauti pats. Jei šio pataisymo nepatvirtinsite, jis išnyks, kai tik įrenginys vėl atsakys."
+            "description": "Šis įrenginys vis atmeta veikimo duomenų užklausas, o kiekviena atmesta užklausa pratęsia jo rašymo užraktą, todėl klausinėti iš naujo tik prailgina problemą. Home Assistant dabar klausia tik kartą per valandą.\n\nNorėdami visai nebeklausti, patvirtinkite šį pataisymą: integracija persikraus, o šio įrenginio veikimo duomenys bus išjungti. Ko tai kainuoja: iš tos užklausos maitinami diagnostiniai jutikliai (kompresoriaus dažnis, darbinė srovė, karštų dujų temperatūra, EEV padėtis ir šilumokaičio temperatūros) nebeatsinaujina, o integracijos parinktyse nustatytas vidaus temperatūros šaltinis įrenginiui nebeperduodamas, nes abiem reikia veikimo duomenų. Visa kita nepaliesta. Vėl įjungti galima integracijos parinktyse, nuostatoje „Užklausti veikimo duomenis“.\n\nJei šio pataisymo neliesite, užraktą nuima įrenginio atjungimas nuo maitinimo minutei. Home Assistant veikimo duomenis vėl pradeda gauti pats, o pataisymas išnyksta."
           }
         }
       }
@@ -151,11 +151,13 @@
         "description": "Žemiau pateikiamos parinktys, kurias galite keisti šiam oro kondicionieriui.",
         "data": {
           "availability_retry_limit": "Pakartotinių bandymų riba",
-          "firmware_update_check": "Tikrinti programinės įrangos atnaujinimus"
+          "firmware_update_check": "Tikrinti programinės įrangos atnaujinimus",
+          "service_data_requests": "Užklausti veikimo duomenis"
         },
         "data_description": {
           "availability_retry_limit": "Kiek iš eilės nepavykusių apklausų reikia, kad kondicionierius būtų pažymėtas kaip nepasiekiamas. Mažiausia reikšmė 3 esant 60 s apklausos intervalui atitinka maždaug tris minutes — pakanka pergyventi kas valandą vykstantį modulio prisijungimą prie Wi-Fi iš naujo. Esant silpnam ryšiui padidinkite.",
-          "firmware_update_check": "Sukuria programinės įrangos atnaujinimo objektą, kuris lygina modulio versiją su gamintojo serveriu. Tai vienintelis integracijos užmezgamas ryšys su internetu — palikite išjungtą, kad viskas liktų vietinėje aplinkoje."
+          "firmware_update_check": "Sukuria programinės įrangos atnaujinimo objektą, kuris lygina modulio versiją su gamintojo serveriu. Tai vienintelis integracijos užmezgamas ryšys su internetu — palikite išjungtą, kad viskas liktų vietinėje aplinkoje.",
+          "service_data_requests": "Išjungta: šiam įrenginiui veikimo duomenų užklausos nesiunčiamos. Diagnostiniams jutikliams ir vidaus temperatūros šaltiniui jų reikia."
         },
         "title": "WF-RAC parinktys",
         "sections": {

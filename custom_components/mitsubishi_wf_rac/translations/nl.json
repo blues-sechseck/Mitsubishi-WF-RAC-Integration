@@ -130,12 +130,12 @@
       "description": "De diagnostische sensoren voor compressor, stroom, temperaturen en EEV-stand worden eens per minuut met een extra verzoek uitgelezen. Dit apparaat accepteert dat verzoek en beantwoordt het, maar heeft er nog nooit ook maar één segment in teruggegeven — die sensoren zouden dus nooit een waarde tonen, hoe het verzoek er ook uitziet.\n\nHome Assistant is gestopt met vragen. De sensoren melden nu niet beschikbaar in plaats van onbekend, en dat is het eerlijke verschil: een meting is niet te laat, er is er geen. U kunt ze op dit apparaat uitschakelen; er gaat niets verloren en het haalt ze uit beeld.\n\nAl het overige blijft ongemoeid — aan/uit, modus, temperatuur, ventilator en lamellen zijn gewone commando's en gebruiken dit kanaal niet. Een in de opties ingestelde bron voor de binnentemperatuur blijft ook werken: die reist op hetzelfde verzoek mee, dat daarvoor nog steeds verstuurd wordt.\n\nDe integratie herladen laat het opnieuw proberen, voor het geval dit tijdelijk was."
     },
     "service_data_refused": {
-      "title": "{device_name} blijft verzoeken om bedrijfsdata weigeren",
+      "title": "{device_name} weigert steeds verzoeken om bedrijfsdata",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Bedrijfsdata voor {device_name} uitschakelen?",
-            "description": "Dit apparaat blijft verzoeken om bedrijfsdata weigeren, en elk geweigerd verzoek houdt zijn schrijfvergrendeling gaande, dus opnieuw vragen verlengt het probleem alleen maar. Home Assistant vraagt nu nog maar één keer per uur.\n\nOm helemaal te stoppen met vragen, bevestigt u deze reparatie: de integratie laadt opnieuw met bedrijfsdata uitgeschakeld voor dit apparaat. Wat dat kost: de diagnostische sensoren die door dat verzoek gevoed worden (compressorfrequentie, bedrijfsstroom, heetgastemperatuur, EEV-stand en de warmtewisselaartemperaturen) worden niet meer bijgewerkt, en een in de opties van de integratie ingestelde bron voor de binnentemperatuur wordt niet meer aan het apparaat doorgegeven, want beide hebben bedrijfsdata nodig. Al het overige blijft ongemoeid.\n\nHet apparaat een minuut spanningsloos maken heft de vergrendeling op, en Home Assistant pakt de bedrijfsdata dan zelf weer op. Bevestigt u deze reparatie niet, dan verdwijnt ze zodra het apparaat weer antwoordt."
+            "description": "Dit apparaat weigert steeds verzoeken om bedrijfsdata, en elk geweigerd verzoek houdt zijn schrijfvergrendeling gaande, dus opnieuw vragen verlengt het probleem alleen maar. Home Assistant vraagt nu nog maar één keer per uur.\n\nOm helemaal te stoppen met vragen, bevestigt u deze reparatie: de integratie laadt opnieuw met bedrijfsdata uitgeschakeld voor dit apparaat. Wat dat kost: de diagnostische sensoren die door dat verzoek gevoed worden (compressorfrequentie, bedrijfsstroom, heetgastemperatuur, EEV-stand en de warmtewisselaartemperaturen) worden niet meer bijgewerkt, en een in de opties van de integratie ingestelde bron voor de binnentemperatuur wordt niet meer aan het apparaat doorgegeven, want beide hebben bedrijfsdata nodig. Al het overige blijft ongemoeid. Met „Bedrijfsdata opvragen” in de opties van de integratie schakelt u het weer in.\n\nLaat u deze reparatie met rust, dan heft het een minuut spanningsloos maken van het apparaat de vergrendeling op. Home Assistant pakt de bedrijfsdata dan zelf weer op en de reparatie verdwijnt."
           }
         }
       }
@@ -151,11 +151,13 @@
         "description": "Hieronder zijn instellingen die je kan aanpassen voor deze airco.",
         "data": {
           "availability_retry_limit": "Herhaallimiet",
-          "firmware_update_check": "Controleren op firmware-updates"
+          "firmware_update_check": "Controleren op firmware-updates",
+          "service_data_requests": "Bedrijfsdata opvragen"
         },
         "data_description": {
           "availability_retry_limit": "Opeenvolgende mislukte pollings voordat de airco als niet beschikbaar wordt gemarkeerd. Het minimum van drie is bij een pollinginterval van 60 s ongeveer drie minuten — genoeg om de uurlijkse wifi-herverbinding van de module te overbruggen. Verhoog het bij een zwakke verbinding.",
-          "firmware_update_check": "Maakt een Firmware-update-entiteit die de versie van de module vergelijkt met de server van de fabrikant. Dit is de enige uitgaande internetverbinding van de integratie — laat hem uit om volledig lokaal te blijven."
+          "firmware_update_check": "Maakt een Firmware-update-entiteit die de versie van de module vergelijkt met de server van de fabrikant. Dit is de enige uitgaande internetverbinding van de integratie — laat hem uit om volledig lokaal te blijven.",
+          "service_data_requests": "Uit: er worden geen verzoeken om bedrijfsdata naar dit apparaat gestuurd. De diagnostische sensoren en de bron voor de binnentemperatuur hebben ze nodig."
         },
         "title": "WF-RAC opties",
         "sections": {

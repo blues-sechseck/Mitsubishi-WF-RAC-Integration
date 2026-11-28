@@ -46,6 +46,7 @@ from .const import (
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
+    CONF_SERVICE_DATA_REQUESTS,
     CONF_TARGET_OFFSET,
     CONF_TARGET_OFFSET_COOL,
     CONF_TARGET_OFFSET_HEAT,
@@ -648,6 +649,7 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
         keys = {
             CONF_AVAILABILITY_RETRY_LIMIT,
             CONF_FIRMWARE_UPDATE_CHECK,
+            CONF_SERVICE_DATA_REQUESTS,
             CONF_EXTERNAL_TEMPERATURE_SOURCE,
             CONF_EXTERNAL_TEMPERATURE_FALLBACK_SOURCE,
             CONF_EXTERNAL_TEMPERATURE_FALLBACK_OFFSET,
@@ -889,6 +891,10 @@ class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                     vol.Required(
                         CONF_FIRMWARE_UPDATE_CHECK,
                         default=options.get(CONF_FIRMWARE_UPDATE_CHECK, False),
+                    ): bool,
+                    vol.Required(
+                        CONF_SERVICE_DATA_REQUESTS,
+                        default=options.get(CONF_SERVICE_DATA_REQUESTS, True),
                     ): bool,
                     **sections,
                     # Collapsed once a source is in use: the overshoot above is

@@ -7,7 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.const import (
     CONF_CARRY_POWER_STATE,
-    CONF_SERVICE_DATA_DISABLED,
+    CONF_SERVICE_DATA_REQUESTS,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     STATUS_REQUEST_STOPPED,
@@ -131,7 +131,7 @@ async def test_the_refused_requests_repair_switches_operation_data_off(
         result = await flow.async_step_confirm({})
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_STOPPED
-    assert entry.data[CONF_SERVICE_DATA_DISABLED] is True
+    assert entry.options[CONF_SERVICE_DATA_REQUESTS] is False
+    assert CONF_STATUS_REQUEST_MODE not in entry.data
     reload.assert_called_once_with(entry.entry_id)
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None

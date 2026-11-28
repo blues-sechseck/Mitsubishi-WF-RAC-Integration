@@ -82,7 +82,7 @@
         "step": {
           "confirm": {
             "title": "Izslēgt darbības datus ierīcei {device_name}?",
-            "description": "Šī ierīce atkārtoti noraida darbības datu pieprasījumus, un katrs noraidītais pieprasījums pagarina tās rakstīšanas bloķējumu, tāpēc jautāt vēlreiz tikai pagarina problēmu. Home Assistant tagad jautā tikai reizi stundā.\n\nLai vispār pārtrauktu jautāt, iesniedziet šo labojumu: integrācija pārlādējas, un šai ierīcei darbības dati tiek izslēgti. Ko tas maksā: diagnostikas sensori, ko baro šis pieprasījums (kompresora frekvence, darba strāva, karstās gāzes temperatūra, EEV pozīcija un siltummaiņu temperatūras), vairs netiek atjaunināti, un integrācijas opcijās norādītais iekštelpu temperatūras avots ierīcei vairs netiek nodots, jo abiem vajadzīgi darbības dati. Viss pārējais nav ietekmēts.\n\nIerīces izslēgšana uz minūti, atvienojot to no strāvas, bloķējumu atceļ, un Home Assistant darbības datus atsāk pats. Ja šo labojumu neiesniedzat, tas pazudīs, tiklīdz ierīce atkal atbildēs."
+            "description": "Šī ierīce atkārtoti noraida darbības datu pieprasījumus, un katrs noraidītais pieprasījums pagarina tās rakstīšanas bloķējumu, tāpēc jautāt vēlreiz tikai pagarina problēmu. Home Assistant tagad jautā tikai reizi stundā.\n\nLai vispār pārtrauktu jautāt, iesniedziet šo labojumu: integrācija pārlādējas, un šai ierīcei darbības dati tiek izslēgti. Ko tas maksā: diagnostikas sensori, ko baro šis pieprasījums (kompresora frekvence, darba strāva, karstās gāzes temperatūra, EEV pozīcija un siltummaiņu temperatūras), vairs netiek atjaunināti, un integrācijas opcijās norādītais iekštelpu temperatūras avots ierīcei vairs netiek nodots, jo abiem vajadzīgi darbības dati. Viss pārējais nav ietekmēts. To var atkal ieslēgt integrācijas opcijās ar iestatījumu „Pieprasīt darbības datus”.\n\nJa šo labojumu neaiztiekat, ierīces izslēgšana uz minūti, atvienojot to no strāvas, bloķējumu atceļ. Home Assistant darbības datus atsāk pats, un labojums pazūd."
           }
         }
       }
@@ -98,11 +98,13 @@
         "description": "Zemāk ir opcijas, ko varat mainīt šim gaisa kondicionierim.",
         "data": {
           "availability_retry_limit": "Atkārtojumu ierobežojums",
-          "firmware_update_check": "Pārbaudīt programmaparatūras atjauninājumus"
+          "firmware_update_check": "Pārbaudīt programmaparatūras atjauninājumus",
+          "service_data_requests": "Pieprasīt darbības datus"
         },
         "data_description": {
           "availability_retry_limit": "Neveiksmīgu aptauju skaits pēc kārtas, pirms gaisa kondicionieris tiek atzīmēts kā nepieejams. Minimālie trīs ir aptuveni trīs minūtes pie 60 sekunžu aptaujas intervāla — pietiekami, lai pārdzīvotu moduļa ik stundu notiekošo WiFi atkārtoto pieslēgšanos. Palieliniet to pie vāja savienojuma.",
-          "firmware_update_check": "Pievieno programmaparatūras atjauninājuma entitāti, kas salīdzina moduļa versiju ar ražotāja serveri. Tas ir vienīgais izejošais interneta savienojums, ko veido integrācija — atstājiet izslēgtu, lai viss paliktu pilnībā lokāls."
+          "firmware_update_check": "Pievieno programmaparatūras atjauninājuma entitāti, kas salīdzina moduļa versiju ar ražotāja serveri. Tas ir vienīgais izejošais interneta savienojums, ko veido integrācija — atstājiet izslēgtu, lai viss paliktu pilnībā lokāls.",
+          "service_data_requests": "Izslēgts: šai ierīcei netiek sūtīti darbības datu pieprasījumi. Diagnostikas sensoriem un iekštelpu temperatūras avotam tie ir vajadzīgi."
         },
         "title": "WF-RAC opcijas",
         "sections": {

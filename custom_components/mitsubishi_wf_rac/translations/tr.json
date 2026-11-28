@@ -82,7 +82,7 @@
         "step": {
           "confirm": {
             "title": "{device_name} için çalışma verileri kapatılsın mı?",
-            "description": "Bu cihaz çalışma verisi isteklerini reddetmeyi sürdürüyor ve reddedilen her istek yazma kilidini uzatıyor; bu yüzden yeniden sormak sorunu yalnızca uzatır. Home Assistant artık saatte yalnızca bir kez soruyor.\n\nHiç sormamak için bu onarımı gönderin: entegrasyon yeniden yüklenir ve bu cihaz için çalışma verileri kapatılır. Bunun bedeli: bu istekle beslenen tanılama sensörleri (kompresör frekansı, çalışma akımı, sıcak gaz sıcaklığı, EEV konumu ve eşanjör sıcaklıkları) artık güncellenmez ve entegrasyon seçeneklerinde ayarlanan bir iç sıcaklık kaynağı cihaza artık iletilmez, çünkü ikisi de çalışma verisine ihtiyaç duyar. Geri kalan her şey etkilenmez.\n\nCihazın bir dakika elektriğini kesmek kilidi çözer ve Home Assistant çalışma verilerini sonra kendiliğinden yeniden alır. Bu onarımı göndermezseniz, cihaz yeniden yanıt verdiğinde kendiliğinden kalkar."
+            "description": "Bu cihaz çalışma verisi isteklerini reddetmeyi sürdürüyor ve reddedilen her istek yazma kilidini uzatıyor; bu yüzden yeniden sormak sorunu yalnızca uzatır. Home Assistant artık saatte yalnızca bir kez soruyor.\n\nHiç sormamak için bu onarımı gönderin: entegrasyon yeniden yüklenir ve bu cihaz için çalışma verileri kapatılır. Bunun bedeli: bu istekle beslenen tanılama sensörleri (kompresör frekansı, çalışma akımı, sıcak gaz sıcaklığı, EEV konumu ve eşanjör sıcaklıkları) artık güncellenmez ve entegrasyon seçeneklerinde ayarlanan bir iç sıcaklık kaynağı cihaza artık iletilmez, çünkü ikisi de çalışma verisine ihtiyaç duyar. Geri kalan her şey etkilenmez. Entegrasyon seçeneklerindeki “Çalışma verilerini iste” ile yeniden açabilirsiniz.\n\nBu onarıma dokunmazsanız, cihazın bir dakika elektriğini kesmek kilidi çözer. Home Assistant çalışma verilerini sonra kendiliğinden yeniden alır ve onarım kalkar."
           }
         }
       }
@@ -98,11 +98,13 @@
         "description": "Aşağıda bu klima için değiştirebileceğiniz seçenekler yer alıyor.",
         "data": {
           "availability_retry_limit": "Yeniden deneme sınırı",
-          "firmware_update_check": "Ürün yazılımı güncellemelerini denetle"
+          "firmware_update_check": "Ürün yazılımı güncellemelerini denetle",
+          "service_data_requests": "Çalışma verilerini iste"
         },
         "data_description": {
           "availability_retry_limit": "Klima kullanılamıyor olarak işaretlenmeden önceki art arda başarısız sorgu sayısı. Üç olan en düşük değer, 60 saniyelik sorgu aralığında yaklaşık üç dakikadır - modülün saatlik Wi-Fi yeniden bağlanmasını atlatmaya yeter. Zayıf bağlantıda artırın.",
-          "firmware_update_check": "Modülün sürümünü üreticinin sunucusuyla karşılaştıran bir Ürün yazılımı güncellemesi varlığı ekler. Entegrasyonun yaptığı tek giden internet bağlantısı budur - tamamen yerel kalmak için kapalı bırakın."
+          "firmware_update_check": "Modülün sürümünü üreticinin sunucusuyla karşılaştıran bir Ürün yazılımı güncellemesi varlığı ekler. Entegrasyonun yaptığı tek giden internet bağlantısı budur - tamamen yerel kalmak için kapalı bırakın.",
+          "service_data_requests": "Kapalı: bu cihaza çalışma verisi isteği gönderilmez. Tanılama sensörleri ve iç sıcaklık kaynağı bunlara ihtiyaç duyar."
         },
         "title": "WF-RAC seçenekleri",
         "sections": {

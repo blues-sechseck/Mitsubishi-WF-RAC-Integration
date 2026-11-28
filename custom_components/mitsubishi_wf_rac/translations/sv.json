@@ -82,7 +82,7 @@
         "step": {
           "confirm": {
             "title": "Stäng av kördata för {device_name}?",
-            "description": "Den här enheten avvisar förfrågningar om kördata gång på gång, och varje avvisad förfrågan håller dess skrivlås igång, så att fråga igen förlänger bara problemet. Home Assistant frågar nu bara en gång i timmen.\n\nSkicka in den här reparationen för att sluta fråga helt: integrationen laddas om med kördata avstängd för den här enheten. Det här kostar: diagnossensorerna som matas av den förfrågan (kompressorfrekvens, driftström, hetgastemperatur, EEV-position och värmeväxlartemperaturerna) uppdateras inte längre, och en inomhustemperaturkälla som angetts i integrationens alternativ skickas inte längre till enheten, eftersom båda behöver kördata. Allt annat påverkas inte.\n\nAtt göra enheten strömlös i en minut häver låset, och Home Assistant tar då upp kördata igen på egen hand. Skickar du inte in reparationen försvinner den så snart enheten svarar igen."
+            "description": "Den här enheten avvisar förfrågningar om kördata gång på gång, och varje avvisad förfrågan håller dess skrivlås igång, så att fråga igen förlänger bara problemet. Home Assistant frågar nu bara en gång i timmen.\n\nSkicka in den här reparationen för att sluta fråga helt: integrationen laddas om med kördata avstängd för den här enheten. Det här kostar: diagnossensorerna som matas av den förfrågan (kompressorfrekvens, driftström, hetgastemperatur, EEV-position och värmeväxlartemperaturerna) uppdateras inte längre, och en inomhustemperaturkälla som angetts i integrationens alternativ skickas inte längre till enheten, eftersom båda behöver kördata. Allt annat påverkas inte. Du kan slå på det igen med Begär kördata i integrationens alternativ.\n\nOm du låter reparationen vara kan du häva låset genom att göra enheten strömlös i en minut. Home Assistant tar då upp kördata igen på egen hand och reparationen försvinner."
           }
         }
       }
@@ -98,11 +98,13 @@
         "description": "Nedan finns alternativen du kan ändra för den här luftkonditioneringen.",
         "data": {
           "availability_retry_limit": "Gräns för nya försök",
-          "firmware_update_check": "Sök efter firmwareuppdateringar"
+          "firmware_update_check": "Sök efter firmwareuppdateringar",
+          "service_data_requests": "Begär kördata"
         },
         "data_description": {
           "availability_retry_limit": "Antal misslyckade hämtningar i följd innan luftkonditioneringen markeras som otillgänglig. Minimivärdet tre motsvarar ungefär tre minuter med 60 sekunders hämtningsintervall – tillräckligt för att klara modulens timvisa WiFi-återanslutning. Höj det vid en svag länk.",
-          "firmware_update_check": "Lägger till en firmwareuppdateringsentitet som jämför modulens version med tillverkarens server. Det här är den enda utgående internetanslutningen integrationen gör – låt den vara avstängd för att hålla allt helt lokalt."
+          "firmware_update_check": "Lägger till en firmwareuppdateringsentitet som jämför modulens version med tillverkarens server. Det här är den enda utgående internetanslutningen integrationen gör – låt den vara avstängd för att hålla allt helt lokalt.",
+          "service_data_requests": "Av: inga förfrågningar om kördata skickas till den här enheten. Diagnossensorerna och inomhustemperaturkällan behöver dem."
         },
         "title": "WF-RAC-alternativ",
         "sections": {

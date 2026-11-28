@@ -117,15 +117,18 @@ class ExternalTemperatureFeed:
         """Whether no value may reach the unit, only the sentinel.
 
         True on a unit we have stopped sending the operation-data request to
-        (#329, #416). The value has no frame of its own and rides on that
-        request, and on such a unit a value that went out once would stand for
+        (#329, #416) and on one the user switched operation data off for. The
+        value has no frame of its own and rides on that request, and on such a unit a value that went out once would stand for
         good: nothing refreshes it, nothing can release it, and the room
         temperature would stay wherever the source last was. So every frame
         hands the unit back to its own sensor instead. Read from the
         coordinator rather than kept here, because the mode is its to decide
         and this must never disagree with it.
         """
-        return self._device.status_request_mode == STATUS_REQUEST_STOPPED
+        return (
+            self._device.status_request_mode == STATUS_REQUEST_STOPPED
+            or not self._device.service_data_enabled
+        )
 
     @property
     def ignored(self) -> bool:

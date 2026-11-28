@@ -10,10 +10,9 @@ from homeassistant.helpers import issue_registry as ir
 
 from .const import (
     CONF_CARRY_POWER_STATE,
-    CONF_SERVICE_DATA_DISABLED,
+    CONF_SERVICE_DATA_REQUESTS,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
-    STATUS_REQUEST_STOPPED,
 )
 from .foreign_writers import status_request_unsupported_issue_id
 from .service_data import service_data_refused_issue_id
@@ -67,9 +66,8 @@ class StatusRequestRetryFlow(ConfirmRepairFlow):
 class ServiceDataOffFlow(ConfirmRepairFlow):
     """Switch operation data off for a unit that keeps refusing it.
 
-    Uses the stopped request mode, which already means "no request at all, the
-    unit is handed back to its own room sensor". The extra flag keeps setup
-    from describing that as the unit changing its own settings.
+    Turns the "Request operation data" option off, so the way back is the same
+    option in the integration's options.
     """
 
     def __init__(self, entry_id: str) -> None:
@@ -86,12 +84,7 @@ class ServiceDataOffFlow(ConfirmRepairFlow):
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         if entry is not None:
             self.hass.config_entries.async_update_entry(
-                entry,
-                data={
-                    **entry.data,
-                    CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED,
-                    CONF_SERVICE_DATA_DISABLED: True,
-                },
+                entry, options={**entry.options, CONF_SERVICE_DATA_REQUESTS: False}
             )
             self.hass.config_entries.async_schedule_reload(entry.entry_id)
         ir.async_delete_issue(

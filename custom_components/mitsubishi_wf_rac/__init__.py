@@ -34,7 +34,6 @@ from .const import (
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
-    CONF_SERVICE_DATA_DISABLED,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     OVERSHOOT_MAX,
@@ -342,14 +341,22 @@ async def async_setup_entry(
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    if _device.status_request_mode == STATUS_REQUEST_STOPPED:
-        # Raised again here because the repair was not persistent when it was
-        # first raised, and an entry that learned this before the change has
-        # none to show after its restart (#416).
-        if not entry.data.get(CONF_SERVICE_DATA_DISABLED):
-            # Not for a unit the user switched off from the refused-requests
-            # repair: that repair's wording is about the unit changing its
-            # settings, which did not happen here.
+    if not _device.service_data_enabled:
+        ir.async_delete_issue(
+            hass, DOMAIN, service_data_refused_issue_id(entry.entry_id)
+        )
+    if (
+        _device.status_request_mode == STATUS_REQUEST_STOPPED
+        or not _device.service_data_enabled
+    ):
+        if _device.status_request_mode == STATUS_REQUEST_STOPPED and (
+            _device.service_data_enabled
+        ):
+            # Raised again here because the repair was not persistent when it
+            # was first raised, and an entry that learned this before the
+            # change has none to show after its restart (#416). Not for a unit
+            # the user switched off: the repair's wording is about the unit
+            # changing its own settings.
             report_status_request_unsupported(hass, entry.entry_id, _device.device_name)
         if _device.external_temperature.source_configured:
             # The previous run may have left the source's last value standing

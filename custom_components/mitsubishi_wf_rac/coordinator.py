@@ -46,6 +46,7 @@ from .account_slots import (
 from .command_queue import CommandQueue
 from .const import (
     AC_CERT_FILENAME,
+    CONF_SERVICE_DATA_REQUESTS,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     MIN_TIME_BETWEEN_UPDATES,
@@ -638,6 +639,11 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         return self._status_request_mode
 
     @property
+    def service_data_enabled(self) -> bool:
+        """Whether the user lets operation data be requested from this unit."""
+        return bool(self.options.get(CONF_SERVICE_DATA_REQUESTS, True))
+
+    @property
     def service_data_supported(self) -> bool:
         """Whether this unit answers operation-data requests at all."""
         return self.service_data.supported
@@ -654,6 +660,8 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         """
         if self._status_request_mode == STATUS_REQUEST_STOPPED:
             return False
+        if not self.service_data_enabled:
+            return False
         return not self._parser.status_request_carries_state or bool(
             self._airco is not None and self._airco.Operation
         )
@@ -664,7 +672,7 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
         When due, that is - see SERVICE_DATA_MIN_SPACING. Never on a unit with a
         reduced state block: it does not answer, and the request is applied.
         """
-        if self.reduced_status_block:
+        if self.reduced_status_block or not self.service_data_enabled:
             return
         service_data_codes = self._subscribed_service_data_codes()
         research = RESEARCH_CONTEXT in self.async_contexts()

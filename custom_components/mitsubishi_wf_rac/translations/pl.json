@@ -82,7 +82,7 @@
         "step": {
           "confirm": {
             "title": "Wyłączyć dane operacyjne dla urządzenia {device_name}?",
-            "description": "To urządzenie wciąż odrzuca zapytania o dane operacyjne, a każde odrzucone zapytanie przedłuża jego blokadę zapisu, więc ponowne pytanie tylko wydłuża problem. Home Assistant pyta teraz tylko raz na godzinę.\n\nAby przestać pytać całkowicie, zatwierdź tę naprawę: integracja się przeładuje, a dane operacyjne tego urządzenia zostaną wyłączone. Co to kosztuje: czujniki diagnostyczne zasilane tym zapytaniem (częstotliwość sprężarki, prąd roboczy, temperatura gorącego gazu, położenie EEV i temperatury wymienników) przestają się aktualizować, a źródło temperatury wewnętrznej ustawione w opcjach integracji nie jest już przekazywane do urządzenia, bo oba wymagają danych operacyjnych. Wszystko inne pozostaje bez zmian.\n\nOdłączenie urządzenia od zasilania na minutę znosi blokadę, a Home Assistant sam wznawia wtedy dane operacyjne. Jeśli nie zatwierdzisz tej naprawy, zniknie ona, gdy tylko urządzenie znów odpowie."
+            "description": "To urządzenie wciąż odrzuca zapytania o dane operacyjne, a każde odrzucone zapytanie przedłuża jego blokadę zapisu, więc ponowne pytanie tylko wydłuża problem. Home Assistant pyta teraz tylko raz na godzinę.\n\nAby przestać pytać całkowicie, zatwierdź tę naprawę: integracja się przeładuje, a dane operacyjne tego urządzenia zostaną wyłączone. Co to kosztuje: czujniki diagnostyczne zasilane tym zapytaniem (częstotliwość sprężarki, prąd roboczy, temperatura gorącego gazu, położenie EEV i temperatury wymienników) przestają się aktualizować, a źródło temperatury wewnętrznej ustawione w opcjach integracji nie jest już przekazywane do urządzenia, bo oba wymagają danych operacyjnych. Wszystko inne pozostaje bez zmian. Można je ponownie włączyć opcją „Pobieraj dane operacyjne” w opcjach integracji.\n\nJeśli zostawisz tę naprawę w spokoju, odłączenie urządzenia od zasilania na minutę znosi blokadę. Home Assistant sam wznawia wtedy dane operacyjne, a naprawa znika."
           }
         }
       }
@@ -98,11 +98,13 @@
         "description": "Poniżej znajdują się opcje, które możesz zmienić dla tego klimatyzatora.",
         "data": {
           "availability_retry_limit": "Limit ponowień",
-          "firmware_update_check": "Sprawdzaj aktualizacje firmware'u"
+          "firmware_update_check": "Sprawdzaj aktualizacje firmware'u",
+          "service_data_requests": "Pobieraj dane operacyjne"
         },
         "data_description": {
           "availability_retry_limit": "Liczba kolejnych nieudanych odpytań, po której klimatyzator zostaje oznaczony jako niedostępny. Minimum, czyli trzy, to około trzech minut przy 60-sekundowym odstępie odpytywania - wystarczy, by przetrwać cogodzinne ponowne łączenie modułu z Wi-Fi. Przy słabym łączu zwiększ tę wartość.",
-          "firmware_update_check": "Dodaje encję aktualizacji firmware'u, która porównuje wersję modułu z serwerem producenta. To jedyne wychodzące połączenie internetowe, jakie nawiązuje integracja - pozostaw wyłączone, aby działać w pełni lokalnie."
+          "firmware_update_check": "Dodaje encję aktualizacji firmware'u, która porównuje wersję modułu z serwerem producenta. To jedyne wychodzące połączenie internetowe, jakie nawiązuje integracja - pozostaw wyłączone, aby działać w pełni lokalnie.",
+          "service_data_requests": "Wyłączone: do tego urządzenia nie są wysyłane zapytania o dane operacyjne. Czujniki diagnostyczne i źródło temperatury wewnętrznej ich potrzebują."
         },
         "title": "Opcje WF-RAC",
         "sections": {

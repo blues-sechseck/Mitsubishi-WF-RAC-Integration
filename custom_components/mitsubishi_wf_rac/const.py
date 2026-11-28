@@ -55,11 +55,11 @@ STATUS_REQUEST_ECHO = "echo"
 STATUS_REQUEST_STOPPED = "stopped"
 STATUS_REQUEST_STOPPED_LEGACY = "silent"
 
-# Set together with the stopped mode when the user switches operation data off
-# from the repair for a unit that keeps refusing it. The stopped mode alone
-# means "the unit changed its settings", which that repair would describe
-# wrongly on the next setup.
-CONF_SERVICE_DATA_DISABLED = "service_data_disabled"
+# Option, on unless set to False: whether operation data is requested from
+# this unit at all. Off sends no such request, which also hands the unit back
+# to its own room sensor. Separate from the stopped request mode, which is
+# learned from the unit rather than chosen.
+CONF_SERVICE_DATA_REQUESTS = "service_data_requests"
 
 # Superseded by CONF_STATUS_REQUEST_MODE and read only to carry entries written
 # by 2026.9.9-beta2..beta6 forward. True there means what "echo" means now.
