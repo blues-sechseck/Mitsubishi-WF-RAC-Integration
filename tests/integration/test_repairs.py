@@ -7,6 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mitsubishi_wf_rac.const import (
     CONF_CARRY_POWER_STATE,
+    CONF_SERVICE_DATA_DISABLED,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     STATUS_REQUEST_STOPPED,
@@ -16,8 +17,12 @@ from custom_components.mitsubishi_wf_rac.foreign_writers import (
     status_request_unsupported_issue_id,
 )
 from custom_components.mitsubishi_wf_rac.repairs import (
+    ServiceDataOffFlow,
     StatusRequestRetryFlow,
     async_create_fix_flow,
+)
+from custom_components.mitsubishi_wf_rac.service_data import (
+    service_data_refused_issue_id,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -95,3 +100,38 @@ async def test_a_repair_without_data_gets_the_plain_confirm_flow(hass: HomeAssis
     flow = await async_create_fix_flow(hass, "status_request_unsupported_x", None)
 
     assert not isinstance(flow, StatusRequestRetryFlow)
+
+
+async def test_the_refused_requests_repair_switches_operation_data_off(
+    hass: HomeAssistant,
+):
+    entry = MockConfigEntry(domain=DOMAIN, data={"airco_id": "a"})
+    entry.add_to_hass(hass)
+    issue_id = service_data_refused_issue_id(entry.entry_id)
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        data={"entry_id": entry.entry_id},
+        is_fixable=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="service_data_refused",
+        translation_placeholders={"device_name": "Living room"},
+    )
+    flow = await async_create_fix_flow(hass, issue_id, {"entry_id": entry.entry_id})
+    assert isinstance(flow, ServiceDataOffFlow)
+    flow.hass = hass
+    flow.handler = DOMAIN
+    flow.issue_id = issue_id
+    flow.data = {"entry_id": entry.entry_id}
+
+    result = await flow.async_step_init()
+    assert result["step_id"] == "confirm"
+    with patch.object(hass.config_entries, "async_schedule_reload") as reload:
+        result = await flow.async_step_confirm({})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_STATUS_REQUEST_MODE] == STATUS_REQUEST_STOPPED
+    assert entry.data[CONF_SERVICE_DATA_DISABLED] is True
+    reload.assert_called_once_with(entry.entry_id)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None

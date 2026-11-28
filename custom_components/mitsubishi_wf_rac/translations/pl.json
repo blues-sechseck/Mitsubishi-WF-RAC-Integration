@@ -76,6 +76,17 @@
       "title": "Dane operacyjne z urządzenia {device_name} są niedostępne",
       "description": "Czujniki diagnostyczne sprężarki, prądu, temperatur i położenia EEV są odczytywane co minutę dodatkowym zapytaniem. To urządzenie przyjmuje to zapytanie i na nie odpowiada, ale nigdy nie zwróciło w nim ani jednego segmentu - te czujniki nie miały więc szans pokazać wartości, niezależnie od tego, jak zapytanie wygląda.\n\nHome Assistant przestał pytać. Czujniki wskazują teraz „niedostępny” zamiast „nieznany” - na tym polega uczciwa różnica: odczyt nie jest spóźniony, jego po prostu nie ma. Możesz je wyłączyć w tym urządzeniu; nic nie przepada, znikają tylko z widoku.\n\nWszystko inne pozostaje bez zmian - zasilanie, tryb, temperatura, wentylator i lamele to zwykłe polecenia i nie korzystają z tego kanału. Źródło temperatury wewnętrznej ustawione w opcjach integracji również nadal działa: jest przenoszone tym samym zapytaniem, które dla niego wciąż jest wysyłane.\n\nPrzeładowanie integracji ponawia próbę, na wypadek gdyby to było chwilowe."
     },
+    "service_data_refused": {
+      "title": "{device_name} wciąż odrzuca zapytania o dane operacyjne",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Wyłączyć dane operacyjne dla urządzenia {device_name}?",
+            "description": "To urządzenie wciąż odrzuca zapytania o dane operacyjne, a każde odrzucone zapytanie przedłuża jego blokadę zapisu, więc ponowne pytanie tylko wydłuża problem. Home Assistant pyta teraz tylko raz na godzinę.\n\nAby przestać pytać całkowicie, zatwierdź tę naprawę: integracja się przeładuje, a dane operacyjne tego urządzenia zostaną wyłączone. Co to kosztuje: czujniki diagnostyczne zasilane tym zapytaniem (częstotliwość sprężarki, prąd roboczy, temperatura gorącego gazu, położenie EEV i temperatury wymienników) przestają się aktualizować, a źródło temperatury wewnętrznej ustawione w opcjach integracji nie jest już przekazywane do urządzenia, bo oba wymagają danych operacyjnych. Wszystko inne pozostaje bez zmian.\n\nOdłączenie urządzenia od zasilania na minutę znosi blokadę, a Home Assistant sam wznawia wtedy dane operacyjne. Jeśli nie zatwierdzisz tej naprawy, zniknie ona, gdy tylko urządzenie znów odpowie."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} nie przyjmuje temperatury pomieszczenia",
       "description": "To urządzenie nie podaje temperatury pomieszczenia i ignoruje przesłaną mu wartość, więc źródło temperatury wewnętrznej ustawione w opcjach tej integracji nie ma żadnego skutku i nic nie jest do niego wysyłane. Możesz usunąć źródło w opcjach; ten komunikat zniknie po przeładowaniu integracji."

@@ -76,6 +76,17 @@
       "title": "Operation data is not available from {device_name}",
       "description": "The diagnostic sensors for compressor, current, temperatures and EEV position are read with an extra request once a minute. This unit accepts that request and answers it, but has never returned a single segment in it - so those sensors were never going to show a value, whatever the request looks like.\n\nHome Assistant has stopped asking. The sensors now say unavailable rather than unknown, which is the honest difference: a reading is not late, there is none. You can disable them on this device; nothing is lost, and it takes them out of view.\n\nEverything else is unaffected - power, mode, temperature, fan and louvres are ordinary commands and do not use this channel. An indoor temperature source set in the integration's options keeps working too: it travels on the same request, which is still sent for it.\n\nReloading the integration makes it try again, in case this was temporary."
     },
+    "service_data_refused": {
+      "title": "Operation data keeps being refused by {device_name}",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Switch operation data off for {device_name}?",
+            "description": "This unit keeps refusing requests for operation data, and every refused request keeps its write lock running, so asking again only prolongs the problem. Home Assistant now asks just once an hour.\n\nTo stop asking altogether, submit this repair: the integration reloads with operation data switched off for this unit. What that costs: the diagnostic sensors fed by that request (compressor frequency, operating current, hot gas temperature, EEV position and the coil temperatures) no longer update, and an indoor temperature source set in the integration's options is no longer passed to the unit, because both need operation data. Everything else is unaffected.\n\nPower-cycling the unit - switching it off at the mains for a minute - clears a lock-out, and Home Assistant then picks operation data up again by itself. If you do not submit this repair, it goes away once the unit answers again."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} does not accept a room temperature",
       "description": "This unit reports no room temperature and ignores one sent to it, so the indoor temperature source set in this integration's options has no effect, and nothing is sent for it. You can remove the source in the options; this message goes away once the integration has reloaded."

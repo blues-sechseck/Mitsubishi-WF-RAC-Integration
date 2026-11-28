@@ -8,8 +8,15 @@ from homeassistant.components.repairs import ConfirmRepairFlow, RepairsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
-from .const import CONF_CARRY_POWER_STATE, CONF_STATUS_REQUEST_MODE, DOMAIN
+from .const import (
+    CONF_CARRY_POWER_STATE,
+    CONF_SERVICE_DATA_DISABLED,
+    CONF_STATUS_REQUEST_MODE,
+    DOMAIN,
+    STATUS_REQUEST_STOPPED,
+)
 from .foreign_writers import status_request_unsupported_issue_id
+from .service_data import service_data_refused_issue_id
 
 if TYPE_CHECKING:
     # Not exported from the repairs package by older cores; on the oldest
@@ -57,6 +64,42 @@ class StatusRequestRetryFlow(ConfirmRepairFlow):
         return self.async_create_entry(data={})
 
 
+class ServiceDataOffFlow(ConfirmRepairFlow):
+    """Switch operation data off for a unit that keeps refusing it.
+
+    Uses the stopped request mode, which already means "no request at all, the
+    unit is handed back to its own room sensor". The extra flag keeps setup
+    from describing that as the unit changing its own settings.
+    """
+
+    def __init__(self, entry_id: str) -> None:
+        """Remember which entry to switch off."""
+        super().__init__()
+        self._entry_id = entry_id
+
+    async def async_step_confirm(
+        self, user_input: dict[str, str] | None = None
+    ) -> RepairsFlowResult:
+        """Stop asking for operation data once the user confirms."""
+        if user_input is None:
+            return await super().async_step_confirm()
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        if entry is not None:
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    CONF_STATUS_REQUEST_MODE: STATUS_REQUEST_STOPPED,
+                    CONF_SERVICE_DATA_DISABLED: True,
+                },
+            )
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        ir.async_delete_issue(
+            self.hass, DOMAIN, service_data_refused_issue_id(self._entry_id)
+        )
+        return self.async_create_entry(data={})
+
+
 async def async_create_fix_flow(
     hass: HomeAssistant,
     issue_id: str,
@@ -68,4 +111,6 @@ async def async_create_fix_flow(
         # Raised by an earlier version, which carried no data. Setup raises it
         # again with the entry id, so this is only a stale row.
         return ConfirmRepairFlow()
+    if issue_id == service_data_refused_issue_id(entry_id):
+        return ServiceDataOffFlow(entry_id)
     return StatusRequestRetryFlow(entry_id)

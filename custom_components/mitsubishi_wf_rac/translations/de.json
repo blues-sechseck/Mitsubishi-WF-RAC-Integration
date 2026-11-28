@@ -129,6 +129,17 @@
       "title": "Von {device_name} sind keine Betriebsdaten lesbar",
       "description": "Die Diagnosesensoren für Verdichter, Strom, Temperaturen und EEV-Position werden einmal pro Minute mit einer zusätzlichen Anfrage geholt. Dieses Gerät nimmt die Anfrage an und beantwortet sie, hat darin aber noch nie ein einziges Segment geliefert — diese Sensoren hätten also nie einen Wert gezeigt, unabhängig davon, wie die Anfrage aussieht.\n\nHome Assistant fragt jetzt nicht mehr. Die Sensoren melden „nicht verfügbar“ statt „unbekannt“ — das ist der ehrliche Unterschied: es fehlt kein Wert, es kommt keiner. Sie können sie an diesem Gerät deaktivieren; es geht nichts verloren, und sie verschwinden aus der Ansicht.\n\nAlles andere bleibt unberührt — Ein/Aus, Modus, Temperatur, Lüfter und Lamellen sind gewöhnliche Befehle und nutzen diesen Kanal nicht. Auch eine in den Optionen eingestellte Raumtemperaturquelle funktioniert weiter: sie reist auf derselben Anfrage, die dafür weiterhin gesendet wird.\n\nEin Neuladen der Integration probiert es erneut, falls es doch nur vorübergehend war."
     },
+    "service_data_refused": {
+      "title": "{device_name} lehnt Betriebsdaten-Anfragen dauerhaft ab",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Betriebsdaten für {device_name} abschalten?",
+            "description": "Dieses Gerät lehnt Anfragen nach Betriebsdaten immer wieder ab, und jede abgelehnte Anfrage hält seine Schreibsperre am Laufen — weiteres Fragen verlängert das Problem nur. Home Assistant fragt deshalb nur noch einmal pro Stunde.\n\nUm gar nicht mehr zu fragen, bestätigen Sie diese Reparatur: Die Integration lädt neu, und die Betriebsdaten sind für dieses Gerät abgeschaltet. Was das kostet: die daraus gespeisten Diagnosesensoren (Verdichterfrequenz, Betriebsstrom, Heißgastemperatur, EEV-Position und die Wärmetauscher-Temperaturen) werden nicht mehr aktualisiert, und eine in den Optionen der Integration eingestellte Raumtemperaturquelle wird dem Gerät nicht mehr übergeben, denn beides braucht Betriebsdaten. Alles andere bleibt unberührt.\n\nEin Aus- und Wiedereinschalten des Geräts — eine Minute stromlos — löst die Sperre, und Home Assistant nimmt die Betriebsdaten dann von selbst wieder auf. Bestätigen Sie die Reparatur nicht, verschwindet sie, sobald das Gerät wieder antwortet."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} nimmt keine Raumtemperatur an",
       "description": "Dieses Gerät meldet keine Raumtemperatur und ignoriert eine, die ihm geschickt wird. Die in den Optionen dieser Integration eingestellte Raumtemperaturquelle bleibt deshalb wirkungslos, und es wird nichts dafür gesendet. Sie können die Quelle in den Optionen entfernen; diese Meldung verschwindet, sobald die Integration neu geladen wurde."

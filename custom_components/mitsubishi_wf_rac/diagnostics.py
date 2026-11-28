@@ -45,6 +45,9 @@ async def async_get_config_entry_diagnostics(
         # Refusals only reach the log at debug level, so this is where a
         # report shows whether the unit has been declining commands.
         "result_codes": device.result_codes,
+        # Why operation data may be paused right now: the ladder step, when it
+        # ends and how many requests in a row were refused.
+        "service_data_breaker": device.service_data.breaker_state(),
         "aircon": asdict(device.airco),
         # Kept across restarts: the raw frames around every detected defrost
         # and which signal fired, to check the detection against other units.

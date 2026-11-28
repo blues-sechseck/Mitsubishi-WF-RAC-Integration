@@ -76,6 +76,17 @@
       "title": "No {device_name} nav pieejami darbības dati",
       "description": "Diagnostikas sensori kompresoram, strāvai, temperatūrām un EEV pozīcijai tiek nolasīti ar papildu pieprasījumu reizi minūtē. Šī ierīce pieņem pieprasījumu un atbild uz to, taču tajā nekad nav atgriezusi nevienu segmentu — tāpēc šie sensori nekad nerādītu vērtību, lai kā arī pieprasījums izskatītos.\n\nHome Assistant ir pārtraucis jautāt. Sensori tagad rāda nepieejams, nevis nezināms, un tā ir godīga atšķirība: rādījums nav kavējies, tā vienkārši nav. Varat tos atspējot šajā ierīcē; nekas netiek zaudēts, un tie pazūd no redzesloka.\n\nViss pārējais nav ietekmēts — ieslēgšana/izslēgšana, režīms, temperatūra, ventilators un žalūzijas ir parastas komandas un šo kanālu neizmanto. Arī integrācijas opcijās norādītais iekštelpu temperatūras avots turpina darboties: tas ceļo ar to pašu pieprasījumu, kas tā dēļ joprojām tiek sūtīts.\n\nIntegrācijas pārlādēšana liek mēģināt vēlreiz, ja tā bija īslaicīga problēma."
     },
+    "service_data_refused": {
+      "title": "{device_name} atkārtoti noraida darbības datu pieprasījumus",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Izslēgt darbības datus ierīcei {device_name}?",
+            "description": "Šī ierīce atkārtoti noraida darbības datu pieprasījumus, un katrs noraidītais pieprasījums pagarina tās rakstīšanas bloķējumu, tāpēc jautāt vēlreiz tikai pagarina problēmu. Home Assistant tagad jautā tikai reizi stundā.\n\nLai vispār pārtrauktu jautāt, iesniedziet šo labojumu: integrācija pārlādējas, un šai ierīcei darbības dati tiek izslēgti. Ko tas maksā: diagnostikas sensori, ko baro šis pieprasījums (kompresora frekvence, darba strāva, karstās gāzes temperatūra, EEV pozīcija un siltummaiņu temperatūras), vairs netiek atjaunināti, un integrācijas opcijās norādītais iekštelpu temperatūras avots ierīcei vairs netiek nodots, jo abiem vajadzīgi darbības dati. Viss pārējais nav ietekmēts.\n\nIerīces izslēgšana uz minūti, atvienojot to no strāvas, bloķējumu atceļ, un Home Assistant darbības datus atsāk pats. Ja šo labojumu neiesniedzat, tas pazudīs, tiklīdz ierīce atkal atbildēs."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} nepieņem telpas temperatūru",
       "description": "Šī ierīce nesniedz telpas temperatūru un ignorē tai nosūtīto, tāpēc šīs integrācijas opcijās norādītajam iekštelpu temperatūras avotam nav nekādas ietekmes, un tā dēļ netiek sūtīts nekas. Avotu varat noņemt opcijās; šis ziņojums pazudīs pēc integrācijas pārlādēšanas."

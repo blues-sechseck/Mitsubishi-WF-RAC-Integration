@@ -55,6 +55,16 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# How long the channel stays quiet after a refusal, by consecutive refusal. A
+# unit that refuses operation-data requests renews its write lock with every
+# one of them, so asking again at the normal cadence keeps it locked out; the
+# last step is held for as long as the refusals go on.
+SERVICE_DATA_PAUSE_LADDER: Final = (
+    timedelta(minutes=5),
+    timedelta(minutes=15),
+    timedelta(minutes=60),
+)
+
 # A refused request costs a full cycle of every operation-data sensor, and
 # these refusals are transient, so one retry is worth the extra request.
 SERVICE_DATA_RETRY_DELAY = timedelta(seconds=5)
@@ -377,6 +387,11 @@ def service_data_unanswered_issue_id(entry_id: str) -> str:
     return f"service_data_unanswered_{entry_id}"
 
 
+def service_data_refused_issue_id(entry_id: str) -> str:
+    """Repair-issue id for a unit that keeps refusing operation-data requests."""
+    return f"service_data_refused_{entry_id}"
+
+
 class ServiceDataChannel:
     """Timing and health of one unit's operation-data channel."""
 
@@ -399,6 +414,121 @@ class ServiceDataChannel:
         self._refusals = ServiceDataRefusals()
         self._overdue: set[int] = set()
         self._humidity_sensor_seen = False
+        # Circuit breaker: consecutive refused requests, and until when the
+        # channel stays quiet because of them. Memory only - a reload asks
+        # again, which is also what clears a lock-out the user ended by
+        # power-cycling the unit.
+        self._refusal_streak = 0
+        self._paused_until: datetime | None = None
+
+    @property
+    def paused(self) -> bool:
+        """Whether the channel is standing down after a refusal."""
+        return self._paused_until is not None and dt_util.utcnow() < self._paused_until
+
+    def breaker_state(self) -> dict[str, int | str | bool | None]:
+        """The circuit breaker's state, for the diagnostics."""
+        return {
+            "pause_level": min(self._refusal_streak, len(SERVICE_DATA_PAUSE_LADDER)),
+            "paused_until": (
+                None if self._paused_until is None else self._paused_until.isoformat()
+            ),
+            "consecutive_refusals": self._refusal_streak,
+            "override_released": self._device.external_temperature.suspended,
+        }
+
+    def _holds_unproven(
+        self, regular_codes: tuple[int, ...], research_codes: tuple[int, ...]
+    ) -> bool:
+        """Whether a request held a code the unit has never answered."""
+        return self._refusals.has_unproven(regular_codes) or any(
+            self._device.research_data.states.get(code) != "ok"
+            for code in research_codes
+        )
+
+    def _note_request_refused(self, *, during_pause: bool, unproven: bool) -> None:
+        """Back off after a refused request, one step further each time.
+
+        Not before the unit has answered once: a module that has never
+        reported anything is the first-answer case handled elsewhere, and
+        pausing it would hide the one request that could prove it works. Nor
+        for a request that held a code the unit never answered: a unit
+        without that code refuses the whole request, which the per-code
+        suspicion above already isolates, and is no lock-out.
+
+        A refused carrier-only request means even the minimal frame is not
+        accepted, so the override is released - the unit goes back to its own
+        sensor instead of regulating on a value that can no longer be
+        refreshed.
+        """
+        if self._last_response is None or unproven:
+            return
+        self._refusal_streak += 1
+        level = min(self._refusal_streak, len(SERVICE_DATA_PAUSE_LADDER))
+        pause = SERVICE_DATA_PAUSE_LADDER[level - 1]
+        self._paused_until = dt_util.utcnow() + pause
+        name = self._device.device_name
+        feed = self._device.external_temperature
+        if during_pause and feed.needs_frame:
+            feed.suspend()
+            _LOGGER.info(
+                "[%s] refused even the request carrying the room temperature "
+                "from the indoor temperature source; the unit is back on its "
+                "own sensor until it answers again",
+                name,
+            )
+        if level < len(SERVICE_DATA_PAUSE_LADDER):
+            _LOGGER.debug(
+                "[%s] refused an operation-data request; pausing the channel "
+                "for %.0f minutes",
+                name,
+                pause.total_seconds() / 60,
+            )
+            return
+        if self._refusal_streak == len(SERVICE_DATA_PAUSE_LADDER):
+            _LOGGER.info(
+                "[%s] keeps refusing operation-data requests; its diagnostic "
+                "sensors stay unknown and it is asked only once an hour now. "
+                "Power-cycling the unit clears the lock-out",
+                name,
+            )
+            ir.async_create_issue(
+                self._device.hass,
+                DOMAIN,
+                service_data_refused_issue_id(self._device.entry_id),
+                data={"entry_id": self._device.entry_id},
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="service_data_refused",
+                translation_placeholders={"device_name": name},
+            )
+
+    def _note_request_answered(self, *, during_pause: bool) -> None:
+        """Lift the pause and re-arm the override once a request is answered.
+
+        An answer to the carrier-only request sent during a pause says nothing
+        about the full request, so it leaves the ladder alone.
+        """
+        if during_pause or (self._refusal_streak == 0 and self._paused_until is None):
+            return
+        if self._refusal_streak >= len(SERVICE_DATA_PAUSE_LADDER):
+            _LOGGER.info(
+                "[%s] answers operation-data requests again",
+                self._device.device_name,
+            )
+            ir.async_delete_issue(
+                self._device.hass,
+                DOMAIN,
+                service_data_refused_issue_id(self._device.entry_id),
+            )
+        else:
+            _LOGGER.debug(
+                "[%s] answers operation-data requests again",
+                self._device.device_name,
+            )
+        self._refusal_streak = 0
+        self._paused_until = None
+        self._device.external_temperature.resume()
 
     @property
     def supported(self) -> bool:
@@ -765,6 +895,7 @@ class ServiceDataChannel:
         async_queue_command() so the refusal is visible here: a queued command
         is flushed by a detached task that deliberately swallows its errors.
         """
+        during_pause = self.paused
         await asyncio.sleep(self.offset.total_seconds())
         # What the frame carries depends on the module: no set-bits at all
         # without the #329 quirk, a full command with it (see
@@ -815,6 +946,7 @@ class ServiceDataChannel:
                 if research_codes and self._device.airco is not None:
                     self._device.research_data.note_answer(self._device.airco)
                 self.note_offset_survived()
+                self._note_request_answered(during_pause=during_pause)
                 # Notify, but deliberately not through async_set_updated_data():
                 # that resets the refresh timer, and this runs half a cycle
                 # after the poll - every cycle - so it would push the next poll
@@ -830,9 +962,11 @@ class ServiceDataChannel:
             except WfRacWriteRefusedError as ex:  # noqa: PERF203
                 # The unit's answer to a code it does not know - or a foreign
                 # write lock, which the refusal limits allow for.
+                unproven = self._holds_unproven(regular_codes, research_codes)
                 if research_codes:
                     self._device.research_data.note_refused(research_codes)
                 self.note_refused(regular_codes)
+                self._note_request_refused(during_pause=during_pause, unproven=unproven)
                 # Someone else may hold the write lock. Unlike a user command
                 # this is not worth contesting: give the cycle up immediately
                 # rather than retrying into a lock we would only be renewing
@@ -855,6 +989,10 @@ class ServiceDataChannel:
                     _LOGGER.debug("Service data request refused (%s); retrying", ex)
                     await asyncio.sleep(SERVICE_DATA_RETRY_DELAY.total_seconds())
                     continue
+                self._note_request_refused(
+                    during_pause=during_pause,
+                    unproven=self._holds_unproven(regular_codes, research_codes),
+                )
                 # Debug, not a warning: the module refuses these requests
                 # transiently and a single skipped cycle changes nothing the
                 # user can see - the values survive their expiry. The

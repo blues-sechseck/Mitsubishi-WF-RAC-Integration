@@ -55,6 +55,12 @@ STATUS_REQUEST_ECHO = "echo"
 STATUS_REQUEST_STOPPED = "stopped"
 STATUS_REQUEST_STOPPED_LEGACY = "silent"
 
+# Set together with the stopped mode when the user switches operation data off
+# from the repair for a unit that keeps refusing it. The stopped mode alone
+# means "the unit changed its settings", which that repair would describe
+# wrongly on the next setup.
+CONF_SERVICE_DATA_DISABLED = "service_data_disabled"
+
 # Superseded by CONF_STATUS_REQUEST_MODE and read only to carry entries written
 # by 2026.9.9-beta2..beta6 forward. True there means what "echo" means now.
 CONF_CARRY_POWER_STATE = "carry_power_state"

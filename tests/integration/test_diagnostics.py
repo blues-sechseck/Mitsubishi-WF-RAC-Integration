@@ -98,6 +98,12 @@ async def test_diagnostics_redacts_sensitive_data_and_is_json_serializable(hass)
         "port": 51443,
     }
     assert diagnostics["config_entry"]["version"] == 5
+    assert diagnostics["service_data_breaker"] == {
+        "pause_level": 0,
+        "paused_until": None,
+        "consecutive_refusals": 0,
+        "override_released": False,
+    }
     trace = diagnostics["defrost_trace"]
     assert trace["episodes_detected"] == 1
     assert trace["episodes"][0][0]["airconStat"] == "QUJD"

@@ -129,6 +129,17 @@
       "title": "Veikimo duomenys iš {device_name} neprieinami",
       "description": "Kompresoriaus, srovės, temperatūrų ir EEV padėties diagnostiniai jutikliai nuskaitomi papildoma užklausa kartą per minutę. Šis įrenginys užklausą priima ir į ją atsako, bet niekada nėra grąžinęs nė vieno segmento — tad tie jutikliai vis tiek nebūtų nieko parodę, kad ir kaip užklausa atrodytų.\n\nHome Assistant nustojo klausti. Jutikliai dabar rodo neprieinama, o ne nežinoma, ir tai yra sąžiningas skirtumas: rodmuo ne vėluoja, jo tiesiog nėra. Šiame įrenginyje galite juos išjungti; nieko neprarasite, tik dingsta iš akių.\n\nVisa kita nepaliesta — įjungimas, režimas, temperatūra, ventiliatorius ir mentės yra įprastos komandos ir šio kanalo nenaudoja. Integracijos parinktyse nustatytas vidaus temperatūros šaltinis taip pat toliau veikia: jis keliauja ta pačia užklausa, kuri dėl jo vis dar siunčiama.\n\nIš naujo įkėlus integraciją bandoma dar kartą — tam atvejui, jei tai buvo laikina."
     },
+    "service_data_refused": {
+      "title": "{device_name} vis atmeta veikimo duomenų užklausas",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Išjungti {device_name} veikimo duomenis?",
+            "description": "Šis įrenginys vis atmeta veikimo duomenų užklausas, o kiekviena atmesta užklausa pratęsia jo rašymo užraktą, todėl klausinėti iš naujo tik prailgina problemą. Home Assistant dabar klausia tik kartą per valandą.\n\nNorėdami visai nebeklausti, patvirtinkite šį pataisymą: integracija persikraus, o šio įrenginio veikimo duomenys bus išjungti. Ko tai kainuoja: iš tos užklausos maitinami diagnostiniai jutikliai (kompresoriaus dažnis, darbinė srovė, karštų dujų temperatūra, EEV padėtis ir šilumokaičio temperatūros) nebeatsinaujina, o integracijos parinktyse nustatytas vidaus temperatūros šaltinis įrenginiui nebeperduodamas, nes abiem reikia veikimo duomenų. Visa kita nepaliesta.\n\nIšjungus įrenginį ir minutę palaukus, kol jis neturi maitinimo, užraktas nusiima, o Home Assistant veikimo duomenis vėl pradeda gauti pats. Jei šio pataisymo nepatvirtinsite, jis išnyks, kai tik įrenginys vėl atsakys."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} nepriima patalpos temperatūros",
       "description": "Šis prietaisas nepraneša patalpos temperatūros ir ignoruoja jam siunčiamą reikšmę, todėl šios integracijos parinktyse nustatytas patalpos temperatūros šaltinis neturi jokio poveikio ir jam niekas nesiunčiama. Šaltinį galite pašalinti parinktyse; šis pranešimas išnyks, kai integracija bus įkelta iš naujo."

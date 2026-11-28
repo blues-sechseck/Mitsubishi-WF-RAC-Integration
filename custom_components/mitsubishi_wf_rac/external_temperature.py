@@ -70,6 +70,27 @@ class ExternalTemperatureFeed:
         # the value so a switch between sources that lands on the same
         # protocol value is visible without being a change to send.
         self._active_source = EXTERNAL_TEMPERATURE_SOURCE_NONE
+        # Set while the unit refuses even the carrier-only request (see
+        # ServiceDataChannel): the armed value is kept, but frames carry the
+        # sentinel and none is sent for it until the unit answers again.
+        self._suspended = False
+
+    @property
+    def suspended(self) -> bool:
+        """Whether the unit has been handed back to its own sensor for now."""
+        return self._suspended
+
+    def suspend(self) -> None:
+        """Stop feeding the unit; the armed value stays for when it answers."""
+        self._suspended = True
+        self._written.clear()
+
+    def resume(self) -> None:
+        """Feed the unit again after a pause ended with an answer."""
+        if not self._suspended:
+            return
+        self._suspended = False
+        self._sync_carrier()
 
     @property
     def active_source(self) -> str:
@@ -148,7 +169,7 @@ class ExternalTemperatureFeed:
         ride on that frame (see _sync_carrier). Never while blocked - no such
         frame is sent then, and the release goes out as a command instead.
         """
-        if self.blocked or self.ignored:
+        if self.blocked or self.ignored or self._suspended:
             return False
         return self._override is not None or self._release_pending
 
@@ -160,7 +181,9 @@ class ExternalTemperatureFeed:
         armed value is still remembered for as long as it is set, so that the
         diagnostics show what a source asked for.
         """
-        return None if self.blocked or self.ignored else self._override
+        if self.blocked or self.ignored or self._suspended:
+            return None
+        return self._override
 
     def mode_changed(self) -> None:
         """Re-evaluate the carrier after the coordinator changed the mode."""
@@ -372,7 +395,12 @@ class ExternalTemperatureFeed:
         once, and showing it as the room while the unit is not even using it
         would be showing an intention rather than a measurement.
         """
-        if self._override is None or self._device.airco is None or self.blocked:
+        if (
+            self._override is None
+            or self._device.airco is None
+            or self.blocked
+            or self._suspended
+        ):
             return None
         if self.source_configured:
             return self._override
@@ -398,7 +426,7 @@ class ExternalTemperatureFeed:
         that far from being right anyway.
         """
         airco = self._device.airco
-        if self._override is None or airco is None or self.blocked:
+        if self._override is None or airco is None or self.blocked or self._suspended:
             return False
         raw = airco.ControllerRoomTempRaw
         return raw is not None and raw in self._written

@@ -76,6 +76,17 @@
       "title": "Les données de fonctionnement de {device_name} ne sont pas disponibles",
       "description": "Les capteurs de diagnostic du compresseur, du courant, des températures et de la position du détendeur électronique sont lus par une requête supplémentaire envoyée une fois par minute. Cet appareil accepte cette requête et y répond, mais n'a jamais renvoyé le moindre segment ; ces capteurs ne pouvaient donc jamais afficher de valeur, quelle que soit la forme de la requête.\n\nHome Assistant a cessé de la demander. Les capteurs indiquent désormais « indisponible » plutôt qu'« inconnu », ce qui reflète la réalité : la mesure n'est pas en retard, elle n'existe pas. Vous pouvez les désactiver sur cet appareil ; rien n'est perdu et ils disparaissent simplement de l'affichage.\n\nTout le reste n'est pas concerné : marche/arrêt, mode, température, ventilateur et volets sont des commandes ordinaires et n'utilisent pas ce canal. Une source de température intérieure définie dans les options de l'intégration continue aussi de fonctionner : elle circule dans la même requête, qui reste envoyée à cet effet.\n\nRecharger l'intégration provoque une nouvelle tentative, au cas où le problème serait temporaire."
     },
+    "service_data_refused": {
+      "title": "{device_name} refuse sans cesse les données de fonctionnement",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Désactiver les données de fonctionnement de {device_name} ?",
+            "description": "Cet appareil refuse sans cesse les requêtes de données de fonctionnement, et chaque requête refusée prolonge son verrou d'écriture : redemander ne fait qu'aggraver le problème. Home Assistant ne demande donc plus qu'une fois par heure.\n\nPour cesser complètement de demander, validez cette réparation : l'intégration se recharge avec les données de fonctionnement désactivées pour cet appareil. Conséquence : les capteurs de diagnostic alimentés par cette requête (fréquence du compresseur, courant de fonctionnement, température du gaz chaud, position du détendeur électronique et températures des échangeurs) ne sont plus mis à jour, et une source de température intérieure définie dans les options de l'intégration n'est plus transmise à l'appareil, car les deux nécessitent les données de fonctionnement. Tout le reste fonctionne normalement.\n\nCouper puis rétablir l'alimentation de l'appareil — une minute hors tension — lève le verrou, et Home Assistant reprend alors les données de fonctionnement de lui-même. Si vous ne validez pas cette réparation, elle disparaît dès que l'appareil répond de nouveau."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} n'accepte pas de température ambiante",
       "description": "Cet appareil ne signale aucune température ambiante et ignore celle qu'on lui envoie ; la source de température intérieure définie dans les options de cette intégration n'a donc aucun effet et rien n'est envoyé pour elle. Vous pouvez retirer la source dans les options ; ce message disparaît une fois l'intégration rechargée."

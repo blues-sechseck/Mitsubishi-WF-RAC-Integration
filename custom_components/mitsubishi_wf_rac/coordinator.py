@@ -685,18 +685,26 @@ class Device(DataUpdateCoordinator[Aircon]):  # pylint: disable=too-many-instanc
             # the write lock for another 60s and is worth far less than
             # leaving the unit controllable from whatever is using it.
             return
+        paused = self.service_data.paused
+        if paused and not self.external_temperature.needs_frame:
+            return
         if not self.service_data.due():
             return
-        regular_codes = self.service_data.select(
-            service_data_codes,
-            self._airco,
-            need_frame=self.external_temperature.needs_frame,
-        )
+        research_codes: tuple[int, ...] = ()
+        if paused:
+            # Only the segment the override rides on: any other code would
+            # renew the write lock of a unit that is refusing them.
+            regular_codes: tuple[int, ...] = (SERVICE_DATA_INDOOR_COIL_RAW,)
+        else:
+            regular_codes = self.service_data.select(
+                service_data_codes,
+                self._airco,
+                need_frame=self.external_temperature.needs_frame,
+            )
         # Research fills the slots the regular codes leave free. Its untested
         # codes go out only when nothing else in the request is unproven, so a
         # refusal has one suspect.
-        research_codes: tuple[int, ...] = ()
-        if research:
+        if research and not paused:
             research_codes = self.research_data.request_codes(
                 SERVICE_DATA_BUDGET - len(regular_codes),
                 allow_untested=not self.service_data.has_unproven(regular_codes),

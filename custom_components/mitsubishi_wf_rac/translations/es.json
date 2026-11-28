@@ -76,6 +76,17 @@
       "title": "Los datos de funcionamiento de {device_name} no están disponibles",
       "description": "Los sensores de diagnóstico del compresor, la corriente, las temperaturas y la posición de la EEV se leen con una solicitud adicional una vez por minuto. Esta unidad acepta esa solicitud y la responde, pero nunca ha devuelto ni un solo segmento en ella, así que esos sensores nunca iban a mostrar un valor, sea cual sea la forma de la solicitud.\n\nHome Assistant ha dejado de solicitarlos. Los sensores ahora aparecen como no disponibles en lugar de desconocidos, que es la diferencia honesta: la lectura no se retrasa, es que no existe. Puedes desactivarlos en este dispositivo; no se pierde nada y dejan de verse.\n\nTodo lo demás no se ve afectado: encendido, modo, temperatura, ventilador y lamas son comandos normales y no usan este canal. Una fuente de temperatura interior definida en las opciones de la integración también sigue funcionando: viaja en la misma solicitud, que se sigue enviando para ello.\n\nRecargar la integración lo intenta de nuevo, por si fuera algo temporal."
     },
+    "service_data_refused": {
+      "title": "{device_name} sigue rechazando los datos de funcionamiento",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "¿Desactivar los datos de funcionamiento de {device_name}?",
+            "description": "Esta unidad rechaza una y otra vez las solicitudes de datos de funcionamiento, y cada solicitud rechazada mantiene en marcha su bloqueo de escritura, así que volver a preguntar solo alarga el problema. Home Assistant ahora pregunta una sola vez por hora.\n\nPara dejar de preguntar del todo, envía esta reparación: la integración se recarga con los datos de funcionamiento desactivados para esta unidad. Lo que esto supone: los sensores de diagnóstico alimentados por esa solicitud (frecuencia del compresor, corriente de funcionamiento, temperatura del gas caliente, posición de la EEV y las temperaturas de las baterías) dejan de actualizarse, y una fuente de temperatura interior definida en las opciones de la integración ya no se pasa a la unidad, porque ambas cosas necesitan los datos de funcionamiento. Todo lo demás no se ve afectado.\n\nApagar y volver a encender la unidad —un minuto sin corriente— elimina el bloqueo, y Home Assistant retoma entonces los datos de funcionamiento por sí solo. Si no envías esta reparación, desaparecerá en cuanto la unidad vuelva a responder."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} no acepta una temperatura ambiente",
       "description": "Esta unidad no informa de ninguna temperatura ambiente e ignora la que se le envía, por lo que la fuente de temperatura interior definida en las opciones de esta integración no tiene efecto y no se envía nada para ella. Puedes quitar la fuente en las opciones; este mensaje desaparece cuando se recargue la integración."

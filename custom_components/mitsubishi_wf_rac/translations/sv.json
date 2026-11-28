@@ -76,6 +76,17 @@
       "title": "Kördata är inte tillgängliga från {device_name}",
       "description": "Diagnossensorerna för kompressor, ström, temperaturer och EEV-position läses med en extra förfrågan varje minut. Den här enheten tar emot förfrågan och svarar på den, men har aldrig returnerat ett enda segment i den – så de här sensorerna skulle aldrig visa något värde, oavsett hur förfrågan ser ut.\n\nHome Assistant har slutat fråga. Sensorerna visar nu otillgänglig i stället för okänd, vilket är den ärliga skillnaden: ett värde är inte försenat, det finns inget. Du kan inaktivera dem på den här enheten; inget går förlorat, och de försvinner ur sikte.\n\nAllt annat påverkas inte – på/av, läge, temperatur, fläkt och luftspjäll är vanliga kommandon och använder inte den här kanalen. En inomhustemperaturkälla som angetts i integrationens alternativ fortsätter också att fungera: den färdas med samma förfrågan, som fortfarande skickas för dess skull.\n\nOm du laddar om integrationen försöker den igen, ifall det här var tillfälligt."
     },
+    "service_data_refused": {
+      "title": "{device_name} avvisar kördata gång på gång",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Stäng av kördata för {device_name}?",
+            "description": "Den här enheten avvisar förfrågningar om kördata gång på gång, och varje avvisad förfrågan håller dess skrivlås igång, så att fråga igen förlänger bara problemet. Home Assistant frågar nu bara en gång i timmen.\n\nSkicka in den här reparationen för att sluta fråga helt: integrationen laddas om med kördata avstängd för den här enheten. Det här kostar: diagnossensorerna som matas av den förfrågan (kompressorfrekvens, driftström, hetgastemperatur, EEV-position och värmeväxlartemperaturerna) uppdateras inte längre, och en inomhustemperaturkälla som angetts i integrationens alternativ skickas inte längre till enheten, eftersom båda behöver kördata. Allt annat påverkas inte.\n\nAtt göra enheten strömlös i en minut häver låset, och Home Assistant tar då upp kördata igen på egen hand. Skickar du inte in reparationen försvinner den så snart enheten svarar igen."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} tar inte emot en rumstemperatur",
       "description": "Den här enheten rapporterar ingen rumstemperatur och ignorerar en som skickas till den, så inomhustemperaturkällan som angetts i den här integrationens alternativ har ingen effekt, och inget skickas för den. Du kan ta bort källan i alternativen; det här meddelandet försvinner när integrationen har laddats om."

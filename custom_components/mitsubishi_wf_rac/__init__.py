@@ -34,6 +34,7 @@ from .const import (
     CONF_OVERSHOOT_COOL,
     CONF_OVERSHOOT_DRY,
     CONF_OVERSHOOT_HEAT,
+    CONF_SERVICE_DATA_DISABLED,
     CONF_STATUS_REQUEST_MODE,
     DOMAIN,
     OVERSHOOT_MAX,
@@ -54,7 +55,10 @@ from .reduced_status import (
     external_temperature_unsupported_issue_id,
     report_external_temperature_unsupported,
 )
-from .service_data import service_data_unanswered_issue_id
+from .service_data import (
+    service_data_refused_issue_id,
+    service_data_unanswered_issue_id,
+)
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -342,7 +346,11 @@ async def async_setup_entry(
         # Raised again here because the repair was not persistent when it was
         # first raised, and an entry that learned this before the change has
         # none to show after its restart (#416).
-        report_status_request_unsupported(hass, entry.entry_id, _device.device_name)
+        if not entry.data.get(CONF_SERVICE_DATA_DISABLED):
+            # Not for a unit the user switched off from the refused-requests
+            # repair: that repair's wording is about the unit changing its
+            # settings, which did not happen here.
+            report_status_request_unsupported(hass, entry.entry_id, _device.device_name)
         if _device.external_temperature.source_configured:
             # The previous run may have left the source's last value standing
             # at the unit, and a blocked feed never sends it again. Once per
@@ -477,6 +485,7 @@ async def async_remove_entry(
     ir.async_delete_issue(
         hass, DOMAIN, service_data_unanswered_issue_id(entry.entry_id)
     )
+    ir.async_delete_issue(hass, DOMAIN, service_data_refused_issue_id(entry.entry_id))
     ir.async_delete_issue(
         hass, DOMAIN, external_temperature_unsupported_issue_id(entry.entry_id)
     )

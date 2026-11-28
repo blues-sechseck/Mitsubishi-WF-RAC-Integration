@@ -76,6 +76,17 @@
       "title": "{device_name} cihazından çalışma verileri alınamıyor",
       "description": "Kompresör, akım, sıcaklıklar ve EEV konumuna ait tanılama sensörleri, dakikada bir ek bir istekle okunur. Bu cihaz isteği kabul eder ve yanıtlar, ancak içinde henüz tek bir bölüm bile döndürmedi - dolayısıyla isteğin nasıl göründüğünden bağımsız olarak bu sensörler hiçbir zaman bir değer göstermeyecekti.\n\nHome Assistant artık sormuyor. Sensörler \"bilinmiyor\" yerine \"kullanılamıyor\" gösteriyor; dürüst fark da bu: okuma gecikmiş değil, hiç yok. Bunları bu cihazda devre dışı bırakabilirsiniz; hiçbir şey kaybolmaz, yalnızca görünümden kalkarlar.\n\nGeri kalan her şey etkilenmez - güç, mod, sıcaklık, fan ve lameller sıradan komutlardır ve bu kanalı kullanmaz. Entegrasyon seçeneklerinde ayarlanan iç sıcaklık kaynağı da çalışmaya devam eder: aynı istekle taşınır ve bunun için istek hâlâ gönderilir.\n\nGeçici bir durumsa diye entegrasyonu yeniden yüklemek yeniden denemesini sağlar."
     },
+    "service_data_refused": {
+      "title": "{device_name} çalışma verisi isteklerini reddetmeyi sürdürüyor",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "{device_name} için çalışma verileri kapatılsın mı?",
+            "description": "Bu cihaz çalışma verisi isteklerini reddetmeyi sürdürüyor ve reddedilen her istek yazma kilidini uzatıyor; bu yüzden yeniden sormak sorunu yalnızca uzatır. Home Assistant artık saatte yalnızca bir kez soruyor.\n\nHiç sormamak için bu onarımı gönderin: entegrasyon yeniden yüklenir ve bu cihaz için çalışma verileri kapatılır. Bunun bedeli: bu istekle beslenen tanılama sensörleri (kompresör frekansı, çalışma akımı, sıcak gaz sıcaklığı, EEV konumu ve eşanjör sıcaklıkları) artık güncellenmez ve entegrasyon seçeneklerinde ayarlanan bir iç sıcaklık kaynağı cihaza artık iletilmez, çünkü ikisi de çalışma verisine ihtiyaç duyar. Geri kalan her şey etkilenmez.\n\nCihazın bir dakika elektriğini kesmek kilidi çözer ve Home Assistant çalışma verilerini sonra kendiliğinden yeniden alır. Bu onarımı göndermezseniz, cihaz yeniden yanıt verdiğinde kendiliğinden kalkar."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} oda sıcaklığını kabul etmiyor",
       "description": "Bu cihaz oda sıcaklığı bildirmiyor ve kendisine gönderileni yok sayıyor; bu yüzden bu entegrasyonun seçeneklerinde ayarlanan iç sıcaklık kaynağının etkisi yok ve bunun için hiçbir şey gönderilmiyor. Kaynağı seçeneklerden kaldırabilirsiniz; entegrasyon yeniden yüklendiğinde bu mesaj kaybolur."

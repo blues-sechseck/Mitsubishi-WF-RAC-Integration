@@ -32,12 +32,15 @@ from custom_components.mitsubishi_wf_rac import (
     coordinator as coordinator_module,
     service_data as service_data_module,
 )
+from custom_components.mitsubishi_wf_rac.const import DOMAIN
 from custom_components.mitsubishi_wf_rac.service_data import (
     RESEARCH_CONTEXT,
     RESEARCH_SERVICE_DATA_CODES,
     SERVICE_DATA_INTERVALS,
     service_data_expiry,
+    service_data_refused_issue_id,
 )
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 
 FAST = SERVICE_DATA_COMPRESSOR_FREQ  # 60 s
@@ -500,3 +503,180 @@ async def test_an_unconfirmed_silent_switch_is_read_again_at_the_next_poll(
         await platform_device.async_set_silent_operation(True)
 
     assert SERVICE_DATA_SILENT_OPERATION in platform_device.service_data._overdue
+
+
+# --- the circuit breaker ------------------------------------------------------
+
+
+class _Clock:
+    """Wall time the breaker reads; asyncio's own clock keeps running."""
+
+    def __init__(self) -> None:
+        self.now = dt_util.utcnow()
+
+    def tick(self, by: timedelta) -> None:
+        self.now += by
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    fake = _Clock()
+    monkeypatch.setattr(dt_util, "utcnow", lambda: fake.now)
+    return fake
+
+
+@pytest.fixture
+def breaker(platform_device, monkeypatch, requests, clock):
+    """A unit that has answered before, subscribed to one fast code."""
+    monkeypatch.setattr(platform_device, "async_contexts", lambda: {FAST})
+    _prove(platform_device.service_data, FAST, SERVICE_DATA_INDOOR_COIL_RAW)
+    platform_device.service_data._last_response = dt_util.utcnow()
+    return platform_device.service_data
+
+
+def _pause_left(channel) -> timedelta:
+    return channel._paused_until - dt_util.utcnow()
+
+
+async def test_refusals_back_off_five_fifteen_sixty_minutes(breaker, requests, clock):
+    requests.refuse.add(FAST)
+
+    assert len(await requests(1)) == 1
+    assert _pause_left(breaker) == timedelta(minutes=5)
+    clock.tick(timedelta(minutes=5, seconds=1))
+    await requests(1)
+    assert _pause_left(breaker) == timedelta(minutes=15)
+    clock.tick(timedelta(minutes=15, seconds=1))
+    await requests(1)
+    assert _pause_left(breaker) == timedelta(minutes=60)
+    clock.tick(timedelta(minutes=60, seconds=1))
+    await requests(1)
+    assert _pause_left(breaker) == timedelta(minutes=60)
+    assert breaker.breaker_state()["consecutive_refusals"] == 4
+    assert breaker.breaker_state()["pause_level"] == 3
+
+
+async def test_an_answer_resets_the_ladder(breaker, requests, clock):
+    requests.refuse.add(FAST)
+    await requests(1)
+    clock.tick(timedelta(minutes=5, seconds=1))
+    await requests(1)
+    assert _pause_left(breaker) == timedelta(minutes=15)
+
+    requests.refuse.clear()
+    clock.tick(timedelta(minutes=15, seconds=1))
+    await requests(1)
+    requests.refuse.add(FAST)
+    clock.tick(timedelta(minutes=2))
+    await requests(1)
+
+    assert _pause_left(breaker) == timedelta(minutes=5)
+    assert breaker.breaker_state()["consecutive_refusals"] == 1
+
+
+async def test_no_data_code_goes_out_during_a_pause(breaker, requests, clock):
+    requests.refuse.add(FAST)
+    await requests(1)
+    requests.refuse.clear()
+
+    assert await requests(3) == [(), (), ()]
+    clock.tick(timedelta(minutes=5, seconds=1))
+    assert await requests(1) == [(FAST, SERVICE_DATA_INDOOR_COIL_RAW)]
+
+
+async def test_refusals_before_the_first_answer_do_not_pause(
+    platform_device, monkeypatch, requests
+):
+    monkeypatch.setattr(platform_device, "async_contexts", lambda: {FAST})
+    platform_device.service_data._refusals.note_answered(FAST)
+    requests.refuse.add(FAST)
+
+    await requests(2)
+
+    assert not platform_device.service_data.paused
+
+
+async def test_a_refusal_of_a_code_never_answered_does_not_pause(
+    breaker, monkeypatch, platform_device, requests
+):
+    monkeypatch.setattr(platform_device, "async_contexts", lambda: {FAST, MEDIUM})
+    requests.refuse.add(MEDIUM)
+
+    await requests(1)
+
+    assert not breaker.paused
+
+
+@pytest.fixture
+def armed(platform_device, monkeypatch, breaker):
+    """The same unit with an override riding on the indoor coil segment."""
+    monkeypatch.setattr(
+        platform_device,
+        "async_contexts",
+        lambda: {FAST, SERVICE_DATA_INDOOR_COIL_RAW},
+    )
+    platform_device.external_temperature._override = 22.0
+    return platform_device.external_temperature
+
+
+async def test_an_armed_override_keeps_its_carrier_going_during_a_pause(
+    armed, breaker, requests, clock
+):
+    requests.refuse.add(FAST)
+    await requests(1)
+
+    assert await requests(3) == [(SERVICE_DATA_INDOOR_COIL_RAW,)] * 3
+    # Answered, but that says nothing about the full request.
+    assert breaker.paused
+    assert breaker.breaker_state()["consecutive_refusals"] == 1
+    assert not armed.suspended
+
+
+async def test_a_refused_carrier_releases_the_override_until_answered(
+    armed, breaker, requests, clock
+):
+    requests.refuse.update({FAST, SERVICE_DATA_INDOOR_COIL_RAW})
+    await requests(1)
+
+    assert await requests(1) == [(SERVICE_DATA_INDOOR_COIL_RAW,)]
+    assert _pause_left(breaker) == timedelta(minutes=15)
+    assert armed.suspended
+    assert armed.wire_value is None
+    assert not armed.needs_frame
+    assert armed.override == 22.0
+    assert breaker.breaker_state()["override_released"] is True
+    assert await requests(2) == [(), ()]
+
+    requests.refuse.clear()
+    clock.tick(timedelta(minutes=15, seconds=1))
+    await requests(1)
+
+    assert not armed.suspended
+    assert armed.wire_value == 22.0
+    assert breaker.breaker_state()["consecutive_refusals"] == 0
+
+
+async def test_the_repair_comes_at_the_third_pause_and_goes_on_an_answer(
+    breaker, platform_device, requests, clock
+):
+    registry = ir.async_get(platform_device.hass)
+    issue_id = service_data_refused_issue_id(platform_device.entry_id)
+    requests.refuse.add(FAST)
+
+    for minutes in (5, 15):
+        await requests(1)
+        assert registry.async_get_issue(DOMAIN, issue_id) is None
+        clock.tick(timedelta(minutes=minutes, seconds=1))
+    await requests(1)
+
+    issue = registry.async_get_issue(DOMAIN, issue_id)
+    assert issue is not None
+    assert issue.is_fixable
+    assert issue.translation_key == "service_data_refused"
+    assert issue.data == {"entry_id": platform_device.entry_id}
+
+    requests.refuse.clear()
+    clock.tick(timedelta(minutes=60, seconds=1))
+    await requests(1)
+
+    assert registry.async_get_issue(DOMAIN, issue_id) is None

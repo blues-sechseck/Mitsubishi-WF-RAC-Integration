@@ -76,6 +76,17 @@
       "title": "I dati di funzionamento di {device_name} non sono disponibili",
       "description": "I sensori diagnostici di compressore, corrente, temperature e posizione della valvola EEV vengono letti con una richiesta aggiuntiva una volta al minuto. Questa unità accetta la richiesta e risponde, ma non ha mai restituito nemmeno un segmento: quei sensori non avrebbero mai potuto mostrare un valore, qualunque forma abbia la richiesta.\n\nHome Assistant ha smesso di chiederli. I sensori ora risultano non disponibili anziché sconosciuti, ed è la differenza corretta: una lettura non è in ritardo, semplicemente non esiste. Puoi disattivarli su questo dispositivo; non si perde nulla e vengono solo nascosti.\n\nTutto il resto non è interessato: accensione, modalità, temperatura, ventola e flap sono normali comandi e non usano questo canale. Funziona ancora anche una sorgente di temperatura interna impostata nelle opzioni dell'integrazione: viaggia nella stessa richiesta, che per questo continua a essere inviata.\n\nRicaricare l'integrazione fa riprovare, nel caso fosse un problema temporaneo."
     },
+    "service_data_refused": {
+      "title": "{device_name} continua a rifiutare i dati di funzionamento",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Disattivare i dati di funzionamento di {device_name}?",
+            "description": "Questa unità rifiuta di continuo le richieste di dati di funzionamento, e ogni richiesta rifiutata tiene attivo il suo blocco di scrittura: chiedere ancora prolunga solo il problema. Home Assistant ora chiede una sola volta all'ora.\n\nPer smettere del tutto di chiedere, conferma questa riparazione: l'integrazione si ricarica con i dati di funzionamento disattivati per questa unità. Il prezzo da pagare: i sensori diagnostici alimentati da quella richiesta (frequenza del compressore, corrente di esercizio, temperatura del gas caldo, posizione della valvola EEV e temperature delle batterie) non si aggiornano più, e una sorgente di temperatura interna impostata nelle opzioni dell'integrazione non viene più passata all'unità, perché entrambe richiedono i dati di funzionamento. Tutto il resto non cambia.\n\nSpegnere e riaccendere l'unità — un minuto senza alimentazione — elimina il blocco, e Home Assistant riprende poi da solo i dati di funzionamento. Se non confermi questa riparazione, scompare non appena l'unità risponde di nuovo."
+          }
+        }
+      }
+    },
     "external_temperature_unsupported": {
       "title": "{device_name} non accetta una temperatura ambiente",
       "description": "Questa unità non riporta alcuna temperatura ambiente e ignora quella che le viene inviata, quindi la sorgente di temperatura interna impostata nelle opzioni di questa integrazione non ha effetto e per essa non viene inviato nulla. Puoi rimuovere la sorgente nelle opzioni; questo messaggio scompare dopo il ricaricamento dell'integrazione."
