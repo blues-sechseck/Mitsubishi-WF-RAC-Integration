@@ -527,6 +527,7 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if (
             configured is not None
             and configured.data.get(CONF_HOST) != host
+            and _address_in_use(configured)
             and not await self._async_answers_at(configured, host)
         ):
             # An announcement is not proof the unit lives there: on networks
@@ -596,6 +597,23 @@ class WfRacConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ):
             return False
         return bool(airco_id) and airco_id.lower() == entry.unique_id
+
+
+def _address_in_use(entry: config_entries.ConfigEntry) -> bool:
+    """Return False if the entry's own address is known not to work.
+
+    Refusing a move only protects an address that works. An entry still
+    retrying its setup, or a loaded unit that stopped answering, has nothing
+    to protect, and a unit that changed its address is exactly that case:
+    the announcement is then the only way it gets found again.
+    """
+    if entry.state is config_entries.ConfigEntryState.SETUP_RETRY:
+        return False
+    if entry.state is config_entries.ConfigEntryState.LOADED:
+        device = getattr(getattr(entry, "runtime_data", None), "device", None)
+        if device is not None and not device.last_update_success:
+            return False
+    return True
 
 
 class WfRacOptionsFlowHandler(config_entries.OptionsFlowWithReload):
