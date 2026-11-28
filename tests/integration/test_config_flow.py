@@ -1242,6 +1242,65 @@ async def test_a_rediscovery_at_an_address_the_unit_is_not_at_keeps_the_entry(
     repo.update_account_info.assert_not_called()
 
 
+@pytest.mark.parametrize("state", ["setup_retry", "loaded_unavailable"])
+async def test_a_rediscovery_moves_an_entry_whose_own_address_is_dead(
+    hass: HomeAssistant, state: str
+):
+    """An address that does not work has nothing to protect.
+
+    A unit that got a new address leaves its entry retrying the setup, or
+    unavailable if it moved while loaded. The announcement is then the only
+    way it gets found again, so it is followed even when the probe at the
+    new address gets no answer.
+    """
+    entry = _existing_entry(hass, host="192.168.1.50")
+    hass.config_entries.async_update_entry(entry, unique_id="ac-living-room")
+    if state == "setup_retry":
+        entry.mock_state(hass, config_entries.ConfigEntryState.SETUP_RETRY)
+    else:
+        entry.mock_state(hass, config_entries.ConfigEntryState.LOADED)
+        entry.runtime_data = mitsubishi_wf_rac.MitsubishiWfRacData(
+            AsyncMock(last_update_success=False)
+        )
+    repo = AsyncMock(get_airco_id=AsyncMock(side_effect=WfRacError("refused")))
+
+    with (
+        _patch_repository(repo),
+        patch.object(hass.config_entries, "async_schedule_reload"),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(host="192.168.2.50"),
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data[CONF_HOST] == "192.168.2.50"
+    repo.get_airco_id.assert_not_called()
+
+
+async def test_a_rediscovery_keeps_a_loaded_unit_that_answers(hass: HomeAssistant):
+    """A working unit keeps its address when the announced one does not answer."""
+    entry = _existing_entry(hass, host="192.168.1.50")
+    hass.config_entries.async_update_entry(entry, unique_id="ac-living-room")
+    entry.mock_state(hass, config_entries.ConfigEntryState.LOADED)
+    entry.runtime_data = mitsubishi_wf_rac.MitsubishiWfRacData(
+        AsyncMock(last_update_success=True)
+    )
+    repo = AsyncMock(get_airco_id=AsyncMock(side_effect=WfRacError("refused")))
+
+    with _patch_repository(repo):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=_zeroconf_info(host="192.168.2.50"),
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert entry.data[CONF_HOST] == "192.168.1.50"
+
+
 @pytest.mark.parametrize(
     ("answering_airco_id", "moved"),
     [("another-unit", False), ("ac-living-room", True)],
