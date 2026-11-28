@@ -79,7 +79,7 @@ by the official app (§5).
 | Property | Value |
 | --- | --- |
 | Port | `51443` (all firmware branches) `[HW]` |
-| Scheme | `https://` on the `WF-RAC-HTTPS` and `WCBN4612L` branches, plain `http://` on the older `WF-RAC` branch `[HW]` |
+| Scheme | `https://` on the `WF-RAC-HTTPS` and `WCBN4612L` branches, plain `http://` on the older `WF-RAC` branch `[UR]` (my own units are `WF-RAC-HTTPS`) |
 | Method | `POST` only |
 | Path | `/beaver/command/<commandName>` |
 | Body | JSON, see below |
@@ -112,14 +112,15 @@ Every request, without exception:
 **All five envelope fields are mandatory and validated before the command is
 dispatched.** `[FW]` The parser reads them in this order and returns an error on
 the first failure, so a missing envelope field looks exactly like a malformed
-request:
+request. It checks type and presence only: a string field must be a JSON string,
+and an empty string is not rejected `[INF]`.
 
 | Field | JSON type | Checked how |
 | --- | --- | --- |
-| `command` | string | present, non-empty; then dispatched |
-| `apiVer` | string | present, non-empty — **the value is never compared.** The literal `"1.0"` exists in the image only for *emitting* responses. Send anything non-empty and it passes |
-| `operatorId` | string | present, non-empty here; `setAirconStat` additionally validates it against the stored accounts (§2.5) |
-| `deviceId` | string | present, non-empty; logged (`deviceId_value=%s`) and passed on to the command handler |
+| `command` | string | present; then dispatched |
+| `apiVer` | string | present — **the value is never compared.** The literal `"1.0"` exists in the image only for *emitting* responses. Any string passes |
+| `operatorId` | string | present here; `setAirconStat` additionally validates it against the stored accounts (§2.5) |
+| `deviceId` | string | present; logged (`deviceId_value=%s`) and passed on to the command handler |
 | `timestamp` | number | present **and non-zero** |
 | `contents` | object | required by every handler except `getDeviceInfo` |
 
@@ -188,8 +189,10 @@ them wrong.
    Four account slots exist, and a device paired with several phones can be
    full. `[FW]` Nothing about them is automatic: entries never expire, and a
    full table refuses the **new** client rather than displacing an existing
-   one, so registering cannot push anyone out. The only way a slot is ever
-   freed is `deleteAccountInfo`. Re-registering an id you already hold costs
+   one, so registering cannot push anyone out. Over the API, only
+   `deleteAccountInfo` frees a slot. Initialising the Wi-Fi interface clears
+   all four `[FW]`; the manual maps this to holding the reset button for three
+   seconds or more `[INF]`, while a power cycle keeps the table. Re-registering an id you already hold costs
    nothing and takes no second slot — it updates the entry in place.
 
    A fifth client can still read everything; it is writing that a full table
@@ -1262,8 +1265,9 @@ Treat them as inert unless you can prove otherwise on your unit.
 No code path in the app sends "start self-clean"; only a reset/cancel bit exists
 (`command[10]` bit `0x04`). `[APP]` The status bit `state[15] & 0x01` does **not**
 track the real cycle: driven from the IR remote, it stayed `0` through a
-complete self-clean run while the module was polled throughout. `[HW]` It echoes
-the last value written over Wi-Fi, nothing more.
+complete self-clean run while the module was polled throughout. `[HW]` The
+likely reading is that it only echoes the last value written over Wi-Fi `[INF]`;
+writing it and reading it back has not been tested.
 
 ### 6.5 The cloud adds no data
 
